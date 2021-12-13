@@ -11,6 +11,13 @@ TAGS_LIST_JSON_FILENAME = 'tags.json'
 
 HISTORY_PARSE_DEPTH = 100000000000
 
+CHANNEL_FIELDS = {
+    'id': 'ID',
+    'title': 'Заголовок',
+}
+CHANNEL_XLSX_FILENAME = 'users.xlsx'
+CHANNEL_JSON_FILENAME = 'users.json'
+
 USER_FIELDS = {
     'id': 'ID',
     'username': 'Логин',
