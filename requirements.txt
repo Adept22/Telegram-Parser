@@ -1,3 +1,5 @@
 telethon == 1.23.0
 xlsxwriter == 3.0.2
 asyncio == 3.4.3
+requests == 2.22.0
+Flask==2.0.2

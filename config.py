@@ -2,6 +2,12 @@ from os import path
 
 BASE_DIR = path.dirname(path.abspath(__file__))
 
+API = {
+    'protocol': 'http',
+    'domain': 'caddy',
+    'path': 'api/v1/telegram'
+}
+
 API_ID = '8347922'
 API_HASH = '766533a46e9e7915f6b91a2de8392ae2'
 USERNAME = 'ParseUser'
@@ -10,13 +16,6 @@ CHANNELS_LIST_JSON_FILENAME = 'channels.json'
 TAGS_LIST_JSON_FILENAME = 'tags.json'
 
 HISTORY_PARSE_DEPTH = 100000000000
-
-CHANNEL_FIELDS = {
-    'id': 'ID',
-    'title': 'Заголовок',
-}
-CHANNEL_XLSX_FILENAME = 'users.xlsx'
-CHANNEL_JSON_FILENAME = 'users.json'
 
 USER_FIELDS = {
     'id': 'ID',
