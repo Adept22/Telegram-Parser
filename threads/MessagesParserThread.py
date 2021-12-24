@@ -1,4 +1,6 @@
 import asyncio
+import threading
+import logging
 import os.path
 
 from models.Message import Message
@@ -11,13 +13,16 @@ from core.ClientFactory import ClientFactory
 from models.errors.MessageValidationError import MessageValidationError
 
 
-class HistoryParser():
-    def __init__(self, channel_link):
-        self.client = ClientFactory().get_client()
-        self.channel_link = channel_link
-
-    def parse(self):
-        self.client.loop.run_until_complete(self.get_history())
+class MessagesParserThread(threading.Thread):
+    def __init__(self, chat, client, loop):
+        print(f"Creating chat {self.chat.id} parsing thread...")
+        logging.debug(f"Creating chat {self.chat.id} parsing thread...")
+        
+        threading.Thread.__init__(self)
+        
+        self.chat = chat
+        self.client = client
+        self.loop = loop
 
     async def dump_all_messages(self, channel):
         channel.title = channel.title.replace('/', '-')
@@ -59,7 +64,7 @@ class HistoryParser():
                 break
         return result_messages
 
-    async def get_history(self):
+    async def async_run(self):
         channel = await self.client.get_entity(self.channel_link)
         channel.link = self.channel_link
         messages = await self.dump_all_messages(channel=channel)
@@ -68,3 +73,6 @@ class HistoryParser():
         xlsx_processor = XLSXFileProcessor(fields_config=MESSAGE_FIELDS, xlsx_filename=os.path.join(BASE_DIR, f'results/{messages[0]["channel"]}/messages/{MESSAGES_XLSX_FILENAME}'))
         xlsx_processor.convert(messages)
         return messages
+
+    def run(self):
+        asyncio.run(self.async_run())

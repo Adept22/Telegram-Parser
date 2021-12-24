@@ -33,6 +33,10 @@ class SendCodeThread(threading.Thread):
             logging.debug(f"SendCodeThread: Try to send code for {self.id}.")
             
             sent = await self.client.send_code_request(phone=self.number)
+            print(f"SendCodeThread: code sended for {self.id}.", flush=True)
+            logging.debug(f"SendCodeThread: code sended for {self.id}.")
+            
+            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': False, 'code': None, 'codeHash': sent.phone_code_hash })
         except errors.rpcerrorlist.FloodWaitError as ex:
             print(f"{bcolors.WARNING}SendCodeThread: flood exception for {self.id}. Sleep {ex.seconds}.{bcolors.ENDC}", flush=True)
             logging.error(f"SendCodeThread: flood exception for {self.id}. Sleep {ex.seconds}.")
@@ -43,11 +47,9 @@ class SendCodeThread(threading.Thread):
         except Exception as ex:
             print(f"{bcolors.FAIL}SendCodeThread: unable to sent code for {self.id}. Exception: {ex}.{bcolors.ENDC}", flush=True)
             logging.error(f"SendCodeThread: unable to sent code for {self.id}. Exception: {ex}.")
-        else:
-            print(f"SendCodeThread: code sended for {self.id}.", flush=True)
-            logging.debug(f"SendCodeThread: code sended for {self.id}.")
             
-            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': False, 'code': None, 'codeHash': sent.phone_code_hash })
+            # TODO: Открыть после всех тестов
+            # ApiProcessor().set('phone', { 'id': self.id, 'isBanned': True, 'code': None, 'codeHash': None })  
 
     def run(self):
         asyncio.run(self.async_run())

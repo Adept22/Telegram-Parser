@@ -6,20 +6,23 @@ from config import BASE_DIR, USER_FIELDS
 
 class User:
     def __init__(self, user_object):
-
         self.user_keys = ['first_name', 'last_name', 'username']
         self.user_object = user_object
         self.user_dict = user_object.to_dict()
         self.username = None
         self.last_name = None
         self.first_name = None
+        
         for key in self.user_keys:
             if key in self.user_dict:
                 self.__dict__[key] = self.user_dict[key]
+                
         self.client = ClientFactory().get_client()
+        
         self.channel = None
         self.channel_link = None
         self.has_photo = False
+        
         self.id = self.user_dict['id']
 
     async def enrich(self, channel):
