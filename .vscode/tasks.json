@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "docker-run",
+            "label": "docker-run: debug",
+            "dependsOn": ["docker-build"],
+            "dockerRun": {
+                "containerName": "tg_parser",
+                "image": "tg_parser:latest",
+                "volumes": [
+                    {
+                        "containerPath": "/app",
+                        "localPath": "${workspaceFolder}"
+                    }
+                ],
+                "envFiles": [ ".env" ],
+                "network": "chats_default",
+                "remove": true
+            },
+            "python": {
+                "args": [ "run" ],
+                "file": "__main__.py"
+            }
+        },
+        {
+            "label": "docker-build",
+            "type": "docker-build",
+            "dockerBuild": {
+                "context": "${workspaceFolder}",
+                "dockerfile": "${workspaceFolder}/Dockerfile",
+                "tag": "tg_parser:latest"
+            }
+        }
+    ]
+}

@@ -1,5 +1,43 @@
-telethon == 1.23.0
-xlsxwriter == 3.0.2
-asyncio == 3.4.3
-requests == 2.22.0
+aiofiles==0.8.0
+asgiref==3.4.1
+async-timeout==4.0.1
+asyncio==3.4.3
+autobahn==21.11.1
+cbor==1.0.0
+cbor2==5.4.2
+cffi==1.15.0
+click==8.0.3
+cryptography==36.0.1
+decorator==5.1.0
+decorators==2.0.7
 Flask==2.0.2
+flatbuffers==2.0
+h11==0.12.0
+h2==4.1.0
+hpack==4.0.0
+hypercorn==0.12.0
+hyperframe==6.0.1
+hyperlink==21.0.0
+itsdangerous==2.0.1
+Jinja2==3.0.3
+MarkupSafe==2.0.1
+msgpack==1.0.3
+priority==2.0.0
+py-ubjson==0.16.1
+pyaes==1.6.1
+pyasn1==0.4.8
+pycparser==2.21
+python-socks==2.0.0
+quart==0.16.1
+rsa==4.8
+singleton-decorator==1.0.0
+Telethon==1.23.0
+toml==0.10.2
+txaio==21.2.1
+typing-extensions==4.0.1
+ujson==5.1.0
+websocket-client==1.2.3
+Werkzeug==2.0.2
+wsproto==1.0.0
+XlsxWriter==3.0.2
+requests==2.22.0

@@ -1,6 +1,6 @@
 from config import API_ID, API_HASH, USERNAME
 from telethon.sync import TelegramClient
-from decorators.singleton import singleton
+from singleton_decorator import singleton
 
 @singleton
 class ClientFactory:

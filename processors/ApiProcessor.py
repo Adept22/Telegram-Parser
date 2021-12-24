@@ -31,9 +31,8 @@ class ApiProcessor():
 
         return requests.delete(self.base_url + '/' + type + '/' + body['id'])
 
-    def send(self, method, url, body):
-        print(url)
-        r = requests.request(method, url, data = body, verify = False)
+    def send(self, method, url, body = None):
+        r = requests.request(method, url, json = body, verify = False)
         r.raise_for_status()
 
         return r.json()
