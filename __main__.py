@@ -22,7 +22,7 @@ async def update_chat(chat):
         chat = ChatsManager()[chat['id']].from_dict(chat)
         
         await chat.init()
-        
+            
         if not chat.is_available:
             print(f"Chat {chat.id} actually not available and must be removed.")
             logging.debug(f"Chat {chat.id} actually not available and must be removed.")
@@ -32,10 +32,14 @@ async def update_chat(chat):
         chat = await Chat(chat).init()
         
         if chat.is_available:
-            print(f"Chat {chat.id} now starts to parse.")
-            logging.debug(f"Chat {chat.id} now starts to parse.")
-            
             ChatsManager()[chat.id] = chat
+        
+    if chat.is_available:
+        pass
+        # ChatsManager()[chat.id].parse()
+    else:
+        print(f"Chat {chat.id} actually not available and cant be used.")
+        logging.debug(f"Chat {chat.id} actually not available and cant be used.")
 
 async def update_chats():
     print("")
@@ -44,7 +48,7 @@ async def update_chats():
     print("Getting chats...")
     logging.debug("Getting chats...")
     
-    chats = ApiProcessor().get('chat')
+    chats = ApiProcessor().get('chat', { 'isAvailable': True })
     
     for chat in chats:
         await update_chat(chat)
@@ -57,12 +61,12 @@ async def update_phone(phone):
     logging.debug("")
     
     if phone['id'] in PhonesManager():
-        PhonesManager()[phone['id']].from_dict(phone)
+        phone = PhonesManager()[phone['id']].from_dict(phone)
         
         print(f"Updating phone {phone.id}.")
         logging.debug(f"Updating phone {phone.id}.")
         
-        await PhonesManager()[phone['id']].init()
+        await phone.init()
         
         if not await phone.client.is_user_authorized():
             print(f"Phone {phone.id} actually not authorized and must be removed.")
@@ -85,7 +89,7 @@ async def update_phones():
     print("Getting phones...")
     logging.debug("Getting phones...")
     
-    phones = ApiProcessor().get('phone')
+    phones = ApiProcessor().get('phone', { 'isBanned': False })
     
     for phone in phones:
         await update_phone(phone)

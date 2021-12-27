@@ -1,8 +1,9 @@
 import os
+import random
 import logging
 import threading
 import asyncio
-from telethon.errors import ChatAdminRequiredError
+from telethon import sync, functions, types
 
 from config import USER_FIELDS, BASE_DIR, USERS_XLSX_FILENAME
 from processors.UsersJSONProcessor import UsersJSONProcessor
@@ -10,34 +11,60 @@ from processors.XLSXFileProcessor import XLSXFileProcessor
 from models.User import User
 
 class MembersParserThread(threading.Thread):
-    def __init__(self, chat, client, loop):
+    def __init__(self, chat, phones, loop):
         print(f"Creating chat {self.chat.id} parsing thread...")
         logging.debug(f"Creating chat {self.chat.id} parsing thread...")
         
         threading.Thread.__init__(self)
         
         self.chat = chat
-        self.client = client
+        self.phones = phones
         self.loop = loop
+        
+        self.clients = [
+            sync.TelegramClient(
+                session=f"sessions/{phone.number}.session", 
+                api_id=os.environ['TELEGRAM_API_ID'],
+                api_hash=os.environ['TELEGRAM_API_HASH'],
+                loop=self.loop
+            ) for phone in self.phones
+        ]
     
     async def async_run(self):
+        for i, client in enumerate(self.clients):
+            try:
+                if not client.is_connected():
+                    await client.connect()
+            except:
+                del self.clients[i]
+                
+        if len(self.clients) == 0:
+            print(f'No available clients for chat {self.chat.id}.')
+            logging.info(f'No available clients for chat {self.chat.id}.')
+            
+            return
+
         result_users = []
         
-        try:
-            users = await self.client.get_participants(self.chat)
-        except:
-            print(f'Catched exception while getting participants for chat {self.chat.id}. Sleeping 10 sec and trying again.')
-            logging.info(f'Catched exception while getting participants for chat {self.chat.id}. Sleeping 10 sec and trying again.')
-            
-            await asyncio.sleep(10)
-        
-        await asyncio.sleep(1)
-        
-        users_count = len(users)
+        for client in self.clients:
+            try:
+                users = await client(
+                    functions.channels.GetParticipantsRequest(
+                        types.InputChannel(channel_id=self.chat.internal_id, access_hash=self.chat.access_hash)
+                    )
+                )
+            except:
+                await asyncio.sleep(random.randint(2, 5))
+                
+                continue
+            else:
+                break
+        else:
+            raise Exception(f'Cannot get chat {self.chat.id} participants. Exit.')
 
         for index, user in enumerate(users):
-            print(f'Chat {self.chat.id}. Receiving users... {index + 1} in {users_count}.')
-            logging.info(f'Chat {self.chat.id}. Receiving users... {index + 1} in {users_count}.')
+            print(f'Chat {self.chat.id}. Receiving users... {index + 1} in {len(users)}.')
+            logging.info(f'Chat {self.chat.id}. Receiving users... {index + 1} in {len(users)}.')
             
             user = User(user)
             

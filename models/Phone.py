@@ -2,9 +2,11 @@ import os
 import re
 import logging
 import asyncio
+import random
 
+from utils.Chat import get_hash
 from utils.bcolors import bcolors
-from telethon import sync
+from telethon import functions, errors, sync, types, utils
 from processors.ApiProcessor import ApiProcessor
 from threads.SendCodeThread import SendCodeThread
 
@@ -63,9 +65,12 @@ class Phone(object):
                     self.send_code_task = SendCodeThread(self.id, self.number, asyncio.new_event_loop())
                     self.send_code_task.start()
         else:
-            if self.send_code_task == None and not self.is_verified or self.code != None or self.code_hash != None:
-                ApiProcessor().set('phone', { 'id': self.id, 'isVerified': True, 'code': None, 'codeHash': None })
+            if self.send_code_task == None or not self.is_verified or self.code != None or self.code_hash != None:  
+                self.is_verified = True
+                self.code = None
+                self.codeHash = None
                 
+                ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code, 'codeHash': self.codeHash })                
             if self.send_code_task != None:
                 self.send_code_task = None
             
@@ -93,29 +98,86 @@ class Phone(object):
         except Exception as ex:
             print(f"{bcolors.FAIL}Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.{bcolors.ENDC}")
             logging.error(f"Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.")
-        else:
-            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': True, 'code': None, 'codeHash': None })
             
-        ApiProcessor().set('phone', { 'id': self.id, 'isVerified': False, 'code': None })
+            self.is_verified = False
+            self.code = None
+            
+            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code })
+        else:
+            self.is_verified = True
+            self.code = None
+            self.codeHash = None
+            
+            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code, 'codeHash': self.codeHash })
     
-    # async def get_chats(self):
-    #     print(f"Getting chats for phone: {self.id}.")
-    #     logging.debug(f"Getting chats for phone: {self.id}.")
+    async def join(self, chat):
+        """Вступает в чат
+
+        Raises:
+            Exception: Если ссылка не верна
+
+        Returns:
+            Chat: Телетоновский объект чата
+        """
+        channel, hash = get_hash(chat.link)
         
-    #     chats = ApiProcessor.get('chat', { 'phones': { 'id': self.id } })
+        if (channel == None and hash == None) or (channel != None and hash != None):
+            raise Exception("Invalid chat link.")
+
+        updates = await self.client(
+            functions.channels.JoinChannelRequest(channel=channel) \
+                if hash is None else functions.messages.ImportChatInviteRequest(hash=hash)
+        )
         
-    #     print(f"Getted {len(chats)} chats for phone: {self.id}.")
-    #     logging.debug(f"Getted {len(chats)} chats for phone: {self.id}.")
-        
-    #     for chat in chats:
-    #         if not chat['id'] in self.chats:
-    #             chat = Chat(chat)
-    #         else:
-    #             chat = self.chats[chat['id']]
+        return updates.chats[0]
+    
+    async def invite(self, phone, chat):
+        user = await phone.client.get_me()
+
+        updates = await self.client(
+            functions.channels.InviteToChannelRequest(
+                channel=types.InputChannel(channel_id=chat.internal_id, access_hash=chat.access_hash), 
+                users=[types.InputUser(user_id=user.id, access_hash=user.access_hash)]
+            ) if chat.access_hash != None else 
+                functions.messages.AddChatUserRequest(
+                    chat_id=chat.internal_id, 
+                    user_id=user.id, 
+                    fwd_limit=100
+                )
+        )
+
+        return updates.chats[0]
+    
+    async def is_participant(self, chat):
+        """
+        Проверяет является ли участником чата
+        """
+        if chat.internal_id != None:
+            try:
+                channel = utils.get_input_channel(
+                    await self.client.get_input_entity(
+                        types.InputChannel(channel_id=int(chat.internal_id), access_hash=int(chat.access_hash)) \
+                            if chat.access_hash != None else types.InputChat(chat_id=int(chat.internal_id))
+                    )
+                )
                 
-    #         if ChatsManager().get(chat['id']) == None:
-    #             ChatsManager()[chat['id']] = chat
-    #         else:
-    #             ChatsManager()[chat['id']].from_dict(chat)
+                participant = utils.get_input_user(await self.client.get_me())
                 
-    #         chat.parse()
+                await self.client(
+                    functions.channels.GetParticipantRequest(
+                        channel=channel,
+                        participant=participant
+                    )
+                )
+            except Exception as ex:
+                print(f"{bcolors.FAIL}Chat or channel {self.id} doesn\'t available. Exception: {ex}.{bcolors.ENDC}")
+                logging.error(f"Chat or channel {self.id} doesn\'t available. Exception: {ex}.")
+            else:
+                return True
+        
+        return False
+    
+    def get_chats_len(self):
+        chats = ApiProcessor().get('chat', { 'phones': { 'id': self.id } })
+        
+        return len(chats)

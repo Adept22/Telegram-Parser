@@ -2,17 +2,16 @@ import asyncio
 import re
 import logging
 import random
-from telethon import functions, types
 
+from utils.bcolors import bcolors
 from utils.Chat import get_hash
 
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
-from models.Message import Message
 
-class Chat:
+class Chat(object):
     def __init__(self, dict):
         if dict is None:
             raise Exception('Unexpected chat dictionary')
@@ -23,49 +22,16 @@ class Chat:
         if not 'link' in dict or dict['link'] is None:
             raise Exception('Unexpected chat link')
         
+        self.dict = dict
+        
         self.internal_id = None
-        self.parsing_thread = None
+        self.members_thread = None
+        self.messages_thread = None
+        
         self._phones = []
         self.messages = []
         
         self.from_dict(dict)
-    
-    def from_dict(self, dict):
-        pattern = re.compile(r'(?<!^)(?=[A-Z])')
-        
-        for key in dict:
-            setattr(self, pattern.sub('_', key).lower(), dict[key])
-            
-        return self
-    
-    async def init(self):
-        """
-            TODO:
-                - join to chat via link if internal_id is None
-                - 
-        """
-        if self.is_available and self.internal_id == None:
-            try:
-                chat = await self.join()
-            except:
-                ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': False })
-            else:
-                self.internal_id = chat.id
-                self.access_hash = chat.access_hash
-                
-                ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': True, 'internalId': self.internal_id, 'accessHash': self.access_hash })
-                
-                if len(self.phones) > 1:
-                    try:
-                        await self.invite()
-                    except:
-                        pass
-        
-        # messages = ApiProcessor.get('messages', { 'chat': { 'id': self.id } })
-        
-        # self.messages = [Message(message) for message in messages]
-        
-        return self
         
     @property
     def phones(self):
@@ -79,44 +45,134 @@ class Chat:
             if phone['id'] in PhonesManager():
                 self._phones.append(PhonesManager()[phone['id']])
     
-    async def join(self):
-        channel, hash = get_hash(self.link)
+    def from_dict(self, dict):
+        pattern = re.compile(r'(?<!^)(?=[A-Z])')
         
-        if (channel == None and hash == None) or (channel != None and hash != None):
-            raise Exception("Invalid chat link.")
-
-        if len(self.phones) == 0:
-            raise Exception("Doesn't exist available phone for joining.")
-
-        updates = await self.phones[0].client(
-            functions.channels.JoinChannelRequest(channel=channel) \
-                if hash is None else functions.messages.ImportChatInviteRequest(hash=hash)
-        )
-        
-        return updates.chats[0]
-
-    async def invite(self):
-        for phone in enumerate(self.phones, start=1):
-            if len(self.phones) <= 1:
-                raise Exception(f"Doesn't exist additional phones for inviting in chat {self.id}.")
+        for key in dict:
+            setattr(self, pattern.sub('_', key).lower(), dict[key])
             
-            user = await phone.client.get_me()
+        self.dict = dict
+        
+        return self
+    
 
-            await self.phones[0].client(
-                functions.channels.InviteToChannelRequest(
-                    channel=types.InputChannel(channel_id=self.internal_id, access_hash=self.access_hash), 
-                    user_id=user.id
-                ) if self.access_hash != None else 
-                    functions.messages.AddChatUserRequest(
-                        chat_id=self.internal_id, 
-                        user_id=user.id, 
-                        fwd_limit=100
-                    )
-            )
-
-            await asyncio.sleep(random.randint(2, 5))
+    def to_dict(self):
+        skip_fields = [ 'dict', 'messages', 'members_thread', 'messages_thread' ]
+        
+        new_dict = {}
+        
+        for attr, value in self.__dict__.items():
+            if key in skip_fields:
+                continue
+            
+            components = attr.split('_')
+            key = components[0] + ''.join(x.title() for x in components[1:])
+            
+            if type(value) == list:
+                new_value = []
+                
+                for item in value:
+                    if type(item) == object:
+                        new_value.append(item.to_dict())
+                    else:
+                        new_value.append(item)
+                        
+                new_dict[key] = value
+            elif type(value) == object:
+                new_dict[key] = value.to_dict()
+            else:
+                new_dict[key] = value
+                
+        return new_dict
+    
+    def save(self):
+        if self.id == None:
+            raise Exception('Undefined object id.')
+        
+        ApiProcessor().set('chat', self.to_dict())
+    
+    async def init(self):
+        if len(self.phones) == 0:
+            if len(PhonesManager().items()) > 0:
+                to_join = list(sorted(PhonesManager().values(), key=lambda phone: phone.chats_count))
+                
+                joined_phones = []
+                
+                for phone in to_join:
+                    phone = PhonesManager()[phone['id']]
+                    
+                    if not await phone.is_participant(self):
+                        try:
+                            # if len(joined_phones) > 0:
+                            #     chat = await joined_phones[0].invite(phone, self)
+                            # else:
+                            chat = await phone.join(self)
+                        except Exception as ex:
+                            print(f"{bcolors.FAIL}Chat or channel {self.id} joining phone {phone.id} problem. Exception: {ex}.{bcolors.ENDC}")
+                            logging.error(f"Chat or channel {self.id} joining phone {phone.id} problem. Exception: {ex}.")
+                            continue
+                        else:
+                            joined_phones.append(phone)
+                            
+                            self.is_available = True
+                            self.internal_id = chat.id
+                            self.access_hash = chat.access_hash
+                            
+                        await asyncio.sleep(random.randint(2, 5))
+                    else:
+                        joined_phones.append(phone)
+                        
+                    if len(joined_phones) == 3:
+                        break
+                    
+                if len(joined_phones) > 0:
+                    ApiProcessor().set('chat', { 
+                        'id': self.id, 
+                        'internalId': self.internal_id, 
+                        'accessHash': self.access_hash, 
+                        'isAvailable': self.is_available, 
+                        'phones': [{ 'id': phone.id } for phone in joined_phones]
+                    })
+                else:
+                    ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': False })
+            else:
+                ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': False })
+        else:
+            new_phones = self.phones
+            
+            joined = []
+            to_join = []
+            
+            for phone in new_phones:
+                if await phone.is_participant(self):
+                    joined.append(phone)
+                else:
+                    to_join.append(phone)
+            
+            for phone in to_join:
+                try:
+                    # if len(joined) > 0:
+                    #     chat = await joined[0].invite(phone, self)
+                    # else:
+                        chat = await phone.join(self)
+                except:
+                    i = next((i for i, p in enumerate(new_phones) if p.id == phone.id), None)
+                    
+                    if i != None:
+                        del new_phones[i]
+            
+            if len(self.phones) != len(new_phones):
+                ApiProcessor().set('chat', { 'id': self.id, 'phones': [{ 'id': phone.id } for phone in new_phones] })
+            
+        return self
     
     def parse(self):
+        if not self.is_available:
+            return
+        
+        print(f"Chat {self.id} now starts to parse.")
+        logging.debug(f"Chat {self.id} now starts to parse.")
+        
         loop = asyncio.new_event_loop()
         
         #--> MEMBERS -->#
