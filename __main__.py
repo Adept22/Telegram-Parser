@@ -48,7 +48,7 @@ async def update_chats():
     print("Getting chats...")
     logging.debug("Getting chats...")
     
-    chats = ApiProcessor().get('chat', { 'isAvailable': True })
+    chats = ApiProcessor().get('chat')
     
     for chat in chats:
         await update_chat(chat)
@@ -89,7 +89,7 @@ async def update_phones():
     print("Getting phones...")
     logging.debug("Getting phones...")
     
-    phones = ApiProcessor().get('phone', { 'isBanned': False })
+    phones = ApiProcessor().get('phone')
     
     for phone in phones:
         await update_phone(phone)
