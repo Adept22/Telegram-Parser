@@ -33,13 +33,6 @@ async def update_chat(chat):
         
         if chat.is_available:
             ChatsManager()[chat.id] = chat
-        
-    if chat.is_available:
-        pass
-        # ChatsManager()[chat.id].parse()
-    else:
-        print(f"Chat {chat.id} actually not available and cant be used.")
-        logging.debug(f"Chat {chat.id} actually not available and cant be used.")
 
 async def update_chats():
     print("")

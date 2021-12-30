@@ -2,11 +2,10 @@ import os
 import re
 import logging
 import asyncio
-import random
 
-from utils.Chat import get_hash
+from errors.ClientNotAvailable import ClientNotAvailable
 from utils.bcolors import bcolors
-from telethon import functions, errors, sync, types, utils
+from telethon import functions, errors, sync, types, sessions
 from processors.ApiProcessor import ApiProcessor
 from threads.SendCodeThread import SendCodeThread
 
@@ -25,17 +24,48 @@ class Phone(object):
         
         self.code = None
         self.code_hash = None
-        self.send_code_task = None
-        
-        self.client = sync.TelegramClient(
-            session=f"sessions/{dict['number']}.session", 
-            api_id=os.environ['TELEGRAM_API_ID'],
-            api_hash=os.environ['TELEGRAM_API_HASH']
-        )
-        
-        self.chats = {}
+        self.send_code_thread = None
+        self._session = sessions.StringSession()
         
         self.from_dict(dict)
+        
+        self.client = sync.TelegramClient(
+            session=self.session, 
+            api_id=os.environ['TELEGRAM_API_ID'],
+            api_hash=os.environ['TELEGRAM_API_HASH'],
+        )
+        
+    @property
+    def session(self):
+        return self._session
+    
+    @session.setter
+    def session(self, new_session):
+        self._session = sessions.StringSession(new_session)
+    
+    async def new_client(self, loop = None):
+        client = sync.TelegramClient(
+            session=self.session, 
+            api_id=os.environ['TELEGRAM_API_ID'],
+            api_hash=os.environ['TELEGRAM_API_HASH'],
+            loop=loop
+        )
+        
+        try:
+            if not client.is_connected():
+                await client.connect()
+            
+            if await client.is_user_authorized():
+                await client.get_me()
+                
+                return client
+            else:
+                raise ClientNotAvailable(f'Phone {self.id} not authorized.')
+        except Exception as ex:
+            print(f"{bcolors.FAIL}Can\'t get phone {self.id} client. Exception: {ex}{bcolors.ENDC}")
+            logging.error(f"Can\'t get phone {self.id} client. Exception: {ex}")
+            
+            raise ClientNotAvailable(ex)
         
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
@@ -50,7 +80,7 @@ class Phone(object):
             raise Exception("Undefined phone id")
         
         if not self.client.is_connected():
-            await self.connect()
+            await self.client.connect()
         
         is_user_authorized = await self.client.is_user_authorized()
         
@@ -61,30 +91,17 @@ class Phone(object):
             if self.code != None and self.code_hash != None:
                 await self.sign_in()
             elif self.code_hash == None:
-                if self.send_code_task == None:
-                    self.send_code_task = SendCodeThread(self.id, self.number, asyncio.new_event_loop())
-                    self.send_code_task.start()
+                if self.send_code_thread == None:
+                    self.send_code_thread = SendCodeThread(self)
+                    self.send_code_thread.start()
         else:
-            if self.send_code_task == None or not self.is_verified or self.code != None or self.code_hash != None:  
-                self.is_verified = True
-                self.code = None
-                self.codeHash = None
-                
-                ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code, 'codeHash': self.codeHash })                
-            if self.send_code_task != None:
-                self.send_code_task = None
+            self.send_code_thread = None
+            
+            if not self.is_verified or self.code != None or self.code_hash != None:
+                ApiProcessor().set('phone', { 'id': self.id, 'isVerified': True, 'code': None, 'codeHash': None })        
             
         return self
-    
-    async def connect(self):
-        print(f"Try connect phone {self.id}.")
-        logging.debug(f"Try connect phone {self.id}.")
         
-        await self.client.connect()
-    
-        print(f"Phone {self.id} connected.")
-        logging.debug(f"Phone {self.id} connected.")
-    
     async def sign_in(self):
         print(f"Phone {self.id} automatic try to sing in with code {self.code}.")
         logging.debug(f"Phone {self.id} automatic try to sing in with code {self.code}.")
@@ -99,85 +116,7 @@ class Phone(object):
             print(f"{bcolors.FAIL}Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.{bcolors.ENDC}")
             logging.error(f"Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.")
             
-            self.is_verified = False
-            self.code = None
-            
-            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code })
+            ApiProcessor().set('phone', { 'id': self.id, 'session': None, 'isVerified': False, 'code': None })
         else:
-            self.is_verified = True
-            self.code = None
-            self.codeHash = None
-            
-            ApiProcessor().set('phone', { 'id': self.id, 'isVerified': self.is_verified, 'code': self.code, 'codeHash': self.codeHash })
+            ApiProcessor().set('phone', { 'id': self.id, 'session': self.session.save(), 'isVerified': True, 'code': None, 'codeHash': None })
     
-    async def join(self, chat):
-        """Вступает в чат
-
-        Raises:
-            Exception: Если ссылка не верна
-
-        Returns:
-            Chat: Телетоновский объект чата
-        """
-        channel, hash = get_hash(chat.link)
-        
-        if (channel == None and hash == None) or (channel != None and hash != None):
-            raise Exception("Invalid chat link.")
-
-        updates = await self.client(
-            functions.channels.JoinChannelRequest(channel=channel) \
-                if hash is None else functions.messages.ImportChatInviteRequest(hash=hash)
-        )
-        
-        return updates.chats[0]
-    
-    async def invite(self, phone, chat):
-        user = await phone.client.get_me()
-
-        updates = await self.client(
-            functions.channels.InviteToChannelRequest(
-                channel=types.InputChannel(channel_id=chat.internal_id, access_hash=chat.access_hash), 
-                users=[types.InputUser(user_id=user.id, access_hash=user.access_hash)]
-            ) if chat.access_hash != None else 
-                functions.messages.AddChatUserRequest(
-                    chat_id=chat.internal_id, 
-                    user_id=user.id, 
-                    fwd_limit=100
-                )
-        )
-
-        return updates.chats[0]
-    
-    async def is_participant(self, chat):
-        """
-        Проверяет является ли участником чата
-        """
-        if chat.internal_id != None:
-            try:
-                channel = utils.get_input_channel(
-                    await self.client.get_input_entity(
-                        types.InputChannel(channel_id=int(chat.internal_id), access_hash=int(chat.access_hash)) \
-                            if chat.access_hash != None else types.InputChat(chat_id=int(chat.internal_id))
-                    )
-                )
-                
-                participant = utils.get_input_user(await self.client.get_me())
-                
-                await self.client(
-                    functions.channels.GetParticipantRequest(
-                        channel=channel,
-                        participant=participant
-                    )
-                )
-            except Exception as ex:
-                print(f"{bcolors.FAIL}Chat or channel {self.id} doesn\'t available. Exception: {ex}.{bcolors.ENDC}")
-                logging.error(f"Chat or channel {self.id} doesn\'t available. Exception: {ex}.")
-            else:
-                return True
-        
-        return False
-    
-    def get_chats_len(self):
-        chats = ApiProcessor().get('chat', { 'phones': { 'id': self.id } })
-        
-        return len(chats)

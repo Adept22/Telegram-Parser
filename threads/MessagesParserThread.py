@@ -3,12 +3,13 @@ import threading
 import logging
 import os.path
 
+from telethon import sync, functions
+
 from models.Message import Message
-from telethon.tl.functions.messages import GetHistoryRequest
+
 from config import HISTORY_PARSE_DEPTH, MESSAGE_FIELDS, BASE_DIR, MESSAGES_XLSX_FILENAME
 from processors.MessagesJSONProcessor import MessagesJSONProcessor
 from processors.XLSXFileProcessor import XLSXFileProcessor
-from core.ClientFactory import ClientFactory
 
 from models.errors.MessageValidationError import MessageValidationError
 
@@ -21,8 +22,16 @@ class MessagesParserThread(threading.Thread):
         threading.Thread.__init__(self)
         
         self.chat = chat
-        self.client = client
-        self.loop = loop
+        self.loop = asyncio.new_event_loop()
+        
+        self.clients = [
+            sync.TelegramClient(
+                session=f"sessions/{phone.number}.session", 
+                api_id=os.environ['TELEGRAM_API_ID'],
+                api_hash=os.environ['TELEGRAM_API_HASH'],
+                loop=self.loop
+            ) for phone in self.chat.phones
+        ]
 
     async def dump_all_messages(self, channel):
         channel.title = channel.title.replace('/', '-')
@@ -37,7 +46,7 @@ class MessagesParserThread(threading.Thread):
         while True:
             await asyncio.sleep(2)
             print(f"Parsing {channel.title}... Received: {all_messages_count} messages.")
-            history = await self.client(GetHistoryRequest(
+            history = await self.client(functions.messages.GetHistoryRequest(
                 peer=channel,
                 offset_id=offset_msg,
                 offset_date=None, add_offset=0,

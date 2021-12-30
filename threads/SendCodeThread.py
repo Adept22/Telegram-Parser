@@ -8,31 +8,25 @@ from telethon import sync, errors
 from processors.ApiProcessor import ApiProcessor
 
 class SendCodeThread(threading.Thread):
-    def __init__(self, id, number, loop):
+    def __init__(self, phone):
         threading.Thread.__init__(self)
         
-        self.id = id
-        self.number = number
-        self.loop = loop
+        self.phone = phone
+        self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
         
-        self.client = sync.TelegramClient(
-            session=f"sessions/{self.number}.session", 
-            api_id=os.environ['TELEGRAM_API_ID'],
-            api_hash=os.environ['TELEGRAM_API_HASH'],
-            loop=self.loop
-        )
-        
     async def async_run(self):
+        client = await self.phone.new_client(loop=self.loop)
+        
+        if client == None:
+            return
+        
         try:
-            if not self.client.is_connected():
-                await self.client.connect()
-            
             print(f"SendCodeThread: Try to send code for {self.id}.", flush=True)
             logging.debug(f"SendCodeThread: Try to send code for {self.id}.")
             
-            sent = await self.client.send_code_request(phone=self.number)
+            sent = await client.send_code_request(phone=self.number)
             print(f"SendCodeThread: code sended for {self.id}.", flush=True)
             logging.debug(f"SendCodeThread: code sended for {self.id}.")
             
