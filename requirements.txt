@@ -41,3 +41,4 @@ Werkzeug==2.0.2
 wsproto==1.0.0
 XlsxWriter==3.0.2
 requests==2.22.0
+async-property==0.2.1

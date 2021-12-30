@@ -1,14 +1,22 @@
+import asyncio
+from os import name
+import random
 import re
 import logging
 
-from models.Phone import Phone
-from threads.ChatJoiningThread import ChatJoiningThread
+from telethon import errors, functions, types
 
 from utils.Chat import get_hash
 
+from models.Phone import Phone
 from core.PhonesManager import PhonesManager
+from processors.ApiProcessor import ApiProcessor
+from threads.ChatPulseThread import ChatPulseThread
+from threads.ChatJoiningThread import ChatJoiningThread
 from threads.MembersParserThread import MembersParserThread
-from threads.MessagesParserThread import MessagesParserThread
+from errors.ChatNotAvailableError import ChatNotAvailableError
+from errors.ClientNotAvailableError import ClientNotAvailableError
+from utils.bcolors import bcolors
 
 class Chat(object):
     def __init__(self, dict):
@@ -28,12 +36,14 @@ class Chat(object):
         self.username = None
         self.hash = None
         self.internal_id = None
-        self.access_hash = None
-        self.chat_joining_thread = None
+        self.is_available = False
+        self.joining_thread = None
         self.members_thread = None
         self.messages_thread = None
         
+        self.valid_phones = []
         self._phones = []
+        
         self.messages = []
         
         self.from_dict(dict)
@@ -54,13 +64,48 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value):
-        self._phones = []
+        new_chat = None
+        new_phones = []
         
         for phone in new_value:
-            if isinstance(phone, Phone):
-                self._phones.append(phone)
-            elif isinstance(phone, dict) and phone['id'] in PhonesManager():
-                self._phones.append(PhonesManager()[phone['id']])
+            phone = PhonesManager().get(phone['id'])
+                
+            if phone != None:
+                new_phones.append(phone)
+            
+        if not self.is_available or self.internal_id == None:
+            print(f"Chat {self.id} actually not available and cant be used.")
+            logging.debug(f"Chat {self.id} actually not available and cant be used.")
+            
+            new_phones = []
+        else:
+            chat_pulse_thread = ChatPulseThread(self, new_phones)
+            chat_pulse_thread.start()
+            new_chat, new_phones = chat_pulse_thread.join()
+            
+        self._phones = new_phones
+        
+        if len(new_phones) != len(new_value):
+            print(f"Chat {self.id} list of phones changed, saving...")
+            logging.debug(f"Chat {self.id} list of phones changed, saving...")
+            
+            self.phones = new_phones
+            
+            ApiProcessor().set('chat', { 
+                'id': self.id, 
+                'phones': [{ 'id': p.id } for p in new_phones] 
+            })
+        
+        if new_chat != None:
+            if self.internal_id != new_chat.id:
+                print(f"Chat {self.id} \'internalId\' changed, saving...")
+                logging.debug(f"Chat {self.id} \'internalId\' changed, saving...")
+                
+                ApiProcessor().set('chat', { 
+                    'id': self.id, 
+                    'internalId': new_chat.id,
+                    'title': new_chat.title if self.title == None else self.title
+                })
     
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
@@ -73,35 +118,33 @@ class Chat(object):
         return self
     
     async def init(self):
-        if not self.is_available:
-            print(f"Chat {self.id} actually not available and cant be used.")
-            logging.debug(f"Chat {self.id} actually not available and cant be used.")
+        if self.is_available:
+            #--> PULSE -->#
+            if self.joining_thread == None and len(self.phones) < 3:
+                self.joining_thread = ChatJoiningThread(self)
+                self.joining_thread.start()
+            else:
+                print(f"Chat joining thread for chat {self.id} actually running.")
+                logging.debug(f"Chat joining thread for chat {self.id} actually running.")
+            #--< PULSE --<#
             
-            return self
-            
-        if self.chat_joining_thread == None:
-            self.chat_joining_thread = ChatJoiningThread(self)
-            self.chat_joining_thread.start()
-        else:
-            print(f"Members parsing thread for chat {self.id} actually running.")
-            logging.debug(f"Members parsing thread for chat {self.id} actually running.")
-        
-        #--> MEMBERS -->#
-        if self.members_thread == None:
-            self.members_thread = MembersParserThread(self)
-            self.members_thread.start()
-        else:
-            print(f"Members parsing thread for chat {self.id} actually running.")
-            logging.debug(f"Members parsing thread for chat {self.id} actually running.")
-        #--< MEMBERS --<#
-        
-        #--> MESSAGES -->#
-        # if self.messages_thread == None:
-        #     self.messages_thread = MessagesParserThread(self)
-        #     self.messages_thread.start()
-        # else:
-        #     print(f"Messages parsing thread for chat {self.id} now is running.")
-        #     logging.debug(f"Messages parsing thread for chat {self.id} now is running.")
-        #--< MESSAGES --<#
+            if len(self.phones) > 0:
+                #--> MEMBERS -->#
+                if self.members_thread == None:
+                    self.members_thread = MembersParserThread(self)
+                    self.members_thread.start()
+                else:
+                    print(f"Members parsing thread for chat {self.id} actually running.")
+                    logging.debug(f"Members parsing thread for chat {self.id} actually running.")
+                #--< MEMBERS --<#
+                
+                #--> MESSAGES -->#
+                # if self.messages_thread == None:
+                #     self.messages_thread = MessagesParserThread(self)
+                #     self.messages_thread.start()
+                # else:
+                #     print(f"Messages parsing thread for chat {self.id} now is running.")
+                #     logging.debug(f"Messages parsing thread for chat {self.id} now is running.")
+                #--< MESSAGES --<#
         
         return self

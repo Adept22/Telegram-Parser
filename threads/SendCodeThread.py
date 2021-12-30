@@ -17,12 +17,9 @@ class SendCodeThread(threading.Thread):
         asyncio.set_event_loop(self.loop)
         
     async def async_run(self):
-        client = await self.phone.new_client(loop=self.loop)
-        
-        if client == None:
-            return
-        
         try:
+            client = await self.phone.new_client(loop=self.loop)
+            
             print(f"SendCodeThread: Try to send code for {self.id}.", flush=True)
             logging.debug(f"SendCodeThread: Try to send code for {self.id}.")
             

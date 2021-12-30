@@ -3,7 +3,7 @@ import re
 import logging
 import asyncio
 
-from errors.ClientNotAvailable import ClientNotAvailable
+from errors.ClientNotAvailableError import ClientNotAvailableError
 from utils.bcolors import bcolors
 from telethon import functions, errors, sync, types, sessions
 from processors.ApiProcessor import ApiProcessor
@@ -60,12 +60,12 @@ class Phone(object):
                 
                 return client
             else:
-                raise ClientNotAvailable(f'Phone {self.id} not authorized.')
+                raise ClientNotAvailableError(f'Phone {self.id} not authorized.')
         except Exception as ex:
             print(f"{bcolors.FAIL}Can\'t get phone {self.id} client. Exception: {ex}{bcolors.ENDC}")
             logging.error(f"Can\'t get phone {self.id} client. Exception: {ex}")
             
-            raise ClientNotAvailable(ex)
+            raise ClientNotAvailableError(ex)
         
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
