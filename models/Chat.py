@@ -1,12 +1,7 @@
-import asyncio
-from os import name
-import random
 import re
 import logging
 
-from telethon import errors, functions, types
-
-from utils.Chat import get_hash
+from utils import get_hash
 
 from models.Phone import Phone
 from core.PhonesManager import PhonesManager
@@ -15,9 +10,6 @@ from threads.ChatPulseThread import ChatPulseThread
 from threads.ChatJoiningThread import ChatJoiningThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
-from errors.ChatNotAvailableError import ChatNotAvailableError
-from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils.bcolors import bcolors
 
 class Chat(object):
     def __init__(self, dict):
@@ -65,10 +57,9 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value):
-        new_chat = None
-        new_phones = []
-                
         if self.is_available:
+            new_phones = []
+            
             for phone in new_value:
                 phone = PhonesManager().get(phone['id'])
                     

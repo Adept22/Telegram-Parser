@@ -1,14 +1,11 @@
 import threading
 import asyncio
 import logging
-import random
 
-from telethon import errors, types
+from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
-from utils.bcolors import bcolors
-from errors.ChatNotAvailableError import ChatNotAvailableError
-from errors.ClientNotAvailableError import ClientNotAvailableError
+from utils import bcolors
 
 class MessageMediaThread(threading.Thread):
     def __init__(self, chat, message, tg_message):

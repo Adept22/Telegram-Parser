@@ -4,9 +4,8 @@ import threading
 import asyncio
 from telethon import types, events
 
-from threads.MessageMediaThread import MessageMediaThread
 from processors.ApiProcessor import ApiProcessor
-from utils.bcolors import bcolors
+from utils import bcolors
 
 class MessagesParserThread(threading.Thread):
     def __init__(self, chat):
@@ -142,7 +141,11 @@ class MessagesParserThread(threading.Thread):
         else:
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'Cannot get chat {self.chat.id} participants. Exit.')
+            raise Exception(f'Chat {self.chat.id} messages download failed. Exit code 1.')
+        
+        print(f"{bcolors.OKGREEN}Chat {self.chat.id} messages download success. Exit code 0.{bcolors.ENDC}")
+        logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
+
         
     def run(self):
         asyncio.run(self.async_run())

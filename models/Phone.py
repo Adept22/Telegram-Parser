@@ -1,13 +1,13 @@
 import os
 import re
 import logging
-import asyncio
 
-from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils.bcolors import bcolors
-from telethon import functions, errors, sync, types, sessions
+from telethon import sync, sessions
+
+from utils import bcolors
 from processors.ApiProcessor import ApiProcessor
 from threads.SendCodeThread import SendCodeThread
+from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Phone(object):
     def __init__(self, dict):
