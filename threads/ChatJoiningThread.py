@@ -68,6 +68,7 @@ class ChatJoiningThread(threading.Thread):
                 raise ChatNotAvailableError(ex)
             
     async def async_run(self):
+        new_chat = None
         new_phones = dict([(p.id, p) for p in self.chat.phones])
         
         print(f"Chat {self.chat.id} has {len(new_phones.items())} wired phones.")

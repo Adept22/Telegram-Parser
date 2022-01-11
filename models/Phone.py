@@ -93,6 +93,7 @@ class Phone(object):
             elif self.code_hash == None:
                 if self.send_code_thread == None:
                     self.send_code_thread = SendCodeThread(self)
+                    self.send_code_thread.setDaemon(True)
                     self.send_code_thread.start()
         else:
             self.send_code_thread = None

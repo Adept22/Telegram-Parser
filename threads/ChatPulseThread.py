@@ -15,23 +15,23 @@ class ChatPulseThread(threading.Thread):
         threading.Thread.__init__(self)
         
         self.new_chat = None
-        self.new_phones = {}
+        self.new_phones = dict([(p.id, p) for p in phones])
         
         self.loop = asyncio.new_event_loop()
         self.chat = chat
-        self.phones = phones
         
         asyncio.set_event_loop(self.loop)
             
     async def async_run(self):
-        self.new_phones = dict([(p.id, p) for p in self.phones])
-        
         print(f"{len(self.new_phones.items())} phones initially wired with chat {self.chat.id}.")
         logging.debug(f"{len(self.new_phones.items())} phones initially wired with chat {self.chat.id}.")
         
         for id, phone in self.new_phones.items():
             try:
                 client = await phone.new_client(loop=self.loop)
+                
+                print(f"Try to get chat {self.chat.id} for check pulse using phone {id}.")
+                logging.debug(f"Try to get chat {self.chat.id} for check pulse using phone {id}.")
                 
                 self.new_chat = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
                 

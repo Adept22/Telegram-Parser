@@ -1,87 +1,148 @@
-import asyncio
-import threading
+import random
 import logging
-import os.path
+import threading
+import asyncio
+from telethon import types, events
 
-from telethon import sync, functions
-
-from models.Message import Message
-
-from config import HISTORY_PARSE_DEPTH, MESSAGE_FIELDS, BASE_DIR, MESSAGES_XLSX_FILENAME
-from processors.MessagesJSONProcessor import MessagesJSONProcessor
-from processors.XLSXFileProcessor import XLSXFileProcessor
-
-from models.errors.MessageValidationError import MessageValidationError
-
+from threads.MessageMediaThread import MessageMediaThread
+from processors.ApiProcessor import ApiProcessor
+from utils.bcolors import bcolors
 
 class MessagesParserThread(threading.Thread):
-    def __init__(self, chat, client, loop):
-        print(f"Creating chat {self.chat.id} parsing thread...")
-        logging.debug(f"Creating chat {self.chat.id} parsing thread...")
+    def __init__(self, chat):
+        print(f"Creating chat {chat.id} messages parsing thread...")
+        logging.debug(f"Creating chat {chat.id} messages parsing thread...")
         
         threading.Thread.__init__(self)
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
         
-        self.clients = [
-            sync.TelegramClient(
-                session=f"sessions/{phone.number}.session", 
-                api_id=os.environ['TELEGRAM_API_ID'],
-                api_hash=os.environ['TELEGRAM_API_HASH'],
-                loop=self.loop
-            ) for phone in self.chat.phones
-        ]
-
-    async def dump_all_messages(self, channel):
-        channel.title = channel.title.replace('/', '-')
-        messages_processor = MessagesJSONProcessor(channel_name=channel.title)
-        offset_msg = 0  # номер записи, с которой начинается считывание
-        limit_msg = 1000  # максимальное число записей, передаваемых за один раз
-        all_messages_count = 0  # список всех сообщений
-        message_id = messages_processor.get_last_id() + 1
-        result_messages = []
-        total_count_limit = HISTORY_PARSE_DEPTH
-
-        while True:
-            await asyncio.sleep(2)
-            print(f"Parsing {channel.title}... Received: {all_messages_count} messages.")
-            history = await self.client(functions.messages.GetHistoryRequest(
-                peer=channel,
-                offset_id=offset_msg,
-                offset_date=None, add_offset=0,
-                limit=limit_msg, max_id=0, min_id=0,
-                hash=0))
-            if not history.messages:
-                break
-            messages = history.messages
-            for message in messages:
-                all_messages_count += 1
-                try:
-                    msg = Message(message)
-                    msg.id = message_id
-                    history_message = messages_processor.check_item_in_list(msg)
-                    if not history_message:
-                        await msg.enrich(channel=channel)
-                        result_messages.append(msg.serialize())
-                        messages_processor.add_message(msg)
-                        message_id += 1
-                except MessageValidationError:
-                    pass
-            offset_msg = messages[len(messages) - 1].id
-            if total_count_limit != 0 and all_messages_count >= total_count_limit:
-                break
-        return result_messages
-
+        asyncio.set_event_loop(self.loop)
+        
+    def get_member(self, peer_id):
+        if isinstance(peer_id, types.PeerUser):
+            members = ApiProcessor().get('member', { 'internalId': peer_id })
+            
+            if len(members) > 0:
+                chat_members = ApiProcessor().get('chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': members[0]['id'] } })
+                
+                if len(chat_members) > 0:
+                    return chat_members[0]
+                
+        return None
+    
+    def get_reply_to(self, reply_to):
+        if reply_to != None:
+            reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
+            
+            if len(reply_to_msgs) > 0:
+                return reply_to_msgs[0]
+            
+        return None
+    
+    def get_fwd(self, fwd_from):
+        fwd_from_id = None
+        fwd_from_name = None
+        
+        if fwd_from != None:
+            if fwd_from.from_id != None:
+                if type(fwd_from.from_id) == types.PeerChannel:
+                    fwd_from_id = fwd_from.from_id.channel_id
+                elif type(fwd_from.from_id) == types.PeerUser:
+                    fwd_from_id = fwd_from.from_id.user_id
+            
+                
+            if fwd_from.from_name != None:
+                fwd_from_name = fwd_from.from_name
+            else:
+                fwd_from_name = "Неизвестно"
+                
+        return fwd_from_id, fwd_from_name
+    
     async def async_run(self):
-        channel = await self.client.get_entity(self.channel_link)
-        channel.link = self.channel_link
-        messages = await self.dump_all_messages(channel=channel)
-        if not len(messages):
-            return
-        xlsx_processor = XLSXFileProcessor(fields_config=MESSAGE_FIELDS, xlsx_filename=os.path.join(BASE_DIR, f'results/{messages[0]["channel"]}/messages/{MESSAGES_XLSX_FILENAME}'))
-        xlsx_processor.convert(messages)
-        return messages
-
+        for phone in self.chat.phones:
+            print(f'Try to recieve messages from chat {self.chat.id}.')
+            logging.debug(f'Try to recieve messages from chat {self.chat.id}.')
+            
+            try:
+                client = await phone.new_client(loop=self.loop)
+                
+                last_message = { 'internalId': 0 }
+                
+                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'DESC' })
+                
+                if len(messages) > 0:
+                    last_message = messages[0]
+                
+                index = 1
+                all_messages = await client.get_messages(
+                    types.PeerChannel(channel_id=self.chat.internal_id), 
+                    0, 
+                    offset_id=last_message['internalId']
+                )
+                
+                async for message in client.iter_messages(
+                    entity=types.PeerChannel(channel_id=self.chat.internal_id), 
+                    offset_id=last_message['internalId']
+                ):
+                    if not isinstance(message, types.Message):
+                        continue
+                    
+                    print(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
+                    logging.debug(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
+                    
+                    messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
+                    
+                    if len(messages) > 0:
+                        print(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
+                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
+                        
+                        continue
+                    
+                    try: 
+                        print(f'Try to save message \'{message.id}\' at \'{message.date}\'')
+                        logging.debug(f'Try to save message \'{message.id}\' at \'{message.date}\'')
+                        
+                        fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
+                        
+                        last_message = ApiProcessor().set('message', { 
+                            'internalId': message.id, 
+                            'text': message.message, 
+                            'chat': { "id": self.chat.id }, 
+                            'member': self.get_member(message.peer_id), 
+                            'replyTo': self.get_reply_to(message.reply_to), 
+                            'isPinned': message.pinned, 
+                            'forwardedFromId': fwd_from_id, 
+                            'forwardedFromName': fwd_from_name, 
+                            'groupedId': message.grouped_id, 
+                            'createdAt': message.date.isoformat() 
+                        })
+                    except Exception as ex:
+                        print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
+                        logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
+                    # else:
+                    #     if message.media != None:
+                    #         message_media_thread = MessageMediaThread(self, message)
+                    #         message_media_thread.setDaemon(True)
+                    #         message_media_thread.start()
+                            
+                    # TODO: Здесь должна быть выкачка вложений
+                    
+                    index += 1
+            except Exception as ex:
+                print(f"{bcolors.FAIL}Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.{bcolors.ENDC}")
+                logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
+                
+                await asyncio.sleep(random.randint(2, 5))
+                
+                continue
+            else:
+                break
+        else:
+            ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
+            
+            raise Exception(f'Cannot get chat {self.chat.id} participants. Exit.')
+        
     def run(self):
         asyncio.run(self.async_run())
