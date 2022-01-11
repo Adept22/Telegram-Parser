@@ -3,8 +3,7 @@ from urllib.parse import urlencode
 from config import API
 
 class ApiProcessor():
-    def __init__(self):
-        self.base_url = API['protocol'] + '://' + API['domain'] + '/' + API['path']
+    base_url = API['protocol'] + '://' + API['domain'] + '/' + API['path']
         
     def get_sort(self, body = None):
         if body != None:
