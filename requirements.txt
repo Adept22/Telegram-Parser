@@ -31,7 +31,7 @@ python-socks==2.0.0
 quart==0.16.1
 rsa==4.8
 singleton-decorator==1.0.0
-Telethon==1.23.0
+Telethon==1.24.0
 toml==0.10.2
 txaio==21.2.1
 typing-extensions==4.0.1

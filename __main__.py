@@ -125,6 +125,6 @@ if __name__ == '__main__':
     print("")
     logging.debug("")
     
-    runner = ApplicationRunner(u"ws://chats_php_1:7016/ws", u"realm1")
+    runner = ApplicationRunner(u"ws://chats-monitoring-api_php_1:7016/ws", u"realm1")
     runner.run(Component)
 

@@ -15,7 +15,7 @@
                     }
                 ],
                 "envFiles": [ ".env" ],
-                "network": "chats_default",
+                "network": "chats-monitoring-api_default",
                 "remove": true
             },
             "python": {
