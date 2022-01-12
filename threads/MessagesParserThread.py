@@ -6,7 +6,7 @@ from telethon import types, events
 
 from threads.MessageMediaThread import MessageMediaThread
 from processors.ApiProcessor import ApiProcessor
-from utils.bcolors import bcolors
+from utils import bcolors
 
 class MessagesParserThread(threading.Thread):
     def __init__(self, chat):
@@ -104,20 +104,20 @@ class MessagesParserThread(threading.Thread):
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
                         
-                        if (message.grouped_id != last_message['groupedId']):
+                        # if (message.grouped_id != last_message['groupedId']):
                         
-                            last_message = ApiProcessor().set('message', { 
-                                'internalId': message.id, 
-                                'text': message.message, 
-                                'chat': { "id": self.chat.id }, 
-                                'member': self.get_member(message.peer_id), 
-                                'replyTo': self.get_reply_to(message.reply_to), 
-                                'isPinned': message.pinned, 
-                                'forwardedFromId': fwd_from_id, 
-                                'forwardedFromName': fwd_from_name, 
-                                'groupedId': message.grouped_id, 
-                                'createdAt': message.date.isoformat() 
-                            })
+                        last_message = ApiProcessor().set('message', { 
+                            'internalId': message.id, 
+                            'text': message.message, 
+                            'chat': { "id": self.chat.id }, 
+                            'member': self.get_member(message.peer_id), 
+                            'replyTo': self.get_reply_to(message.reply_to), 
+                            'isPinned': message.pinned, 
+                            'forwardedFromId': fwd_from_id, 
+                            'forwardedFromName': fwd_from_name, 
+                            'groupedId': message.grouped_id, 
+                            'createdAt': message.date.isoformat() 
+                        })
 
                     except Exception as ex:
                         print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
@@ -125,7 +125,7 @@ class MessagesParserThread(threading.Thread):
                     else:
                         if message.media != None:
                             message_media_thread = MessageMediaThread(self.chat, phone, last_message, message)
-                            message_media_thread.setDaemon(False)
+                            message_media_thread.setDaemon(True)
                             message_media_thread.start()
                             
                     # TODO: Здесь должна быть выкачка вложений

@@ -5,10 +5,10 @@ import random
 
 from telethon import errors, types
 
-from utils.bcolors import bcolors
+from utils import bcolors
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils.bcolors import bcolors
+from utils import bcolors
 
 class ChatPulseThread(threading.Thread):
     def __init__(self, chat, phones):

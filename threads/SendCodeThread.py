@@ -3,7 +3,7 @@ import threading
 import asyncio
 import logging
 
-from utils.bcolors import bcolors
+from utils import bcolors
 from telethon import sync, errors
 from processors.ApiProcessor import ApiProcessor
 

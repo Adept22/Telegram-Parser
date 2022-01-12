@@ -5,7 +5,7 @@ import asyncio
 from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
-from utils.bcolors import bcolors
+from utils import bcolors
 
 class MembersParserThread(threading.Thread):
     def __init__(self, chat):

@@ -4,7 +4,7 @@ import logging
 import asyncio
 
 from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils.bcolors import bcolors
+from utils import bcolors
 from telethon import functions, errors, sync, types, sessions
 from processors.ApiProcessor import ApiProcessor
 from threads.SendCodeThread import SendCodeThread

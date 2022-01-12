@@ -5,12 +5,12 @@ import random
 
 from telethon import functions, errors, types
 
-from utils.bcolors import bcolors
+from utils import bcolors
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils.bcolors import bcolors
+from utils import bcolors
 
 class ChatJoiningThread(threading.Thread):
     def __init__(self, chat):
