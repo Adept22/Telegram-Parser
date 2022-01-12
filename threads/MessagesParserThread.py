@@ -68,7 +68,7 @@ class MessagesParserThread(threading.Thread):
             try:
                 client = await phone.new_client(loop=self.loop)
                 
-                last_message = { 'internalId': 0 }
+                last_message = { 'internalId': 0, 'groupedId': 0 }
                 
                 messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'DESC' })
                 
@@ -78,13 +78,11 @@ class MessagesParserThread(threading.Thread):
                 index = 1
                 all_messages = await client.get_messages(
                     types.PeerChannel(channel_id=self.chat.internal_id), 
-                    0, 
-                    offset_id=last_message['internalId']
+                    0
                 )
                 
                 async for message in client.iter_messages(
-                    entity=types.PeerChannel(channel_id=self.chat.internal_id), 
-                    offset_id=last_message['internalId']
+                    entity=types.PeerChannel(channel_id=self.chat.internal_id)
                 ):
                     if not isinstance(message, types.Message):
                         continue
@@ -95,8 +93,8 @@ class MessagesParserThread(threading.Thread):
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     
                     if len(messages) > 0:
-                        print(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
-                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
+                        print(f'Chat {self.chat.id}. Message {messages[0]["id"]}. Message exist. Continue.')
+                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]["id"]}. Message exist. Continue.')
                         
                         continue
                     
@@ -106,26 +104,29 @@ class MessagesParserThread(threading.Thread):
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
                         
-                        last_message = ApiProcessor().set('message', { 
-                            'internalId': message.id, 
-                            'text': message.message, 
-                            'chat': { "id": self.chat.id }, 
-                            'member': self.get_member(message.peer_id), 
-                            'replyTo': self.get_reply_to(message.reply_to), 
-                            'isPinned': message.pinned, 
-                            'forwardedFromId': fwd_from_id, 
-                            'forwardedFromName': fwd_from_name, 
-                            'groupedId': message.grouped_id, 
-                            'createdAt': message.date.isoformat() 
-                        })
+                        if (message.grouped_id != last_message['groupedId']):
+                        
+                            last_message = ApiProcessor().set('message', { 
+                                'internalId': message.id, 
+                                'text': message.message, 
+                                'chat': { "id": self.chat.id }, 
+                                'member': self.get_member(message.peer_id), 
+                                'replyTo': self.get_reply_to(message.reply_to), 
+                                'isPinned': message.pinned, 
+                                'forwardedFromId': fwd_from_id, 
+                                'forwardedFromName': fwd_from_name, 
+                                'groupedId': message.grouped_id, 
+                                'createdAt': message.date.isoformat() 
+                            })
+
                     except Exception as ex:
                         print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
-                    # else:
-                    #     if message.media != None:
-                    #         message_media_thread = MessageMediaThread(self, message)
-                    #         message_media_thread.setDaemon(True)
-                    #         message_media_thread.start()
+                    else:
+                        if message.media != None:
+                            message_media_thread = MessageMediaThread(self.chat, phone, last_message, message)
+                            message_media_thread.setDaemon(False)
+                            message_media_thread.start()
                             
                     # TODO: Здесь должна быть выкачка вложений
                     
