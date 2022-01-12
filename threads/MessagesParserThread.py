@@ -122,13 +122,14 @@ class MessagesParserThread(threading.Thread):
                     except Exception as ex:
                         print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
-                    else:
-                        if message.media != None:
-                            message_media_thread = MessageMediaThread(self.chat, phone, last_message, message)
-                            message_media_thread.setDaemon(True)
-                            message_media_thread.start()
-                            
                     # TODO: Здесь должна быть выкачка вложений
+
+                    # else:
+                    #     if message.media != None:
+                    #         message_media_thread = MessageMediaThread(self.chat, phone, last_message, message)
+                    #         message_media_thread.setDaemon(True)
+                    #         message_media_thread.start()
+                            
                     
                     index += 1
             except Exception as ex:
