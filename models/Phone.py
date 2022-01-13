@@ -7,7 +7,7 @@ from errors.ClientNotAvailableError import ClientNotAvailableError
 from utils import bcolors
 from telethon import functions, errors, sync, types, sessions
 from processors.ApiProcessor import ApiProcessor
-from threads.SendCodeThread import SendCodeThread
+from threads.AuthorizationThread import AuthorizationThread
 
 class Phone(object):
     def __init__(self, dict):
@@ -24,16 +24,10 @@ class Phone(object):
         
         self.code = None
         self.code_hash = None
-        self.send_code_thread = None
+        self.authorization_thread = None
         self._session = sessions.StringSession()
         
         self.from_dict(dict)
-        
-        self.client = sync.TelegramClient(
-            session=self.session, 
-            api_id=os.environ['TELEGRAM_API_ID'],
-            api_hash=os.environ['TELEGRAM_API_HASH'],
-        )
         
     @property
     def session(self):
@@ -76,48 +70,15 @@ class Phone(object):
         return self
     
     async def init(self):
-        if self.id == None:
-            raise Exception("Undefined phone id")
-        
-        if not self.client.is_connected():
-            await self.client.connect()
-        
-        is_user_authorized = await self.client.is_user_authorized()
-        
-        print(f"Phone {self.id} is authorized {is_user_authorized}.")
-        logging.debug(f"Phone {self.id} is authorized {is_user_authorized}.")
-        
-        if not is_user_authorized:
-            if self.code != None and self.code_hash != None:
-                await self.sign_in()
-            elif self.code_hash == None:
-                if self.send_code_thread == None:
-                    self.send_code_thread = SendCodeThread(self)
-                    self.send_code_thread.setDaemon(True)
-                    self.send_code_thread.start()
+        if self.session.save() == "":
+            if self.authorization_thread == None:
+                self.authorization_thread = AuthorizationThread(self)
+                self.authorization_thread.setDaemon(True)
+                self.authorization_thread.start()
+            else:
+                print(f"Authorization thread for phone {self.id} actually running.")
+                logging.debug(f"Authorization thread for phone {self.id} actually running.")
         else:
-            self.send_code_thread = None
-            
-            if not self.is_verified or self.code != None or self.code_hash != None:
-                ApiProcessor().set('phone', { 'id': self.id, 'isVerified': True, 'code': None, 'codeHash': None })        
+            self.authorization_thread = None       
             
         return self
-        
-    async def sign_in(self):
-        print(f"Phone {self.id} automatic try to sing in with code {self.code}.")
-        logging.debug(f"Phone {self.id} automatic try to sing in with code {self.code}.")
-        
-        try:
-            await self.client.sign_in(
-                phone=self.number, 
-                code=self.code, 
-                phone_code_hash=self.code_hash
-            )
-        except Exception as ex:
-            print(f"{bcolors.FAIL}Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.{bcolors.ENDC}")
-            logging.error(f"Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.")
-            
-            ApiProcessor().set('phone', { 'id': self.id, 'session': None, 'isVerified': False, 'code': None })
-        else:
-            ApiProcessor().set('phone', { 'id': self.id, 'session': self.session.save(), 'isVerified': True, 'code': None, 'codeHash': None })
-    

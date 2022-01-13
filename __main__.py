@@ -41,7 +41,7 @@ async def update_chats():
     print("Getting chats...")
     logging.debug("Getting chats...")
     
-    chats = ApiProcessor().get('chat')
+    chats = ApiProcessor().get('chat', { "isAvailable": True })
     
     for chat in chats:
         await update_chat(chat)
@@ -60,20 +60,19 @@ async def update_phone(phone):
         logging.debug(f"Updating phone {phone.id}.")
         
         await phone.init()
-        
-        if not await phone.client.is_user_authorized():
-            print(f"Phone {phone.id} actually not authorized and must be removed.")
-            logging.debug(f"Phone {phone.id} actually not authorized and must be removed.")
-            
-            del PhonesManager()[phone.id]
     else:
         phone = await Phone(phone).init()
+    
+    if phone.session.save() == "" and phone.id in PhonesManager():
+        print(f"Phone {phone.id} actually not authorized.")
+        logging.debug(f"Phone {phone.id} actually not authorized.")
         
-        if await phone.client.is_user_authorized():
-            print(f"Phone {phone.id} now starts to use.")
-            logging.debug(f"Phone {phone.id} now starts to use.")
-            
-            PhonesManager()[phone.id] = phone
+        del PhonesManager()[phone.id]
+    elif phone.session.save() != "":
+        print(f"Phone {phone.id} now starts to use.")
+        logging.debug(f"Phone {phone.id} now starts to use.")
+        
+        PhonesManager()[phone.id] = phone
 
 async def update_phones():
     print("")
@@ -82,7 +81,7 @@ async def update_phones():
     print("Getting phones...")
     logging.debug("Getting phones...")
     
-    phones = ApiProcessor().get('phone')
+    phones = ApiProcessor().get('phone', { "isBanned": False })
     
     for phone in phones:
         await update_phone(phone)
