@@ -1,3 +1,4 @@
+from re import split 
 import random
 import logging
 import threading
@@ -52,14 +53,63 @@ class MessagesParserThread(threading.Thread):
                 elif type(fwd_from.from_id) == types.PeerUser:
                     fwd_from_id = fwd_from.from_id.user_id
             
-                
             if fwd_from.from_name != None:
                 fwd_from_name = fwd_from.from_name
             else:
                 fwd_from_name = "Неизвестно"
                 
         return fwd_from_id, fwd_from_name
-    
+
+    async def download_media(self, client, last_message, message):
+        try:
+            print(f'Try to save message \'{last_message["id"]}\' media.')
+            logging.debug(f'Try to save message \'{last_message["id"]}\' media.')
+            # client = await phone.new_client(loop=self.loop)
+            
+            if isinstance(message.media, types.MessageMediaPoll):
+                pass
+            elif isinstance(message.media, types.MessageMediaVenue):
+                pass
+            elif isinstance(message.media, types.MessageMediaContact):
+                pass
+            elif isinstance(message.media, types.MessageMediaPhoto):
+                def progress_callback(current, total):
+                    print(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
+                    logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
+                
+                path = await client.download_media(
+                    message=message,
+                    file=f'../../uploads/{self.chat.id}/{last_message["id"]}/{message.id}',
+                    progress_callback=progress_callback
+                )
+
+                if path != None:
+                    media = ApiProcessor().set('message-media', { 
+                        'message': { "id": last_message["id"] }, 
+                        'path': f'/uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}', 
+                    })
+
+            elif isinstance(message.media, types.MessageMediaDocument):
+                def progress_callback(current, total):
+                    print(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
+                    logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
+                
+                path = await client.download_media(
+                    message=message,
+                    file=f'../../uploads/{self.chat.id}/{last_message["id"]}/{message.id}',
+                    progress_callback=progress_callback
+                )
+
+                if path != None:
+                    media = ApiProcessor().set('message-media', { 
+                        'message': { "id": last_message["id"] }, 
+                        'path': f'/uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}'
+                    })
+
+        except Exception as ex:
+            print(f"{bcolors.FAIL}Can\'t save message {last_message['id']} media. Exception: {ex}.{bcolors.ENDC}")
+            logging.error(f"Can\'t save message {last_message['id']} media. Exception: {ex}.")
+
     async def async_run(self):
         for phone in self.chat.phones:
             print(f'Try to recieve messages from chat {self.chat.id}.')
@@ -122,14 +172,14 @@ class MessagesParserThread(threading.Thread):
                     except Exception as ex:
                         print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
+
                     # TODO: Здесь должна быть выкачка вложений
 
                     # else:
                     #     if message.media != None:
-                    #         message_media_thread = MessageMediaThread(self.chat, phone, last_message, message)
-                    #         message_media_thread.setDaemon(True)
-                    #         message_media_thread.start()
-                            
+                    #         self.download_media(client, last_message, message)
+                            # asyncio.create_task(self.download_media(client, last_message, message))
+                            # asyncio.create_task(asyncio.sleep(1))
                     
                     index += 1
             except Exception as ex:
