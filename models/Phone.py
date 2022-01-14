@@ -70,14 +70,13 @@ class Phone(object):
         return self
     
     async def init(self):
-        if self.session.save() == "":
-            if self.authorization_thread == None:
-                self.authorization_thread = AuthorizationThread(self)
-                self.authorization_thread.setDaemon(True)
-                self.authorization_thread.start()
-            else:
-                print(f"Authorization thread for phone {self.id} actually running.")
-                logging.debug(f"Authorization thread for phone {self.id} actually running.")
+        if self.session.save() == "" and self.authorization_thread == None:
+            self.authorization_thread = AuthorizationThread(self)
+            self.authorization_thread.setDaemon(True)
+            self.authorization_thread.start()
+        elif self.authorization_thread != None:
+            print(f"Authorization thread for phone {self.id} actually running.")
+            logging.debug(f"Authorization thread for phone {self.id} actually running.")
         else:
             self.authorization_thread = None       
             

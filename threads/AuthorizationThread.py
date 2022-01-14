@@ -64,10 +64,7 @@ class AuthorizationThread(threading.Thread):
         else:
             ApiProcessor().set('phone', { 'id': self.phone.id, 'session': self.client.session.save(), 'isVerified': True, 'code': None, 'codeHash': None })
     
-    async def async_run(self):
-        if not self.client.is_connected():
-            await self.client.connect()
-            
+    async def auth(self):
         if not await self.client.is_user_authorized():
             if self.phone.code != None and self.phone.code_hash != None:
                 await self.sign_in()
@@ -79,12 +76,19 @@ class AuthorizationThread(threading.Thread):
                 if self.retry <= 50:
                     await asyncio.sleep(10)
                     
-                    await self.async_run()
+                    await self.auth()
                 else:
                     print(f"{bcolors.FAIL}Cannot authentificate phone {self.phone.id}. Code sended code expired.{bcolors.ENDC}")
                     logging.error(f"Cannot authentificate phone {self.phone.id}. Code sended code expired.")
         else:
             print(f"{bcolors.FAIL}Phone {self.phone.id} actually authorized.{bcolors.ENDC}")
             logging.error(f"Phone {self.phone.id} actually authorized.")
+
+    async def async_run(self):
+        if not self.client.is_connected():
+            await self.client.connect()
+            
+        await self.auth()
+                
     def run(self):
         asyncio.run(self.async_run())
