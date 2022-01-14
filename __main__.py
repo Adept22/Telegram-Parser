@@ -72,7 +72,7 @@ async def update_phone(phone):
     #     print(f"Phone {phone.id} now starts to use.")
     #     logging.debug(f"Phone {phone.id} now starts to use.")
         
-        PhonesManager()[phone.id] = phone
+    PhonesManager()[phone.id] = phone
 
 async def update_phones():
     print("")

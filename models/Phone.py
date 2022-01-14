@@ -24,8 +24,8 @@ class Phone(object):
         
         self.code = None
         self.code_hash = None
-        self.authorization_thread = None
         self._session = sessions.StringSession()
+        self.authorization_thread = None
         
         self.from_dict(dict)
         
@@ -70,14 +70,9 @@ class Phone(object):
         return self
     
     async def init(self):
-        if self.session.save() == "" and self.authorization_thread == None:
+        if self.authorization_thread == None:
             self.authorization_thread = AuthorizationThread(self)
             self.authorization_thread.setDaemon(True)
             self.authorization_thread.start()
-        elif self.authorization_thread != None:
-            print(f"Authorization thread for phone {self.id} actually running.")
-            logging.debug(f"Authorization thread for phone {self.id} actually running.")
-        else:
-            self.authorization_thread = None       
             
         return self
