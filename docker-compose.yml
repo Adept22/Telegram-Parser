@@ -1,8 +1,18 @@
 version: '3.4'
 
 services:
-  tgparser:
-    image: tgparser
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    tg_parser:
+        build:
+            context: .
+            dockerfile: ./Dockerfile
+        environment:
+            TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+            TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+            API_URL: ${API_URL:-https://social.tegia.ru/api/v1/telegram}
+            WEBSOCKET_URL: ${WEBSOCKET_URL:-ws://chats-monitoring-api_php_1:7015/ws}
+            WEBSOCKET_REALM: ${WEBSOCKET_REALM:-realm1}
+
+networks:
+    default:
+        external:
+            name: chats-monitoring-api_default

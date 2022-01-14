@@ -1,18 +1,15 @@
 import random
-import logging
 import threading
 import asyncio
-from telethon import types, events
+import logging
+from telethon import types
+from utils import bcolors
 
 from processors.ApiProcessor import ApiProcessor
-from utils import bcolors
 
 class MessagesParserThread(threading.Thread):
     def __init__(self, chat):
-        print(f"Creating chat {chat.id} messages parsing thread...")
-        logging.debug(f"Creating chat {chat.id} messages parsing thread...")
-        
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name=f'MessagesParserThread-{chat.id}')
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -61,8 +58,7 @@ class MessagesParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            print(f'Try to recieve messages from chat {self.chat.id}.')
-            logging.debug(f'Try to recieve messages from chat {self.chat.id}.')
+            logging.info(f'Recieving messages from chat {self.chat.id}.')
             
             try:
                 client = await phone.new_client(loop=self.loop)
@@ -72,6 +68,8 @@ class MessagesParserThread(threading.Thread):
                 messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'DESC' })
                 
                 if len(messages) > 0:
+                    logging.info(f'Last message in API exist. Continue.')
+
                     last_message = messages[0]
                 
                 index = 1
@@ -80,6 +78,7 @@ class MessagesParserThread(threading.Thread):
                     0, 
                     offset_id=last_message['internalId']
                 )
+                logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
                 
                 async for message in client.iter_messages(
                     entity=types.PeerChannel(channel_id=self.chat.internal_id), 
@@ -87,21 +86,17 @@ class MessagesParserThread(threading.Thread):
                 ):
                     if not isinstance(message, types.Message):
                         continue
-                    
-                    print(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
                     logging.debug(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
                     
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     
                     if len(messages) > 0:
-                        print(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
-                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]}. Message exist. Continue.')
+                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]} exist. Continue.')
                         
                         continue
                     
                     try: 
-                        print(f'Try to save message \'{message.id}\' at \'{message.date}\'')
-                        logging.debug(f'Try to save message \'{message.id}\' at \'{message.date}\'')
+                        logging.debug(f'Saving message \'{message.id}\' at \'{message.date}\'')
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
                         
@@ -118,19 +113,20 @@ class MessagesParserThread(threading.Thread):
                             'createdAt': message.date.isoformat() 
                         })
                     except Exception as ex:
-                        print(f"{bcolors.FAIL}Can\'t save chat {self.chat.id} message. Exception: {ex}.{bcolors.ENDC}")
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
-                    # else:
-                    #     if message.media != None:
-                    #         message_media_thread = MessageMediaThread(self, message)
-                    #         message_media_thread.setDaemon(True)
-                    #         message_media_thread.start()
-                            
-                    # TODO: Здесь должна быть выкачка вложений
+                    else:
+                        logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
+
+                        # TODO: Здесь должна быть выкачка вложений
+                        # if message.media != None:
+                        #     message_media_thread = MessageMediaThread(self, message)
+                        #     message_media_thread.setDaemon(True)
+                        #     message_media_thread.start()
+                else:
+                    logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
                     
                     index += 1
             except Exception as ex:
-                print(f"{bcolors.FAIL}Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.{bcolors.ENDC}")
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 
                 await asyncio.sleep(random.randint(2, 5))
@@ -139,13 +135,11 @@ class MessagesParserThread(threading.Thread):
             else:
                 break
         else:
+            logging.error(f"Can\'t get chat {self.chat.id} messages.")
+
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
             raise Exception(f'Chat {self.chat.id} messages download failed. Exit code 1.')
-        
-        print(f"{bcolors.OKGREEN}Chat {self.chat.id} messages download success. Exit code 0.{bcolors.ENDC}")
-        logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
-
         
     def run(self):
         asyncio.run(self.async_run())

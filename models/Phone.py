@@ -62,7 +62,6 @@ class Phone(object):
             else:
                 raise ClientNotAvailableError(f'Phone {self.id} not authorized.')
         except Exception as ex:
-            print(f"{bcolors.FAIL}Can\'t get phone {self.id} client. Exception: {ex}{bcolors.ENDC}")
             logging.error(f"Can\'t get phone {self.id} client. Exception: {ex}")
             
             raise ClientNotAvailableError(ex)
@@ -84,7 +83,6 @@ class Phone(object):
         
         is_user_authorized = await self.client.is_user_authorized()
         
-        print(f"Phone {self.id} is authorized {is_user_authorized}.")
         logging.debug(f"Phone {self.id} is authorized {is_user_authorized}.")
         
         if not is_user_authorized:
@@ -104,7 +102,6 @@ class Phone(object):
         return self
         
     async def sign_in(self):
-        print(f"Phone {self.id} automatic try to sing in with code {self.code}.")
         logging.debug(f"Phone {self.id} automatic try to sing in with code {self.code}.")
         
         try:
@@ -114,7 +111,6 @@ class Phone(object):
                 phone_code_hash=self.code_hash
             )
         except Exception as ex:
-            print(f"{bcolors.FAIL}Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.{bcolors.ENDC}")
             logging.error(f"Cannot authentificate phone {self.id} with code {self.code}. Exception: {ex}.")
             
             ApiProcessor().set('phone', { 'id': self.id, 'session': None, 'isVerified': False, 'code': None })

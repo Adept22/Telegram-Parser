@@ -1,0 +1,7 @@
+version: '3.4'
+
+services:
+    tg_parser:
+        volumes:
+            # The "cached" option has no effect on Linux but improves performance on Mac
+            - ./:/srv/app:rw,cached

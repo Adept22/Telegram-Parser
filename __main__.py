@@ -1,3 +1,5 @@
+from sys import stdout
+import os
 import asyncio
 import logging
 from autobahn.wamp.types import SubscribeOptions
@@ -11,21 +13,28 @@ from core.PhonesManager import PhonesManager
 
 from autobahn.asyncio.component import Component
 
+fh = logging.FileHandler(filename='log/dev.log', mode='a')
+fh.setLevel(logging.INFO)
+
+sh = logging.StreamHandler(stdout)
+sh.setLevel(logging.DEBUG)
+
+logging.basicConfig(
+    format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s",
+    datefmt='%H:%M:%S',
+    handlers=[fh, sh]
+)
+
 async def update_chat(chat):
-    print("")
-    logging.debug("")
-    
     if chat['id'] in ChatsManager():
-        print(f"Chat {chat['id']} founded in manager. Updating...")
-        logging.debug(f"Chat {chat['id']} founded in manager. Updating...")
+        logging.info(f"Chat {chat['id']} founded in manager. Updating...")
         
         chat = ChatsManager()[chat['id']].from_dict(chat)
         
         await chat.init()
             
         if not chat.is_available:
-            print(f"Chat {chat.id} actually not available and must be removed.")
-            logging.debug(f"Chat {chat.id} actually not available and must be removed.")
+            logging.warning(f"Chat {chat.id} actually not available.")
             
             del ChatsManager()[chat.id]
     else:
@@ -35,10 +44,6 @@ async def update_chat(chat):
             ChatsManager()[chat.id] = chat
 
 async def update_chats():
-    print("")
-    logging.debug("")
-    
-    print("Getting chats...")
     logging.debug("Getting chats...")
     
     chats = ApiProcessor().get('chat')
@@ -46,40 +51,31 @@ async def update_chats():
     for chat in chats:
         await update_chat(chat)
         
-    print(f"Received {len(chats)} chats.")
     logging.debug(f"Received {len(chats)} chats.")
     
 async def update_phone(phone):
-    print("")
     logging.debug("")
     
     if phone['id'] in PhonesManager():
         phone = PhonesManager()[phone['id']].from_dict(phone)
         
-        print(f"Updating phone {phone.id}.")
-        logging.debug(f"Updating phone {phone.id}.")
+        logging.info(f"Updating phone {phone.id}.")
         
         await phone.init()
         
         if not await phone.client.is_user_authorized():
-            print(f"Phone {phone.id} actually not authorized and must be removed.")
-            logging.debug(f"Phone {phone.id} actually not authorized and must be removed.")
+            logging.warning(f"Phone {phone.id} actually not authorized and must be removed.")
             
             del PhonesManager()[phone.id]
     else:
         phone = await Phone(phone).init()
         
         if await phone.client.is_user_authorized():
-            print(f"Phone {phone.id} now starts to use.")
-            logging.debug(f"Phone {phone.id} now starts to use.")
+            logging.info(f"Phone {phone.id} now starts to use.")
             
             PhonesManager()[phone.id] = phone
 
 async def update_phones():
-    print("")
-    logging.debug("")
-    
-    print("Getting phones...")
     logging.debug("Getting phones...")
     
     phones = ApiProcessor().get('phone')
@@ -87,25 +83,16 @@ async def update_phones():
     for phone in phones:
         await update_phone(phone)
         
-    print(f"Received {len(phones)} phones.")
     logging.debug(f"Received {len(phones)} phones.")
 
 class Component(ApplicationSession):
     async def onJoin(self, details):
-        print("")
-        logging.debug("")
-
-        print(f"session on_join: {details}")
         logging.info(f"session on_join: {details}")
         
         await update_phones()
         await update_chats()
 
         async def on_event(event, details=None):
-            print("")
-            logging.debug("")
-            
-            print(f"Got event, publication ID {details.publication}, publisher {details.publisher}: {event}")
             logging.debug(f"Got event, publication ID {details.publication}, publisher {details.publisher}: {event}")
             
             if event['_'] == 'TelegramPhone':
@@ -118,13 +105,6 @@ class Component(ApplicationSession):
     def onDisconnect(self):
         asyncio.get_event_loop().stop()
 
-
 if __name__ == '__main__':
-    logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.DEBUG, datefmt="%H:%M:%S")
-    
-    print("")
-    logging.debug("")
-    
-    runner = ApplicationRunner(u"ws://chats-monitoring-api_php_1:7016/ws", u"realm1")
+    runner = ApplicationRunner(os.environ['WEBSOCKET_URL'], os.environ['WEBSOCKET_REALM'])
     runner.run(Component)
-
