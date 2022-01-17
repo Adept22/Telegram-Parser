@@ -6,8 +6,8 @@
             "label": "docker-run: debug",
             "dependsOn": ["docker-build"],
             "dockerRun": {
-                "containerName": "tg_parser",
-                "image": "tg_parser:latest",
+                "containerName": "telegram-parser",
+                "image": "telegram-parser:latest",
                 "volumes": [
                     {
                         "containerPath": "/app",
@@ -15,7 +15,7 @@
                     }
                 ],
                 "envFiles": [ ".env" ],
-                "network": "chats-monitoring-api_default",
+                "network": "host",
                 "remove": true
             },
             "python": {
@@ -29,7 +29,7 @@
             "dockerBuild": {
                 "context": "${workspaceFolder}",
                 "dockerfile": "${workspaceFolder}/Dockerfile",
-                "tag": "tg_parser:latest"
+                "tag": "telegram-parser:latest"
             }
         }
     ]
