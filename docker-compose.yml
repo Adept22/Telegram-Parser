@@ -5,8 +5,7 @@ services:
         build:
             context: .
             dockerfile: ./Dockerfile
-        networks:
-          - host
+        network_mode: "host"
         environment:
             TELEGRAM_API_ID: ${TELEGRAM_API_ID}
             TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}

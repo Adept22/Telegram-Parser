@@ -58,7 +58,6 @@ class MessagesParserThread(threading.Thread):
 
     async def download_media(self, client, last_message, message):
         try:
-            print(f'Try to save message \'{last_message["id"]}\' media.')
             logging.debug(f'Try to save message \'{last_message["id"]}\' media.')
             # client = await phone.new_client(loop=self.loop)
             
@@ -70,7 +69,6 @@ class MessagesParserThread(threading.Thread):
                 pass
             elif isinstance(message.media, types.MessageMediaPhoto):
                 def progress_callback(current, total):
-                    print(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                     logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                 
                 path = await client.download_media(
@@ -87,7 +85,6 @@ class MessagesParserThread(threading.Thread):
 
             elif isinstance(message.media, types.MessageMediaDocument):
                 def progress_callback(current, total):
-                    print(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                     logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                 
                 path = await client.download_media(
@@ -103,7 +100,6 @@ class MessagesParserThread(threading.Thread):
                     })
 
         except Exception as ex:
-            print(f"{bcolors.FAIL}Can\'t save message {last_message['id']} media. Exception: {ex}.{bcolors.ENDC}")
             logging.error(f"Can\'t save message {last_message['id']} media. Exception: {ex}.")
 
     async def async_run(self):

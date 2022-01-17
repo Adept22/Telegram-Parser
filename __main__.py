@@ -64,15 +64,6 @@ async def update_phone(phone):
         await phone.init()
     else:
         phone = await Phone(phone).init()
-    
-    # if phone.session.save() == "" and phone.id in PhonesManager():
-    #     print(f"Phone {phone.id} actually not authorized.")
-    #     logging.debug(f"Phone {phone.id} actually not authorized.")
-        
-    #     del PhonesManager()[phone.id]
-    # elif phone.session.save() != "":
-    #     print(f"Phone {phone.id} now starts to use.")
-    #     logging.debug(f"Phone {phone.id} now starts to use.")
         
     PhonesManager()[phone.id] = phone
 

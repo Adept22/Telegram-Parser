@@ -27,27 +27,23 @@ class AuthorizationThread(threading.Thread):
         
     async def send_code(self):
         try:
-            print(f"AuthorizationThread: Try to send code for {self.phone.id}.", flush=True)
             logging.debug(f"AuthorizationThread: Try to send code for {self.phone.id}.")
             
             sent = await self.client.send_code_request(phone=self.phone.number)
-            print(f"AuthorizationThread: code sended for {self.phone.id}.", flush=True)
+            
             logging.debug(f"AuthorizationThread: code sended for {self.phone.id}.")
             
             ApiProcessor().set('phone', { 'id': self.phone.id, 'isVerified': False, 'code': None, 'codeHash': sent.phone_code_hash })
         except errors.rpcerrorlist.FloodWaitError as ex:
-            print(f"{bcolors.WARNING}AuthorizationThread: flood exception for {self.phone.id}. Sleep {ex.seconds}.{bcolors.ENDC}", flush=True)
             logging.error(f"AuthorizationThread: flood exception for {self.phone.id}. Sleep {ex.seconds}.")
             
             await asyncio.sleep(ex.seconds)
             
             await self.send_code()
         except Exception as ex:
-            print(f"{bcolors.FAIL}AuthorizationThread: unable to sent code for {self.phone.id}. Exception: {ex}.{bcolors.ENDC}", flush=True)
             logging.error(f"AuthorizationThread: unable to sent code for {self.phone.id}. Exception: {ex}.")
             
     async def sign_in(self):
-        print(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
         logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
         
         try:
@@ -57,7 +53,6 @@ class AuthorizationThread(threading.Thread):
                 phone_code_hash=self.phone.code_hash
             )
         except Exception as ex:
-            print(f"{bcolors.FAIL}Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}.{bcolors.ENDC}")
             logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}.")
             
             ApiProcessor().set('phone', { 'id': self.phone.id, 'session': None, 'isVerified': False, 'code': None })
@@ -81,11 +76,9 @@ class AuthorizationThread(threading.Thread):
                     
                     await self.async_run()
                 else:
-                    print(f"{bcolors.FAIL}Cannot authentificate phone {self.phone.id}. Code sended code expired.{bcolors.ENDC}")
                     logging.error(f"Cannot authentificate phone {self.phone.id}. Code sended code expired.")
         else:
-            print(f"{bcolors.FAIL}Phone {self.phone.id} actually authorized.{bcolors.ENDC}")
-            logging.error(f"Phone {self.phone.id} actually authorized.")
+            logging.warning(f"Phone {self.phone.id} actually authorized.")
                 
     def run(self):
         asyncio.run(self.async_run())

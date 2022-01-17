@@ -50,7 +50,6 @@ class MessageMediaThread(threading.Thread):
                     })
             elif isinstance(self.tg_message.media, types.MessageMediaDocument):
                 def progress_callback(current, total):
-                    print(f'Message \'{self.message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                     logging.debug(f'Message \'{self.message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                 
                 path = await self.tg_message.download_media(
