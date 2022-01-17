@@ -1,11 +1,5 @@
-import asyncio
-from os import name
-import random
 import re
 import logging
-
-from telethon import errors, functions, types
-
 from utils import get_hash
 
 from models.Phone import Phone
@@ -15,9 +9,6 @@ from threads.ChatPulseThread import ChatPulseThread
 from threads.ChatJoiningThread import ChatJoiningThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
-from errors.ChatNotAvailableError import ChatNotAvailableError
-from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils import bcolors
 
 class Chat(object):
     def __init__(self, dict):
@@ -65,9 +56,8 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value):
-        new_chat = None
         new_phones = []
-                
+
         if self.is_available:
             for phone in new_value:
                 phone = PhonesManager().get(phone['id'])
@@ -84,8 +74,7 @@ class Chat(object):
                 new_chat, new_phones = chat_pulse_thread.join()
                 
                 if len(new_phones) != len(new_value):
-                    print(f"Chat {self.id} list of phones changed, saving...")
-                    logging.debug(f"Chat {self.id} list of phones changed, saving...")
+                    logging.info(f"Chat {self.id} list of phones changed, saving...")
                     
                     ApiProcessor().set('chat', { 
                         'id': self.id, 
@@ -94,8 +83,7 @@ class Chat(object):
                 
                 if new_chat != None:
                     if self.internal_id != new_chat.id:
-                        print(f"Chat {self.id} \'internalId\' changed, saving...")
-                        logging.debug(f"Chat {self.id} \'internalId\' changed, saving...")
+                        logging.info(f"Chat {self.id} \'internalId\' changed, saving...")
                         
                         ApiProcessor().set('chat', { 
                             'id': self.id, 
@@ -108,11 +96,7 @@ class Chat(object):
                     self.joining_thread.setDaemon(True)
                     self.joining_thread.start()
                 else:
-                    print(f"Chat joining thread for chat {self.id} actually running.")
                     logging.debug(f"Chat joining thread for chat {self.id} actually running.")
-        else:
-            print(f"Chat {self.id} actually not available.")
-            logging.debug(f"Chat {self.id} actually not available.")
                     
         self._phones = new_phones
     
@@ -134,7 +118,6 @@ class Chat(object):
                 self.members_thread.setDaemon(True)
                 self.members_thread.start()
             else:
-                print(f"Members parsing thread for chat {self.id} actually running.")
                 logging.debug(f"Members parsing thread for chat {self.id} actually running.")
             #--< MEMBERS --<#
             
@@ -144,7 +127,6 @@ class Chat(object):
                 self.messages_thread.setDaemon(True)
                 self.messages_thread.start()
             else:
-                print(f"Messages parsing thread for chat {self.id} now is running.")
                 logging.debug(f"Messages parsing thread for chat {self.id} now is running.")
             #--< MESSAGES --<#
         

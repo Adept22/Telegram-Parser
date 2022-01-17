@@ -1,20 +1,18 @@
 import threading
 import asyncio
-import logging
 import random
+import logging
 
 from telethon import functions, errors, types
 
-from utils import bcolors
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
-from utils import bcolors
 
 class ChatJoiningThread(threading.Thread):
     def __init__(self, chat):
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name=f'ChatJoiningThread-{chat.id}')
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -71,38 +69,32 @@ class ChatJoiningThread(threading.Thread):
         new_chat = None
         new_phones = dict([(p.id, p) for p in self.chat.phones])
         
-        print(f"Chat {self.chat.id} has {len(new_phones.items())} wired phones.")
         logging.debug(f"Chat {self.chat.id} has {len(new_phones.items())} wired phones.")
         
         to_join = [PhonesManager()[k] for k in list(set(PhonesManager()) - set(new_phones))]
         to_join = list(sorted(to_join, key=lambda p: p.chats_count))
         
-        print(f"{len(to_join)} ready for joining in chat {self.chat.id}.")
         logging.debug(f"{len(to_join)} ready for joining in chat {self.chat.id}.")
         
         for phone in to_join:
             try:
                 new_chat = await self.wire(phone)
             except (ClientNotAvailableError, ChatNotAvailableError) as ex:
-                print(f"{bcolors.FAIL}Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.{bcolors.ENDC}")
                 logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
                 
                 await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             except errors.FloodWaitError as ex:
-                print(f"{bcolors.FAIL}Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.{bcolors.ENDC}")
                 logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
                 
                 await asyncio.sleep(ex.seconds)
             else:
-                print(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
-                logging.debug(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
+                logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
                 
                 new_phones[phone.id] = phone
                 
                 if len(new_phones.items()) >= 3:
-                    print(f"Wired phones limit reached for chat {self.chat.id}.")
                     logging.debug(f"Wired phones limit reached for chat {self.chat.id}.")
                     
                     break
@@ -110,7 +102,6 @@ class ChatJoiningThread(threading.Thread):
                 await asyncio.sleep(random.randint(2, 5))
             
         if new_chat == None or len(new_phones.items()) == 0:
-            print(f"{bcolors.FAIL}Chat {self.chat.id} not available.{bcolors.ENDC}")
             logging.error(f"Chat {self.chat.id} not available.")
             
             self.chat.is_available = False
@@ -118,8 +109,7 @@ class ChatJoiningThread(threading.Thread):
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
         else:
             if self.chat.internal_id != new_chat.id:
-                print(f"Chat {self.chat.id} \'internalId\' changed, saving...")
-                logging.debug(f"Chat {self.chat.id} \'internalId\' changed, saving...")
+                logging.info(f"Chat {self.chat.id} \'internalId\' changed, saving...")
                 
                 ApiProcessor().set('chat', { 
                     'id': self.chat.id, 
@@ -129,8 +119,7 @@ class ChatJoiningThread(threading.Thread):
                 
             if len(new_phones.items()) != len(self.chat.phones) or \
                 any(x.id != y.id for x, y in zip(new_phones.values(), self.chat.phones)):
-                print(f"Chat {self.chat.id} list of phones changed, saving...")
-                logging.debug(f"Chat {self.chat.id} list of phones changed, saving...")
+                logging.info(f"Chat {self.chat.id} list of phones changed, saving...")
                 
                 ApiProcessor().set('chat', { 
                     'id': self.chat.id, 

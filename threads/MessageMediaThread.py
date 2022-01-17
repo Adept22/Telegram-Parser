@@ -1,20 +1,16 @@
-from os import name
+import os
 from re import split
 import threading
 import asyncio
 import logging
-import random
 
-from telethon import errors, types
+from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
-from utils import bcolors
-from errors.ChatNotAvailableError import ChatNotAvailableError
-from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class MessageMediaThread(threading.Thread):
     def __init__(self, chat, phone, message, tg_message):
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name=f'MessageMediaThread-{message["id"]}')
         
         self.chat = chat
         self.phone = phone
@@ -27,7 +23,6 @@ class MessageMediaThread(threading.Thread):
             
     async def async_run(self):
         try:
-            print(f'Try to save message \'{self.message["id"]}\' media.')
             logging.debug(f'Try to save message \'{self.message["id"]}\' media.')
 
             client = await self.phone.new_client(loop=self.loop)
@@ -40,7 +35,6 @@ class MessageMediaThread(threading.Thread):
                 pass
             elif isinstance(self.tg_message.media, types.MessageMediaPhoto):
                 def progress_callback(current, total):
-                    print(f'Message \'{self.message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                     logging.debug(f'Message \'{self.message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
                 
                 path = await client.download_media(
@@ -71,8 +65,7 @@ class MessageMediaThread(threading.Thread):
                         'path': f'/uploads/{self.chat.id}/{self.message["id"]}/{split("/", path)[-1]}'
                     })
         except Exception as ex:
-            print(f"{bcolors.FAIL}Can\'t save message {self.message['id']} media. Exception: {ex}.{bcolors.ENDC}")
-            logging.error(f"Can\'t save message {self.message['id']} media. Exception: {ex}.")
+            logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
 
     def run(self):
         asyncio.run(self.async_run())
