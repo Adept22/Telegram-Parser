@@ -157,8 +157,7 @@ class MembersParserThread(threading.Thread):
                         # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
                         #     pass
                     except Exception as ex:
-                        # logging.error(f"test")
-                        logging.error(f"Can\'t save profile photo {user.id} media. Exception: {ex}.")
+                        logging.error(f"Can\'t save profile photo {member['id']} media. Exception: {ex}.")
 
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
