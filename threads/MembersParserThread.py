@@ -1,3 +1,4 @@
+from re import split 
 import random
 import threading
 import asyncio
@@ -132,11 +133,33 @@ class MembersParserThread(threading.Thread):
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     logging.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     
-                    self.save_chat_member_role(user.participant, self.save_chat_member(self.save_member(user)))
-                    
+                    member = self.save_member(user)
+                    self.save_chat_member_role(user.participant, self.save_chat_member(member))
                     # TODO: Здесь должна быть выкачка аватарок
-                    # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
-                    #     pass
+
+                    try:
+                        logging.debug(f'Try to save profile photo \'{user.id}\' media.')
+
+                        pathFolder = f'/uploads/members/{member["id"]}/'
+
+                        pathToFile = await client.download_profile_photo(
+                            user,
+                            file=f'.{pathFolder}0',
+                            download_big=True
+                        )
+
+                        if pathToFile != None:
+                            media = ApiProcessor().set('member-media', { 
+                                'member': { "id": member['id'] }, 
+                                'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
+                            })
+
+                        # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
+                        #     pass
+                    except Exception as ex:
+                        # logging.error(f"test")
+                        logging.error(f"Can\'t save profile photo {user.id} media. Exception: {ex}.")
+
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
                 
