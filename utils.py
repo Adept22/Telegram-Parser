@@ -41,11 +41,11 @@ class DateTimeEncoder(json.JSONEncoder):
             return list(item)
         return json.JSONEncoder.default(self, item)
 
-async def profile_media_process(client, entity, uiid, media_type):
+async def profile_media_process(client, entity, uuid, media_type):
     try:
-        logging.debug(f'Try to save {media_type} profile \'{uiid}\' media.')
+        logging.debug(f'Try to save {media_type} profile \'{uuid}\' media.')
 
-        pathFolder = f'/uploads/{media_type}-media/{uiid}/'
+        pathFolder = f'/uploads/{media_type}-media/{uuid}/'
 
         pathToFile = await client.download_profile_photo(
             entity=entity,
@@ -55,7 +55,7 @@ async def profile_media_process(client, entity, uiid, media_type):
 
         if pathToFile != None:
             ApiProcessor().set(f'{media_type}-media', { 
-                'member': { "id": uiid }, 
+                media_type: { "id": uuid }, 
                 'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
             })
 

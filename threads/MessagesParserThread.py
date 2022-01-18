@@ -5,6 +5,7 @@ import asyncio
 import logging
 from telethon import types
 from utils import bcolors
+from utils import profile_media_process
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -119,15 +120,24 @@ class MessagesParserThread(threading.Thread):
                     last_message = messages[0]
                 
                 index = 1
+                entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
+
+                await profile_media_process(
+                    client=client,
+                    entity=entity,
+                    uuid=self.chat.id,
+                    media_type='chat'
+                )                
+
                 all_messages = await client.get_messages(
-                    types.PeerChannel(channel_id=self.chat.internal_id), 
-                    0,
+                    entity=entity, 
+                    limit=0,
                     offset_id=last_message['internalId']
                 )
                 logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
-                
+
                 async for message in client.iter_messages(
-                    entity=types.PeerChannel(channel_id=self.chat.internal_id),
+                    entity=entity,
                     offset_id=last_message['internalId']
                 ):
                     if not isinstance(message, types.Message):

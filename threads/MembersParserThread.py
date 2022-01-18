@@ -97,7 +97,7 @@ class MembersParserThread(threading.Thread):
                     await profile_media_process(
                         client=client,
                         entity=user,
-                        uiid=member['id'],
+                        uuid=member['id'],
                         media_type='member'
                     )
 
