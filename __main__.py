@@ -13,22 +13,9 @@ from core.PhonesManager import PhonesManager
 
 from autobahn.asyncio.component import Component
 
-fh = logging.FileHandler(filename='log/dev.log', mode='a')
-fh.setLevel(logging.INFO)
-
-sh = logging.StreamHandler(stdout)
-sh.setLevel(logging.DEBUG)
-
-logging.basicConfig(
-    format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s",
-    datefmt='%H:%M:%S',
-    handlers=[fh, sh],
-    level=logging.DEBUG
-)
-
 async def update_chat(chat):
     if chat['id'] in ChatsManager():
-        logging.info(f"Chat {chat['id']} founded in manager. Updating...")
+        logging.debug(f"Updating chat {chat['id']}.")
         
         chat = ChatsManager()[chat['id']].from_dict(chat)
         
@@ -39,6 +26,8 @@ async def update_chat(chat):
             
             del ChatsManager()[chat.id]
     else:
+        logging.debug(f"Setting up new chat {chat['id']}.")
+        
         chat = await Chat(chat).init()
         
         if chat.is_available:
@@ -55,15 +44,15 @@ async def update_chats():
     logging.debug(f"Received {len(chats)} chats.")
     
 async def update_phone(phone):
-    logging.debug("")
-    
     if phone['id'] in PhonesManager():
-        phone = PhonesManager()[phone['id']].from_dict(phone)
+        logging.debug(f"Updating phone {phone['id']}.")
         
-        logging.info(f"Updating phone {phone.id}.")
+        phone = PhonesManager()[phone['id']].from_dict(phone)
         
         await phone.init()
     else:
+        logging.debug(f"Setting up new phone {phone['id']}.")
+        
         phone = await Phone(phone).init()
         
     PhonesManager()[phone.id] = phone
@@ -99,5 +88,18 @@ class Component(ApplicationSession):
         asyncio.get_event_loop().stop()
 
 if __name__ == '__main__':
+    fh = logging.FileHandler(filename='log/dev.log', mode='a')
+    fh.setLevel(logging.INFO)
+
+    sh = logging.StreamHandler(stdout)
+    sh.setLevel(logging.DEBUG)
+
+    logging.basicConfig(
+        format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s",
+        datefmt='%H:%M:%S',
+        handlers=[fh, sh],
+        level=logging.DEBUG
+    )
+    
     runner = ApplicationRunner(os.environ['WEBSOCKET_URL'], os.environ['WEBSOCKET_REALM'])
     runner.run(Component)
