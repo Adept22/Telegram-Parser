@@ -9,6 +9,13 @@
                 "containerName": "telegram-parser",
                 "image": "telegram-parser:latest",
                 "envFiles": [ ".env" ],
+                "volumes": [
+                    {
+                        "localPath": "${workspaceFolder}",
+                        "containerPath": "/srv/app",
+                        "permissions": "rw"
+                    }
+                ],
                 "network": "host",
                 "remove": true
             },
