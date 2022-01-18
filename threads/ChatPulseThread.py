@@ -5,6 +5,7 @@ import logging
 
 from telethon import errors, types
 
+from processors.ApiProcessor import ApiProcessor
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
@@ -12,24 +13,28 @@ class ChatPulseThread(threading.Thread):
     def __init__(self, chat, phones):
         threading.Thread.__init__(self, name=f'ChatPulseThread-{chat.id}')
         
-        self.new_chat = None
-        self.new_phones = dict([(p.id, p) for p in phones])
+        self.chat = chat
+        self.phones = phones
         
         self.loop = asyncio.new_event_loop()
-        self.chat = chat
         
         asyncio.set_event_loop(self.loop)
             
     async def async_run(self):
-        logging.debug(f"{len(self.new_phones.items())} phones initially wired with chat {self.chat.id}.")
+        tg_chat = None
+        new_phones = dict([(p.id, p) for p in self.phones])
         
-        for id, phone in self.new_phones.items():
+        logging.debug(f"{len(new_phones.items())} phones initially wired with chat {self.chat.id}.")
+        
+        for phone in self.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
-                logging.debug(f"Try to get chat {self.chat.id} for check pulse using phone {id}.")
                 
-                self.new_chat = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
-                logging.info(f"Chat {self.chat.id} getted from Telethone by phone {id}.")
+                logging.debug(f"Try to get chat {self.chat.id} for check pulse using phone {phone.id}.")
+                
+                tg_chat = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
+                
+                logging.info(f"Chat {self.chat.id} getted from Telethone by phone {phone.id}.")
             except (
                 ClientNotAvailableError, 
                 ChatNotAvailableError, 
@@ -39,16 +44,35 @@ class ChatPulseThread(threading.Thread):
                 errors.ChatIdInvalidError,
                 errors.PeerIdInvalidError
             ) as ex:
-                logging.error(f"Chat or channel {self.chat.id} not available for phone {id} problem. Exception: {ex}.")
+                logging.error(f"Chat or channel {self.chat.id} not available for phone {phone.id} problem. Exception: {ex}.")
                 
-                del self.new_phones[id]
+                del new_phones[phone.id]
+            else:
+                await asyncio.sleep(random.randint(2, 5))
         
-            await asyncio.sleep(random.randint(2, 5))
+        new_chat = { 'id': self.chat.id }
+            
+        if len(new_phones) != len(self.phones):
+            logging.info(f"Chat {self.id} list of phones changed...")
+            
+            new_chat['phones'] = [{ 'id': p.id } for p in new_phones]
+            
+        if tg_chat != None:
+            if self.chat.internal_id != tg_chat.id:
+                logging.info(f"Chat {self.chat.id} \'internalId\' changed...")
+                
+                new_chat['internalId'] = tg_chat.id
+            
+            if self.chat.title != tg_chat.title:
+                logging.info(f"Chat {self.chat.id} \'title\' changed...")
+                
+                new_chat['title'] = tg_chat.title if self.chat.title == None else self.chat.title
+                
+        if len(new_phones) == 0:
+            new_chat["isAvailable"] = False
+                
+        if len(new_chat.items()) > 1:
+            ApiProcessor().set('chat', new_chat)
 
     def run(self):
         asyncio.run(self.async_run())
-        
-    def join(self, *args):
-        threading.Thread.join(self, *args)
-        
-        return self.new_chat, list(self.new_phones.values())

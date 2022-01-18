@@ -2,7 +2,6 @@ import re
 import logging
 from utils import get_hash
 
-from models.Phone import Phone
 from core.PhonesManager import PhonesManager
 from processors.ApiProcessor import ApiProcessor
 from threads.ChatPulseThread import ChatPulseThread
@@ -29,6 +28,8 @@ class Chat(object):
         self.hash = None
         self.internal_id = None
         self.is_available = False
+        
+        self.chat_pulse_thread = None
         self.joining_thread = None
         self.members_thread = None
         self.messages_thread = None
@@ -65,38 +66,21 @@ class Chat(object):
                 if phone != None:
                     new_phones.append(phone)
                     
-            if len(new_phones) >= 3:
-                self.joining_thread = None
-                
-                chat_pulse_thread = ChatPulseThread(self, new_phones)
-                chat_pulse_thread.setDaemon(True)
-                chat_pulse_thread.start()
-                new_chat, new_phones = chat_pulse_thread.join()
-                
-                if len(new_phones) != len(new_value):
-                    logging.info(f"Chat {self.id} list of phones changed, saving...")
-                    
-                    ApiProcessor().set('chat', { 
-                        'id': self.id, 
-                        'phones': [{ 'id': p.id } for p in new_phones] 
-                    })
-                
-                if new_chat != None:
-                    if self.internal_id != new_chat.id:
-                        logging.info(f"Chat {self.id} \'internalId\' changed, saving...")
-                        
-                        ApiProcessor().set('chat', { 
-                            'id': self.id, 
-                            'internalId': new_chat.id,
-                            'title': new_chat.title if self.title == None else self.title
-                        })
-            else:
+            if len(new_phones) < 3 and len(PhonesManager().items()) >= 3:
                 if self.joining_thread == None:
                     self.joining_thread = ChatJoiningThread(self)
                     self.joining_thread.setDaemon(True)
                     self.joining_thread.start()
                 else:
-                    logging.debug(f"Chat joining thread for chat {self.id} actually running.")
+                    logging.debug(f"Chat joining thread for chat {self.id} is running.")
+            else:
+                self.joining_thread = None
+                
+                if self.chat_pulse_thread == None:
+                    self.chat_pulse_thread = ChatPulseThread(self, new_phones)
+                    self.chat_pulse_thread.start()
+                else:
+                    logging.debug(f"Chat pulse thread for chat {self.id} is running.")
                     
         self._phones = new_phones
     
@@ -118,7 +102,7 @@ class Chat(object):
                 self.members_thread.setDaemon(True)
                 self.members_thread.start()
             else:
-                logging.debug(f"Members parsing thread for chat {self.id} actually running.")
+                logging.debug(f"Members parsing thread for chat {self.id} is running.")
             #--< MEMBERS --<#
             
             #--> MESSAGES -->#
@@ -127,7 +111,7 @@ class Chat(object):
                 self.messages_thread.setDaemon(True)
                 self.messages_thread.start()
             else:
-                logging.debug(f"Messages parsing thread for chat {self.id} now is running.")
+                logging.debug(f"Messages parsing thread for chat {self.id} is running.")
             #--< MESSAGES --<#
         
         return self
