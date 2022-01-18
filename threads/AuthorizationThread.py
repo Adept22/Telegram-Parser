@@ -76,7 +76,9 @@ class AuthorizationThread(threading.Thread):
                     
                     await self.async_run()
                 else:
-                    logging.error(f"Cannot authentificate phone {self.phone.id}. Code sended code expired.")
+                    logging.error(f"Cannot authentificate phone {self.phone.id}. Code expired.")
+                    
+                    ApiProcessor().set('phone', { 'id': self.phone.id, 'session': None, 'isVerified': False, 'code': None, 'codeHash': None })
         else:
             logging.warning(f"Phone {self.phone.id} actually authorized.")
                 

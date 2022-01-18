@@ -66,10 +66,18 @@ class Phone(object):
             
         return self
     
+    def start_auth_thread(self):
+        self.authorization_thread = AuthorizationThread(self)
+        self.authorization_thread.setDaemon(True)
+        self.authorization_thread.start()
+    
     async def init(self):
-        if self.authorization_thread == None:
-            self.authorization_thread = AuthorizationThread(self)
-            self.authorization_thread.setDaemon(True)
-            self.authorization_thread.start()
+        if self.session.save() == "":
+            if self.authorization_thread == None:
+                self.start_auth_thread()
+            elif not self.authorization_thread.is_alive():
+                self.start_auth_thread()
+        else:
+            self.authorization_thread == None
             
         return self
