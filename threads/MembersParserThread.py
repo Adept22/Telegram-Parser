@@ -15,112 +15,61 @@ class MembersParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-    def save_member(self, user):
-        member = {}
+    def get_member(self, user):
+        new_member = {
+            'internalId': user.id,
+            'username': user.username,
+            'firstName': user.first_name,
+            'lastName': user.last_name,
+            'phone': user.phone
+        }
         
         members = ApiProcessor().get('member', { 'internalId': user.id })
         
         if len(members) > 0:
-            logging.debug(f'Member \'{user.first_name}\' founded in API.')
+            logging.debug(f'Member \'{user.first_name}\' exists in API.')
             
-            member = members[0]
+            if members[0].get('id') != None:
+                new_member['id'] = members[0].get('id')
         
-        try: 
-            logging.debug(f'Try to save member \'{user.first_name}\'')
-            
-            new_member = {
-                'internalId': user.id,
-                'username': user.username,
-                'firstName': user.first_name,
-                'lastName': user.last_name,
-                'phone': user.phone
-            }
-            
-            if member.get('id') != None:
-                new_member['id'] = member['id']
-            
-            member = ApiProcessor().set('member', new_member)
-        except Exception as ex:
-            logging.error(f"Can\'t save chat {self.chat.id} member. Exception: {ex}.")
-
-            raise Exception(f'Can\'t save member of chat {self.chat.id}')
-        else:
-            logging.info(f'Member \'{member["id"]}\' saved.')
+        return new_member
         
-        return member
+    def get_chat_member(self, member):
+        new_chat_member = {
+            'chat': { 'id': self.chat.id }, 
+            'member': member
+        }
         
-    def save_chat_member(self, member):
-        chat_member = {}
+        if new_chat_member['member'].get('id') != None:
+            chat_members = ApiProcessor().get('chat-member', new_chat_member)
+            
+            if len(chat_members) > 0:
+                if chat_members[0].get('id') != None:
+                    new_chat_member['id'] = chat_members[0]['id']
         
-        chat_members = ApiProcessor().get('chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': member['id'] } })
-        
-        if len(chat_members) > 0:
-            logging.debug(f"Chat-member {member['id']} founded in API.")
-            
-            chat_member = chat_members[0]
-            
-        try:
-            logging.debug(f"Try to save chat-member: chat - {self.chat.id}, member - {member['id']}.")
-            
-            new_chat_member = {
-                'chat': { 'id': self.chat.id }, 
-                'member': { 'id': member['id'] } 
-            }
-            
-            if chat_member.get('id') != None:
-                new_chat_member['id'] = chat_member['id']
-            
-            chat_member = ApiProcessor().set('chat-member', new_chat_member)
-        except Exception as ex:
-            logging.error(f"Can\'t save chat-member chat: {self.chat.id} member: {member['id']}. Exception: {ex}.")
-
-            raise Exception(f'Can\'t create chat-member entity. Exception: {ex}')
-        else:
-            logging.info(f'Chat member \'{chat_member["id"]}\' saved.')
-        
-        return chat_member
+        return new_chat_member
     
-    def save_chat_member_role(self, participant, chat_member):
-        chat_member_role = {}
+    def get_chat_member_role(self, participant, chat_member):
+        new_chat_member_role = { 'member': chat_member }
         
         if isinstance(participant, types.ChannelParticipantAdmin):
-            title = (participant.rank if participant.rank != None else 'Администратор')
-            code = "admin"
+            new_chat_member_role["title"] = (participant.rank if participant.rank != None else 'Администратор')
+            new_chat_member_role["code"] = "admin"
         elif isinstance(participant, types.ChannelParticipantCreator):
-            title = (participant.rank if participant.rank != None else 'Создатель')
-            code = "creator"
+            new_chat_member_role["title"] = (participant.rank if participant.rank != None else 'Создатель')
+            new_chat_member_role["code"] = "creator"
         else:
-            title = "Участник"
-            code = "member"
-            
-        chat_member_roles = ApiProcessor().get('chat-member-role', { 'member': {'id': chat_member['id']}, 'title': title, 'code': code })
+            new_chat_member_role["title"] = "Участник"
+            new_chat_member_role["code"] = "member"
         
-        if len(chat_member_roles) > 0:
-            logging.debug(f"Chat-member-role for chat-member {chat_member['id']} founded in API.")
+        if new_chat_member_role['member'].get('id') != None:
+            chat_member_roles = ApiProcessor().get('chat-member-role', new_chat_member_role)
             
-            chat_member_role = chat_member_roles[0]
-            
-        try:
-            logging.debug(f"Try to save chat-member-role: chat - {self.chat.id}, chat-member - {chat_member['id']}.")
-            
-            new_chat_member_role = {
-                'member': { 'id': chat_member['id'] }, 
-                'title': title, 
-                'code': code 
-            }
-            
-            if chat_member_role.get('id') != None:
-                new_chat_member_role['id'] = chat_member_role['id']
-            
-            chat_member_role = ApiProcessor().set('chat-member-role', new_chat_member_role)
-        except Exception as ex:
-            logging.error(f"Can\'t save chat-member-role: chat - {self.chat.id}, chat-member - {chat_member['id']}. Exception: {ex}.")
-        
-            raise Exception(f'Can\'t create chat-member-role entity. Exception: {ex}')
-        else:
-            logging.info(f'Chat member role \'{chat_member_role["id"]}\' saved.')
+            if len(chat_member_roles) > 0:
+                if chat_member_roles[0].get('id') != None:
+                    new_chat_member_role['id'] = chat_member_roles[0]['id']
                     
-        return chat_member_role
+        return new_chat_member_role
     
     async def async_run(self):
         for phone in self.chat.phones:
@@ -132,8 +81,15 @@ class MembersParserThread(threading.Thread):
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     logging.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     
-                    self.save_chat_member_role(user.participant, self.save_chat_member(self.save_member(user)))
+                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
+                    try:
+                        ApiProcessor().set('chat-member-role', chat_member_role)
+                    except Exception as ex:
+                        logging.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
+                    else:
+                        logging.debug(f"Member \'{user.first_name}\' with role saved.")
+                        
                     # TODO: Здесь должна быть выкачка аватарок
                     # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
                     #     pass

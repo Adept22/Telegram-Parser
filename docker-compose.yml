@@ -10,5 +10,5 @@ services:
             TELEGRAM_API_ID: ${TELEGRAM_API_ID}
             TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
             API_URL: ${API_URL:-https://localhost:7006/api/v1/telegram}
-            WEBSOCKET_URL: ${WEBSOCKET_URL:-ws://localhost:7015/ws}
+            WEBSOCKET_URL: ${WEBSOCKET_URL:-ws://localhost:7015}
             WEBSOCKET_REALM: ${WEBSOCKET_REALM:-realm1}
