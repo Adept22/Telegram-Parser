@@ -1,11 +1,12 @@
+from re import split 
 import random
 import threading
 import asyncio
 import logging
 from telethon import types
+from utils import profile_media_process
 
 from processors.ApiProcessor import ApiProcessor
-from utils import profile_media_process
 
 class MembersParserThread(threading.Thread):
     def __init__(self, chat):
@@ -82,8 +83,9 @@ class MembersParserThread(threading.Thread):
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     logging.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     
-                    member = self.get_member(user)
-                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(member))
+                    member = self.save_member(user)
+                    self.save_chat_member_role(user.participant, self.save_chat_member(member))
+                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
                     try:
                         ApiProcessor().set('chat-member-role', chat_member_role)
@@ -94,12 +96,27 @@ class MembersParserThread(threading.Thread):
                         
                     # TODO: Здесь должна быть выкачка аватарок
 
-                    await profile_media_process(
-                        client=client,
-                        entity=user,
-                        uiid=member['id'],
-                        media_type='member'
-                    )
+                    try:
+                        logging.debug(f'Try to save profile photo \'{user.id}\' media.')
+
+                        pathFolder = f'/uploads/members/{member["id"]}/'
+
+                        pathToFile = client.download_profile_photo(
+                            user,
+                            file=f'.{pathFolder}0',
+                            download_big=True
+                        )
+
+                        if pathToFile != None:
+                            media = ApiProcessor().set('member-media', { 
+                                'member': { "id": member['id'] }, 
+                                'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
+                            })
+
+                        # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
+                        #     pass
+                    except Exception as ex:
+                        logging.error(f"Can\'t save profile photo {member['id']} media. Exception: {ex}.")
 
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")

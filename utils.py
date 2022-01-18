@@ -1,7 +1,9 @@
 import re
+import logging
 import json
 from errors.InvalidLinkError import InvalidLinkError
 from datetime import datetime
+from processors.ApiProcessor import ApiProcessor
 
 class bcolors:
     HEADER = '\033[95m'
@@ -38,3 +40,26 @@ class DateTimeEncoder(json.JSONEncoder):
         if isinstance(item, bytes):
             return list(item)
         return json.JSONEncoder.default(self, item)
+
+async def profile_media_process(client, entity, uiid, media_type):
+    try:
+        logging.debug(f'Try to save {media_type} profile \'{uiid}\' media.')
+
+        pathFolder = f'/uploads/{media_type}-media/{uiid}/'
+
+        pathToFile = await client.download_profile_photo(
+            entity=entity,
+            file=f'.{pathFolder}0',
+            download_big=True
+        )
+
+        if pathToFile != None:
+            ApiProcessor().set(f'{media_type}-media', { 
+                'member': { "id": uiid }, 
+                'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+            })
+
+        # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
+        #     pass
+    except Exception as ex:
+        logging.error(f"Can\'t save profile photo {id} media. Exception: {ex}.")

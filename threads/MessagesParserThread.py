@@ -121,12 +121,14 @@ class MessagesParserThread(threading.Thread):
                 index = 1
                 all_messages = await client.get_messages(
                     types.PeerChannel(channel_id=self.chat.internal_id), 
-                    0
+                    0,
+                    offset_id=last_message['internalId']
                 )
                 logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
                 
                 async for message in client.iter_messages(
-                    entity=types.PeerChannel(channel_id=self.chat.internal_id)
+                    entity=types.PeerChannel(channel_id=self.chat.internal_id),
+                    offset_id=last_message['internalId']
                 ):
                     if not isinstance(message, types.Message):
                         continue
