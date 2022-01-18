@@ -22,7 +22,8 @@ sh.setLevel(logging.DEBUG)
 logging.basicConfig(
     format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s",
     datefmt='%H:%M:%S',
-    handlers=[fh, sh]
+    handlers=[fh, sh],
+    level=logging.DEBUG
 )
 
 async def update_chat(chat):
