@@ -173,7 +173,8 @@ class MessagesParserThread(threading.Thread):
                         #     message_media_thread.setDaemon(True)
                         #     message_media_thread.start()
                 else:
-                    logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
+                    # logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
+                    logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
                     
                     index += 1
             except Exception as ex:

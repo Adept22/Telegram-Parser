@@ -42,8 +42,6 @@ class DateTimeEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, item)
 
 async def profile_media_process(client, entity, uuid, media_type):
-    try:
-        logging.debug(f'Try to save {media_type} profile \'{uuid}\' media.')
 
         pathFolder = f'/uploads/{media_type}-media/{uuid}/'
 
@@ -61,5 +59,14 @@ async def profile_media_process(client, entity, uuid, media_type):
 
         # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
         #     pass
-    except Exception as ex:
-        logging.error(f"Can\'t save profile photo {id} media. Exception: {ex}.")
+
+# def user_title(id, username, first_name, last_name):
+#     return id or first_name+last_name or username
+
+def user_title(user):
+    if user.username != None:
+        return user.username
+    elif user.first_name or user.last_name:
+        return user.first_name or user.last_name
+    else:
+        return user.id

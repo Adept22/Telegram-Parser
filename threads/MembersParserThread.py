@@ -2,10 +2,32 @@ import random
 import threading
 import asyncio
 import logging
+from sys import stdout
 from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
-from utils import profile_media_process
+from utils import profile_media_process, bcolors, user_title
+from utils import bcolors
+
+LOGFILE = 'log/dev.log'
+logger = logging.getLogger("base_logger")
+logger.setLevel(logging.INFO)
+
+# create a console handler
+print_format = logging.Formatter('%(threadName)-8s %(message)s')
+console_handler = logging.StreamHandler(stdout)
+console_handler.setFormatter(print_format)
+
+# create a log file handler
+log_format = logging.Formatter('[%(asctime)s] %(levelname)-8s %(name)-12s %(message)s')
+file_handler = logging.FileHandler(LOGFILE)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(log_format)
+
+#Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
 
 class MembersParserThread(threading.Thread):
     def __init__(self, chat):
@@ -28,7 +50,7 @@ class MembersParserThread(threading.Thread):
         members = ApiProcessor().get('member', { 'internalId': user.id })
         
         if len(members) > 0:
-            logging.debug(f'Member \'{user.first_name}\' exists in API.')
+            logger.debug(f'Member \'{user.first_name}\' exists in API.')
             
             if members[0].get('id') != None:
                 new_member['id'] = members[0].get('id')
@@ -74,47 +96,61 @@ class MembersParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            logging.info(f'Recieving members from chat {self.chat.id}.')
+            # logger.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.id}.')
+            logger.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.title}.')
             
             try:
                 client = await phone.new_client(loop=self.loop)
                 
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
-                    logging.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
+                    # logger.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
+                    logger.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
                     
                     member = self.get_member(user)
                     chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(member))
                     
+                    
                     try:
                         ApiProcessor().set('chat-member-role', chat_member_role)
                     except Exception as ex:
-                        logging.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
+                        # logger.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
+                        logger.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
                     else:
-                        logging.debug(f"Member \'{user.first_name}\' with role saved.")
+                        logger.debug(f"Member \'{user_title(user)}\' with role saved.")
                         
                     # TODO: Здесь должна быть выкачка аватарок
 
-                    await profile_media_process(
-                        client=client,
-                        entity=user,
-                        uuid=member['id'],
-                        media_type='member'
-                    )
+                    try:
+                        logging.debug(f'Try to save member \'{user_title(user)}\' profile media.')
+                        await profile_media_process(
+                            client=client,
+                            entity=user,
+                            uuid=member['id'],
+                            media_type='member'
+                        )
+                    except Exception as ex:
+                        logging.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
+                    else:
+                        logger.info(f"Member \'{user_title(user)}\'")
+
 
             except Exception as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
+                # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
+                logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
                 
                 await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             else:
-                logging.info(f"Chat {self.chat.id} participants download success. Exit code 0.")
+                # logger.info(f"{bcolors.OKGREEN} Chat {self.chat.id} participants download success. Exit code 0.")
+                logger.info(f"{bcolors.OKGREEN} 🏁 Chat \'{self.chat.title}\' participants download success. Exit code 0 🏁")
                 
                 break
         else:
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
+            # raise Exception(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
+            raise Exception(f'Cannot get chat {self.chat.title} participants. Exit code 1.')
         
     def run(self):
         asyncio.run(self.async_run())
