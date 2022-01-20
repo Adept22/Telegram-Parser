@@ -109,7 +109,6 @@ class MembersParserThread(threading.Thread):
                     member = self.get_member(user)
                     chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(member))
                     
-                    
                     try:
                         ApiProcessor().set('chat-member-role', chat_member_role)
                     except Exception as ex:
@@ -131,7 +130,7 @@ class MembersParserThread(threading.Thread):
                     except Exception as ex:
                         logging.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
                     else:
-                        logger.info(f"Member \'{user_title(user)}\'")
+                        logger.info(f"Member \'{user_title(user)}\' profile media saved")
 
 
             except Exception as ex:
@@ -150,7 +149,7 @@ class MembersParserThread(threading.Thread):
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
             # raise Exception(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
-            raise Exception(f'Cannot get chat {self.chat.title} participants. Exit code 1.')
+            raise Exception(f'{bcolors.FAIL} Cannot get chat {self.chat.title} participants. Exit code 1.')
         
     def run(self):
         asyncio.run(self.async_run())

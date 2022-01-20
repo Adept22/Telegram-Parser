@@ -42,26 +42,22 @@ class DateTimeEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, item)
 
 async def profile_media_process(client, entity, uuid, media_type):
+    pathFolder = f'./uploads/{media_type}-media/{uuid}/'
 
-        pathFolder = f'/uploads/{media_type}-media/{uuid}/'
+    pathToFile = await client.download_profile_photo(
+        entity=entity,
+        file=f'{pathFolder}0',
+        download_big=True
+    )
 
-        pathToFile = await client.download_profile_photo(
-            entity=entity,
-            file=f'.{pathFolder}0',
-            download_big=True
-        )
+    if pathToFile != None:
+        ApiProcessor().set(f'{media_type}-media', { 
+            media_type: { "id": uuid }, 
+            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+        })
 
-        if pathToFile != None:
-            ApiProcessor().set(f'{media_type}-media', { 
-                media_type: { "id": uuid }, 
-                'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
-            })
-
-        # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
-        #     pass
-
-# def user_title(id, username, first_name, last_name):
-#     return id or first_name+last_name or username
+    # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
+    #     pass
 
 def user_title(user):
     if user.username != None:
