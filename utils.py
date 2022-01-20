@@ -59,6 +59,22 @@ async def profile_media_process(client, entity, uuid, media_type):
     # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
     #     pass
 
+async def get_media(client, media, uuid, media_type):
+    pathFolder = f'./uploads/{media_type}-media/{uuid}/'
+
+    pathToFile = await client.download_media(
+        message=media,
+        file=f'{pathFolder}/{media.id}',
+        thumb=media.sizes[-2]
+    )
+
+    if pathToFile != None:
+        ApiProcessor().set(f'{media_type}-media', { 
+            media_type: { "id": uuid }, 
+            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+        })
+
+
 def user_title(user):
     if user.username != None:
         return user.username

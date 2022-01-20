@@ -101,7 +101,7 @@ class MembersParserThread(threading.Thread):
             
             try:
                 client = await phone.new_client(loop=self.loop)
-                
+
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     # logger.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     logger.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
@@ -128,9 +128,9 @@ class MembersParserThread(threading.Thread):
                             media_type='member'
                         )
                     except Exception as ex:
-                        logging.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
+                        logger.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
                     else:
-                        logger.info(f"Member \'{user_title(user)}\' profile media saved")
+                        logger.info(f"{bcolors.OKGREEN} Member \'{user_title(user)}\' profile media saved")
 
 
             except Exception as ex:

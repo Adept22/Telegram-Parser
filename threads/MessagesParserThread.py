@@ -6,6 +6,7 @@ import logging
 from telethon import types
 from utils import bcolors
 from utils import profile_media_process
+from utils import get_media
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -108,12 +109,27 @@ class MessagesParserThread(threading.Thread):
                 index = 1
                 entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
 
-                await profile_media_process(
-                    client=client,
-                    entity=entity,
-                    uuid=self.chat.id,
-                    media_type='chat'
-                )                
+                # await profile_media_process(
+                #     client=client,
+                #     entity=entity,
+                #     uuid=self.chat.id,
+                #     media_type='chat'
+                # )                
+                
+                photos = await client.get_profile_photos(entity)
+                
+                for photo in photos:
+                    try:
+                        await get_media(
+                            client=client,
+                            media=photo,
+                            uuid=self.chat.id,
+                            media_type='chat'
+                        )
+                    except Exception as ex:
+                        logging.error(f"{bcolors.FAIL} Can\'t save channel {self.chat} media. Exception: {ex}.")
+                    else:
+                        logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!')
 
                 all_messages = await client.get_messages(
                     entity=entity, 
