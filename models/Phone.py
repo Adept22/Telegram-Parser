@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 import logging
 
 from telethon import sync, sessions
@@ -35,7 +36,7 @@ class Phone(object):
     def session(self, new_session):
         self._session = sessions.StringSession(new_session)
     
-    async def new_client(self, loop = None):
+    async def new_client(self, loop = asyncio.get_event_loop()):
         client = sync.TelegramClient(
             session=self.session, 
             api_id=os.environ['TELEGRAM_API_ID'],
