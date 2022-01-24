@@ -117,9 +117,15 @@ class MessagesParserThread(threading.Thread):
                 
                 if photos:
                     for photo in photos:
-                        try:
-                            pathFolder = f'./uploads/chat-media/{self.chat.id}/'
+                        savedPhotos = ApiProcessor().get('chat-media', { 'internalId': photo.id})
+                        
+                        if len(savedPhotos) > 0:
+                            logging.debug(f'Chat {self.chat.id}. Chat-media {savedPhotos[0]} exist. Continue.')
+                        
+                            continue
 
+                        try:
+                            pathFolder = f'./uploads/chat-media/{self.chat.id}'
 
                             pathToFile = await client.download_media(
                                 message=photo,
@@ -128,10 +134,10 @@ class MessagesParserThread(threading.Thread):
                             )
 
                             if pathToFile != None:
-                                ApiProcessor().set(f'chat-media', { 
+                                ApiProcessor().set('chat-media', { 
                                     'chat-media': { "id": self.chat.id }, 
-                                    'internalId': f'{photo.id}',
-                                    'path': f'{pathFolder}{split("/", pathToFile)[-1]}'
+                                    'internalId': photo.id,
+                                    'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
                                 })
 
                         except Exception as ex:
@@ -190,14 +196,7 @@ class MessagesParserThread(threading.Thread):
                             last_message=last_message,
                             message=message
                         )
-
-                        # TODO: Здесь должна быть выкачка вложений
-                        # if message.media != None:
-                        #     message_media_thread = MessageMediaThread(self, phone, last_message, message)
-                        #     message_media_thread.setDaemon(True)
-                        #     message_media_thread.start()
                 else:
-                    # logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
                     logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
                     
                     index += 1

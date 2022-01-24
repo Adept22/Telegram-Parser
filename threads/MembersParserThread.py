@@ -146,7 +146,7 @@ class MembersParserThread(threading.Thread):
                             except Exception as ex:
                                 logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.")
                             else:
-                                logging.info(f"{bcolors.OKGREEN} Sucessfuly saved channel {member['id']} media!")
+                                logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!")
 
             except Exception as ex:
                 # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
