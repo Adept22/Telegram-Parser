@@ -76,8 +76,6 @@ class Component(ApplicationSession):
         await update_chats()
 
         async def on_event(event, details=None):
-            logging.debug(f"Got event, publication ID {details.publication}, publisher {details.publisher}: {event}")
-            
             if event['_'] == 'TelegramPhone':
                 await update_phone(event['entity'])
             elif event['_'] == 'TelegramChat':
