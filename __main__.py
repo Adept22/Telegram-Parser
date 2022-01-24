@@ -4,7 +4,7 @@ import asyncio
 import logging
 from autobahn.wamp.types import SubscribeOptions
 from autobahn.asyncio.wamp import ApplicationSession
-from autobahn_autoreconnect import ApplicationRunner
+from core.ApplicationRunner import ApplicationRunner
 
 from models.Chat import Chat
 from models.Phone import Phone
