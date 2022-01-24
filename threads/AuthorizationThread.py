@@ -9,7 +9,7 @@ from processors.ApiProcessor import ApiProcessor
 
 class AuthorizationThread(threading.Thread):
     def __init__(self, phone):
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name=f'AuthorizationThread-{phone.id}')
         
         self.retry = 0
         self.phone = phone

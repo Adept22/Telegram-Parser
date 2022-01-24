@@ -111,7 +111,7 @@ class MessagesParserThread(threading.Thread):
                 
                 last_message = { 'internalId': 0, 'groupedId': 0 }
                 
-                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'DESC' })
+                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
                 
                 if len(messages) > 0:
                     logging.info(f'Last message in API exist. Continue.')
@@ -122,13 +122,13 @@ class MessagesParserThread(threading.Thread):
                 all_messages = await client.get_messages(
                     types.PeerChannel(channel_id=self.chat.internal_id), 
                     0,
-                    min_id=last_message['internalId']
+                    max_id=last_message['internalId']
                 )
                 logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
                 
                 async for message in client.iter_messages(
                     entity=types.PeerChannel(channel_id=self.chat.internal_id),
-                    min_id=last_message['internalId']
+                    max_id=last_message['internalId']
                 ):
                     index += 1
                     
