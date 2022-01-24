@@ -77,12 +77,12 @@ class AuthorizationThread(threading.Thread):
                     await self.async_run()
                 else:
                     logging.error(f"Cannot authentificate phone {self.phone.id}. Code expired.")
+        
+                    self.phone.authorization_thread = None
                     
-                    ApiProcessor().set('phone', { 'id': self.phone.id, 'session': None, 'isVerified': False, 'code': None, 'codeHash': None })
+                    ApiProcessor().set('phone', { 'id': self.phone.id, 'session': None, 'isVerified': False, 'isBanned': True, 'code': None, 'codeHash': None })
         else:
             logging.warning(f"Phone {self.phone.id} actually authorized.")
                 
     def run(self):
         asyncio.run(self.async_run())
-        
-        self.phone.authorization_thread = None

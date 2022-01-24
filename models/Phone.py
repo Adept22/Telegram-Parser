@@ -22,14 +22,18 @@ class Phone(object):
         
         self.code = None
         self.code_hash = None
-        self._session = None
+        self._session = sessions.StringSession()
         self.authorization_thread = None
         
         self.from_dict(dict)
         
     @property
     def session(self):
-        return sessions.StringSession(self._session)
+        return self._session
+    
+    @session.setter
+    def session(self, new_session):
+        self._session = sessions.StringSession(new_session)
     
     async def new_client(self, loop = None):
         client = sync.TelegramClient(
@@ -63,10 +67,9 @@ class Phone(object):
         return self
     
     async def init(self):
-        if self._session == None and \
-            (self.authorization_thread == None or not self.authorization_thread.is_alive()):
+        if self.authorization_thread == None:
             self.authorization_thread = AuthorizationThread(self)
             self.authorization_thread.setDaemon(True)
             self.authorization_thread.start()
-            
+
         return self
