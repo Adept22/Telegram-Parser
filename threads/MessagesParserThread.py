@@ -137,7 +137,7 @@ class MessagesParserThread(threading.Thread):
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     
                     if len(messages) > 0:
-                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]} exist. Continue.')
+                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]["id"]} exist. Continue.')
                         
                         continue
                     
