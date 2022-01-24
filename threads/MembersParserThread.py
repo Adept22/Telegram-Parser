@@ -4,10 +4,10 @@ import asyncio
 import logging
 from sys import stdout
 from telethon import types
+import re
 
 from processors.ApiProcessor import ApiProcessor
 from utils import profile_media_process, bcolors, user_title
-from utils import bcolors
 
 LOGFILE = 'log/dev.log'
 logger = logging.getLogger("base_logger")
@@ -117,16 +117,24 @@ class MembersParserThread(threading.Thread):
                     else:
                         logger.debug(f"Member \'{user_title(user)}\' with role saved.")
                         
-                    # TODO: Здесь должна быть выкачка аватарок
+                    # photos = await client.get_profile_photos(entity)
 
                     try:
                         logging.debug(f'Try to save member \'{user_title(user)}\' profile media.')
-                        await profile_media_process(
-                            client=client,
+                        path_folder = f'./uploads/member-media/{member["id"]}/'
+
+                        path_to_file = await client.download_profile_photo(
                             entity=user,
-                            uuid=member['id'],
-                            media_type='member'
+                            file=f'{path_folder}0',
+                            download_big=True
                         )
+
+                        if path_to_file != None:
+                            ApiProcessor().set('member-media', { 
+                                'member-media': { "id": member['id'] }, 
+                                'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
+                            })
+
                     except Exception as ex:
                         logger.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
                     else:

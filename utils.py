@@ -53,6 +53,7 @@ async def profile_media_process(client, entity, uuid, media_type):
     if pathToFile != None:
         ApiProcessor().set(f'{media_type}-media', { 
             media_type: { "id": uuid }, 
+			'internalId': f'{entity.id}',
             'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
         })
 
@@ -71,6 +72,7 @@ async def get_media(client, media, uuid, media_type):
     if pathToFile != None:
         ApiProcessor().set(f'{media_type}-media', { 
             media_type: { "id": uuid }, 
+			'internalId': {f'{media.id}'},
             'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
         })
 
