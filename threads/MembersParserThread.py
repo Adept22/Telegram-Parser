@@ -111,35 +111,42 @@ class MembersParserThread(threading.Thread):
                     
                     try:
                         ApiProcessor().set('chat-member-role', chat_member_role)
+                        photos = await client.get_profile_photos(user)
                     except Exception as ex:
                         # logger.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
                         logger.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
                     else:
                         logger.debug(f"Member \'{user_title(user)}\' with role saved.")
                         
-                    # photos = await client.get_profile_photos(entity)
+                    if photos:
+                        for photo in photos:
+                            savedPhotos = ApiProcessor().get('member-media', { 'internalId': photo.id})
+                            
+                            if len(savedPhotos) > 0:
+                                logging.debug(f'Chat {member["id"]}. Member-media {savedPhotos[0]} exist. Continue.')
+                            
+                                continue
 
-                    try:
-                        logging.debug(f'Try to save member \'{user_title(user)}\' profile media.')
-                        path_folder = f'./uploads/member-media/{member["id"]}/'
+                            try:
+                                pathFolder = f'./uploads/member-media/{member["id"]}'
 
-                        path_to_file = await client.download_profile_photo(
-                            entity=user,
-                            file=f'{path_folder}0',
-                            download_big=True
-                        )
+                                pathToFile = await client.download_media(
+                                    message=photo,
+                                    file=f'{pathFolder}/{photo.id}',
+                                    thumb=photo.sizes[-2]
+                                )
 
-                        if path_to_file != None:
-                            ApiProcessor().set('member-media', { 
-                                'member-media': { "id": member['id'] }, 
-                                'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
-                            })
+                                if pathToFile != None:
+                                    ApiProcessor().set('member-media', { 
+                                        'member': { "id": member['id'] }, 
+                                        'internalId': photo.id,
+                                        'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+                                    })
 
-                    except Exception as ex:
-                        logger.error(f"Can\'t save profile photo {user_title(user)} media. Exception: {ex}.")
-                    else:
-                        logger.info(f"{bcolors.OKGREEN} Member \'{user_title(user)}\' profile media saved")
-
+                            except Exception as ex:
+                                logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.")
+                            else:
+                                logging.info(f"{bcolors.OKGREEN} Sucessfuly saved channel {member['id']} media!")
 
             except Exception as ex:
                 # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
