@@ -118,7 +118,7 @@ class MessagesParserThread(threading.Thread):
 
                     last_message = messages[0]
                 
-                index = 1
+                index = 0
                 all_messages = await client.get_messages(
                     types.PeerChannel(channel_id=self.chat.internal_id), 
                     0,
@@ -130,8 +130,11 @@ class MessagesParserThread(threading.Thread):
                     entity=types.PeerChannel(channel_id=self.chat.internal_id),
                     offset_id=last_message['internalId']
                 ):
+                    index += 1
+                    
                     if not isinstance(message, types.Message):
                         continue
+                    
                     logging.debug(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
                     
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
@@ -173,8 +176,6 @@ class MessagesParserThread(threading.Thread):
                         #     message_media_thread.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
-                    
-                    index += 1
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 
