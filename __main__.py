@@ -56,7 +56,7 @@ async def update_phone(phone):
         
         phone = await Phone(phone).init()
         
-    PhonesManager()[phone.id] = phone
+        PhonesManager()[phone.id] = phone
 
 async def update_phones():
     logging.debug("Getting phones...")

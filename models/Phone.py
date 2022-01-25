@@ -5,6 +5,7 @@ import logging
 
 from telethon import sync, sessions
 
+from processors.ApiProcessor import ApiProcessor
 from threads.AuthorizationThread import AuthorizationThread
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
@@ -23,22 +24,14 @@ class Phone(object):
         
         self.code = None
         self.code_hash = None
-        self._session = sessions.StringSession()
+        self.session = None
         self.authorization_thread = None
         
         self.from_dict(dict)
-        
-    @property
-    def session(self):
-        return self._session
-    
-    @session.setter
-    def session(self, new_session):
-        self._session = sessions.StringSession(new_session)
     
     async def new_client(self, loop = asyncio.get_event_loop()):
         client = sync.TelegramClient(
-            session=self.session, 
+            session=sessions.StringSession(self.session), 
             api_id=os.environ['TELEGRAM_API_ID'],
             api_hash=os.environ['TELEGRAM_API_HASH'],
             loop=loop
@@ -66,6 +59,19 @@ class Phone(object):
             setattr(self, pattern.sub('_', key).lower(), dict[key])
             
         return self
+    
+    def save(self):
+        skip = ['dict', 'chats_count', 'code_hash', 'authorization_thread']
+        
+        dict = {}
+        
+        for key in self.__dict__:
+            if not key in skip:
+                dict[key] = self.__dict__[key]
+                
+        return ApiProcessor().set('phone', dict)
+                
+            
     
     async def init(self):
         if self.authorization_thread == None:
