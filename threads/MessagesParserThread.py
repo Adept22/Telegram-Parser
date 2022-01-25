@@ -110,9 +110,9 @@ class MessagesParserThread(threading.Thread):
                 try:
                     photos = await client.get_profile_photos(entity)
                 except Exception as ex:
-                    logging.error(f"{bcolors.FAIL} Can\'t get {self.chat.title} media list. Exception: {ex}.")
+                    logging.error(f"Can\'t get {self.chat.title} media list. Exception: {ex}.")
                 else:
-                    logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!')
+                    logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
                 
                 if photos:
                     for photo in photos:
@@ -141,9 +141,9 @@ class MessagesParserThread(threading.Thread):
                                 })
 
                         except Exception as ex:
-                            logging.error(f"{bcolors.FAIL} Can\'t save channel {self.chat} media. Exception: {ex}.")
+                            logging.error(f"Can\'t save channel {self.chat} media. Exception: {ex}.")
                         else:
-                            logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!')
+                            logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
 
                 all_messages = await client.get_messages(
                     entity=entity, 

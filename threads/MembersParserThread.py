@@ -8,27 +8,7 @@ import re
 import os.path
 
 from processors.ApiProcessor import ApiProcessor
-from utils import profile_media_process, bcolors, user_title, formated_date
-
-LOGFILE = 'log/dev.log'
-logger = logging.getLogger("base_logger")
-logger.setLevel(logging.INFO)
-
-# create a console handler
-print_format = logging.Formatter('%(threadName)-8s %(message)s')
-console_handler = logging.StreamHandler(stdout)
-console_handler.setFormatter(print_format)
-
-# create a log file handler
-log_format = logging.Formatter('[%(asctime)s] %(levelname)-8s %(name)-12s %(message)s')
-file_handler = logging.FileHandler(LOGFILE)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(log_format)
-
-#Add handlers to the logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
-
+from utils import bcolors, user_title, formated_date
 
 class MembersParserThread(threading.Thread):
     def __init__(self, chat):
@@ -51,7 +31,7 @@ class MembersParserThread(threading.Thread):
         members = ApiProcessor().get('member', { 'internalId': user.id })
         
         if len(members) > 0:
-            logger.debug(f'Member \'{user.first_name}\' exists in API.')
+            logging.debug(f'Member \'{user.first_name}\' exists in API.')
             
             if members[0].get('id') != None:
                 new_member['id'] = members[0].get('id')
@@ -97,24 +77,24 @@ class MembersParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            logger.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.title}.')
+            logging.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.title}.{bcolors.ENDC}')
             
             try:
                 client = await phone.new_client(loop=self.loop)
 
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
-                    logger.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
+                    logging.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
                     
                     chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
                     try:
                         chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
                     except Exception as ex:
-                        logger.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
+                        logging.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.{bcolors.ENDC}")
 
                         continue
                     
-                    logger.debug(f"Member \'{user_title(user)}\' with role saved.")
+                    logging.debug(f"Member \'{user_title(user)}\' with role saved.")
 
                     member = chat_member_role['member']['member']
 
@@ -159,26 +139,23 @@ class MembersParserThread(threading.Thread):
                                 ApiProcessor().set('member-media', new_photo)
 
                         except Exception as ex:
-                            logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.")
+                            logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.{bcolors.ENDC}")
                         else:
-                            logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!")
+                            logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!{bcolors.ENDC}")
             except Exception as ex:
-                # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
-                logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
+                logging.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.{bcolors.ENDC}")
                 
                 await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             else:
-                # logger.info(f"{bcolors.OKGREEN} Chat {self.chat.id} participants download success. Exit code 0.")
-                logger.info(f"{bcolors.OKGREEN} 🏁 Chat \'{self.chat.title}\' participants download success. Exit code 0 🏁")
+                logging.info(f"{bcolors.OKGREEN} 🏁 Chat \'{self.chat.title}\' participants download success. Exit code 0 🏁{bcolors.ENDC}")
                 
                 break
         else:
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            # raise Exception(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
-            raise Exception(f'{bcolors.FAIL} Cannot get chat {self.chat.title} participants. Exit code 1.')
+            raise Exception(f'{bcolors.FAIL} Cannot get chat {self.chat.title} participants. Exit code 1.{bcolors.ENDC}')
         
     def run(self):
         asyncio.run(self.async_run())

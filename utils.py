@@ -57,9 +57,6 @@ async def profile_media_process(client, entity, uuid, media_type):
             'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
         })
 
-    # async for photo in client.iter_profile_photos(types.PeerUser(user_id=user.id)):
-    #     pass
-
 async def get_media(client, media, uuid, media_type):
     pathFolder = f'./uploads/{media_type}-media/{uuid}/'
 
