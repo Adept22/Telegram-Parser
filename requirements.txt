@@ -3,6 +3,7 @@ asgiref==3.4.1
 async-timeout==4.0.1
 asyncio==3.4.3
 autobahn==21.11.1
+autobahn-autoreconnect==0.1.1
 cbor==1.0.0
 cbor2==5.4.2
 cffi==1.15.0

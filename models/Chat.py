@@ -66,7 +66,7 @@ class Chat(object):
                 if phone != None:
                     new_phones.append(phone)
                     
-            if len(new_phones) < 3 and len(PhonesManager().items()) >= 3:
+            if len(new_phones) < 3:
                 if self.joining_thread == None:
                     self.joining_thread = ChatJoiningThread(self)
                     self.joining_thread.setDaemon(True)

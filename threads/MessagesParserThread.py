@@ -97,7 +97,7 @@ class MessagesParserThread(threading.Thread):
                 
                 last_message = { 'internalId': 0, 'groupedId': 0 }
                 
-                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'DESC' })
+                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
                 
                 if len(messages) > 0:
                     logging.info(f'Last message in API exist. Continue.')
@@ -148,22 +148,25 @@ class MessagesParserThread(threading.Thread):
                 all_messages = await client.get_messages(
                     entity=entity, 
                     limit=0,
-                    offset_id=last_message['internalId']
+                    max_id=last_message['internalId']
                 )
                 logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
 
                 async for message in client.iter_messages(
                     entity=entity,
-                    offset_id=last_message['internalId']
+                    max_id=last_message['internalId']
                 ):
+                    index += 1
+                    
                     if not isinstance(message, types.Message):
                         continue
+                    
                     logging.debug(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
                     
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     
                     if len(messages) > 0:
-                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]} exist. Continue.')
+                        logging.debug(f'Chat {self.chat.id}. Message {messages[0]["id"]} exist. Continue.')
                         
                         continue
                     
@@ -198,8 +201,6 @@ class MessagesParserThread(threading.Thread):
                         )
                 else:
                     logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
-                    
-                    index += 1
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 

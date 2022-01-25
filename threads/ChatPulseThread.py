@@ -53,7 +53,7 @@ class ChatPulseThread(threading.Thread):
         new_chat = { 'id': self.chat.id }
             
         if len(new_phones) != len(self.phones):
-            logging.info(f"Chat {self.id} list of phones changed...")
+            logging.info(f"Chat {self.chat.id} list of phones changed...")
             
             new_chat['phones'] = [{ 'id': p.id } for p in new_phones]
             
