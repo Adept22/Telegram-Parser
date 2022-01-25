@@ -5,6 +5,7 @@ import logging
 from sys import stdout
 from telethon import types
 import re
+import os.path
 
 from processors.ApiProcessor import ApiProcessor
 from utils import profile_media_process, bcolors, user_title, formated_date
@@ -96,61 +97,71 @@ class MembersParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            # logger.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.id}.')
             logger.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.title}.')
             
             try:
                 client = await phone.new_client(loop=self.loop)
 
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
-                    # logger.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     logger.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
                     
                     chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
                     try:
                         chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
-                        memberId = chat_member_role['member']['member']['id']
-                        
-                        photos = await client.get_profile_photos(user)
                     except Exception as ex:
-                        # logger.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
                         logger.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
-                    else:
-                        logger.debug(f"Member \'{user_title(user)}\' with role saved.")
-                        
-                        if photos:
-                            for photo in photos:
-                                savedPhotos = ApiProcessor().get('member-media', { 'internalId': photo.id})
-                                
-                                if len(savedPhotos) > 0:
-                                    logging.debug(f'Chat {memberId}. Member-media {savedPhotos[0]} exist. Continue.')
-                                
-                                    continue
 
-                                try:
-                                    pathFolder = f'./uploads/member-media/{memberId}'
+                        continue
+                    
+                    logger.debug(f"Member \'{user_title(user)}\' with role saved.")
 
-                                    pathToFile = await client.download_media(
-                                        message=photo,
-                                        file=f'{pathFolder}/{photo.id}',
-                                        # TODO: здесь надо проверить как обрабатываются видео
-                                        thumb=photo.sizes[-2]
-                                    )
+                    member = chat_member_role['member']['member']
 
-                                    if pathToFile != None:
-                                        ApiProcessor().set('member-media', { 
-                                            'member': { "id": memberId }, 
-                                            'internalId': photo.id,
-                                            'createdAt': formated_date(photo.date),
-                                            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
-                                        })
+                    photos = await client.get_profile_photos(entity=types.PeerUser(user_id=user.id))
+                    
+                    for photo in photos:
+                        saved_photo = { 'internalId': photo.id }
 
-                                except Exception as ex:
-                                    logging.error(f"{bcolors.FAIL} Can\'t save member {memberId} media. Exception: {ex}.")
-                                else:
-                                    logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {memberId} media!")
+                        saved_photos = ApiProcessor().get('member-media', saved_photo)
 
+                        if len(saved_photos) > 0:
+                            saved_photo = saved_photos[0]
+
+                            if os.path.exists(saved_photo['path']):
+                                logging.debug(f'Chat {member["id"]}. Member-media {saved_photo["id"]} exist. Continue.')
+                            
+                                await asyncio.sleep(1)
+                                continue
+
+                        try:
+                            path_folder = f'./uploads/member-media/{member["id"]}'
+
+                            path_to_file = await client.download_media(
+                                message=photo,
+                                file=f'{path_folder}/{photo.id}',
+                                # TODO: здесь надо проверить как обрабатываются видео
+                                thumb=photo.sizes[-2]
+                            )
+
+                            if path_to_file != None:
+                                new_photo = { 
+                                    'id': saved_photo.get('id'),
+                                    'member': member, 
+                                    'internalId': photo.id,
+                                    'createdAt': formated_date(photo.date),
+                                    'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
+                                }
+
+                                if 'id' in saved_photo:
+                                    new_photo['id'] = saved_photo['id']
+                                    
+                                ApiProcessor().set('member-media', new_photo)
+
+                        except Exception as ex:
+                            logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.")
+                        else:
+                            logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!")
             except Exception as ex:
                 # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
                 logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")

@@ -108,7 +108,6 @@ class MessagesParserThread(threading.Thread):
                 entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
                 
                 try:
-                    logging.info(f'{bcolors.OKGREEN} Trying to get {self.chat.title} media list')
                     photos = await client.get_profile_photos(entity)
                 except Exception as ex:
                     logging.error(f"{bcolors.FAIL} Can\'t get {self.chat.title} media list. Exception: {ex}.")
