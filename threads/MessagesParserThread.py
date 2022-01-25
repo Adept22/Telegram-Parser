@@ -4,7 +4,7 @@ import threading
 import asyncio
 import logging
 from telethon import types
-from utils import bcolors
+from utils import bcolors, formated_date
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -137,6 +137,7 @@ class MessagesParserThread(threading.Thread):
                                 ApiProcessor().set('chat-media', { 
                                     'chat-media': { "id": self.chat.id }, 
                                     'internalId': photo.id,
+                                    'createdAt': formated_date(photo.date),
                                     'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
                                 })
 

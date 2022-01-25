@@ -7,7 +7,7 @@ from telethon import types
 import re
 
 from processors.ApiProcessor import ApiProcessor
-from utils import profile_media_process, bcolors, user_title
+from utils import profile_media_process, bcolors, user_title, formated_date
 
 LOGFILE = 'log/dev.log'
 logger = logging.getLogger("base_logger")
@@ -106,11 +106,12 @@ class MembersParserThread(threading.Thread):
                     # logger.debug(f'Chat {self.chat.id}. Received user \'{user.first_name}\'')
                     logger.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
                     
-                    member = self.get_member(user)
-                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(member))
+                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
                     try:
-                        ApiProcessor().set('chat-member-role', chat_member_role)
+                        chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
+                        memberId = chat_member_role['member']['member']['id']
+                        
                         photos = await client.get_profile_photos(user)
                     except Exception as ex:
                         # logger.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.id}. Exception: {ex}.")
@@ -118,35 +119,37 @@ class MembersParserThread(threading.Thread):
                     else:
                         logger.debug(f"Member \'{user_title(user)}\' with role saved.")
                         
-                    if photos:
-                        for photo in photos:
-                            savedPhotos = ApiProcessor().get('member-media', { 'internalId': photo.id})
-                            
-                            if len(savedPhotos) > 0:
-                                logging.debug(f'Chat {member["id"]}. Member-media {savedPhotos[0]} exist. Continue.')
-                            
-                                continue
+                        if photos:
+                            for photo in photos:
+                                savedPhotos = ApiProcessor().get('member-media', { 'internalId': photo.id})
+                                
+                                if len(savedPhotos) > 0:
+                                    logging.debug(f'Chat {memberId}. Member-media {savedPhotos[0]} exist. Continue.')
+                                
+                                    continue
 
-                            try:
-                                pathFolder = f'./uploads/member-media/{member["id"]}'
+                                try:
+                                    pathFolder = f'./uploads/member-media/{memberId}'
 
-                                pathToFile = await client.download_media(
-                                    message=photo,
-                                    file=f'{pathFolder}/{photo.id}',
-                                    thumb=photo.sizes[-2]
-                                )
+                                    pathToFile = await client.download_media(
+                                        message=photo,
+                                        file=f'{pathFolder}/{photo.id}',
+                                        # TODO: здесь надо проверить как обрабатываются видео
+                                        thumb=photo.sizes[-2]
+                                    )
 
-                                if pathToFile != None:
-                                    ApiProcessor().set('member-media', { 
-                                        'member': { "id": member['id'] }, 
-                                        'internalId': photo.id,
-                                        'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
-                                    })
+                                    if pathToFile != None:
+                                        ApiProcessor().set('member-media', { 
+                                            'member': { "id": memberId }, 
+                                            'internalId': photo.id,
+                                            'createdAt': formated_date(photo.date),
+                                            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+                                        })
 
-                            except Exception as ex:
-                                logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.")
-                            else:
-                                logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!")
+                                except Exception as ex:
+                                    logging.error(f"{bcolors.FAIL} Can\'t save member {memberId} media. Exception: {ex}.")
+                                else:
+                                    logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {memberId} media!")
 
             except Exception as ex:
                 # logger.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.id} participants using phone {phone.id}. Exception: {ex}.")
