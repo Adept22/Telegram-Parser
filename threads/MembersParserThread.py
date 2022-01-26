@@ -126,7 +126,6 @@ class MembersParserThread(threading.Thread):
 
                             if path_to_file != None:
                                 new_photo = { 
-                                    'id': saved_photo.get('id'),
                                     'member': member, 
                                     'internalId': photo.id,
                                     'createdAt': formated_date(photo.date),

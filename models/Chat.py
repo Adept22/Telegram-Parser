@@ -1,5 +1,6 @@
 import re
 import logging
+from threads.ChatMediaThread import ChatMediaThread
 from utils import get_hash
 
 from core.PhonesManager import PhonesManager
@@ -32,6 +33,7 @@ class Chat(object):
         self.chat_pulse_thread = None
         self.joining_thread = None
         self.members_thread = None
+        self.medias_thread = None
         self.messages_thread = None
         
         self.valid_phones = []
@@ -104,6 +106,15 @@ class Chat(object):
             else:
                 logging.debug(f"Members parsing thread for chat {self.id} is running.")
             #--< MEMBERS --<#
+
+            #--> MEDIAS -->#
+            if self.medias_thread == None:
+                self.medias_thread = ChatMediaThread(self)
+                self.medias_thread.setDaemon(True)
+                self.medias_thread.start()
+            else:
+                logging.debug(f"Medias parsing thread for chat {self.id} is running.")
+            #--< MEDIAS --<#
             
             #--> MESSAGES -->#
             if self.messages_thread == None:

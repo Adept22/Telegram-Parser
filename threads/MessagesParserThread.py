@@ -107,43 +107,43 @@ class MessagesParserThread(threading.Thread):
                 index = 1
                 entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
                 
-                try:
-                    photos = await client.get_profile_photos(entity)
-                except Exception as ex:
-                    logging.error(f"Can\'t get {self.chat.title} media list. Exception: {ex}.")
-                else:
-                    logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
+                # try:
+                #     photos = await client.get_profile_photos(entity)
+                # except Exception as ex:
+                #     logging.error(f"Can\'t get {self.chat.title} media list. Exception: {ex}.")
+                # else:
+                #     logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
                 
-                if photos:
-                    for photo in photos:
-                        savedPhotos = ApiProcessor().get('chat-media', { 'internalId': photo.id})
+                # if photos:
+                #     for photo in photos:
+                #         savedPhotos = ApiProcessor().get('chat-media', { 'internalId': photo.id})
                         
-                        if len(savedPhotos) > 0:
-                            logging.debug(f'Chat {self.chat.id}. Chat-media {savedPhotos[0]} exist. Continue.')
+                #         if len(savedPhotos) > 0:
+                #             logging.debug(f'Chat {self.chat.id}. Chat-media {savedPhotos[0]} exist. Continue.')
                         
-                            continue
+                #             continue
 
-                        try:
-                            pathFolder = f'./uploads/chat-media/{self.chat.id}'
+                #         try:
+                #             pathFolder = f'./uploads/chat-media/{self.chat.id}'
 
-                            pathToFile = await client.download_media(
-                                message=photo,
-                                file=f'{pathFolder}/{photo.id}',
-                                thumb=photo.sizes[-2]
-                            )
+                #             pathToFile = await client.download_media(
+                #                 message=photo,
+                #                 file=f'{pathFolder}/{photo.id}',
+                #                 thumb=photo.sizes[-2]
+                #             )
 
-                            if pathToFile != None:
-                                ApiProcessor().set('chat-media', { 
-                                    'chat-media': { "id": self.chat.id }, 
-                                    'internalId': photo.id,
-                                    'createdAt': formated_date(photo.date),
-                                    'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
-                                })
+                #             if pathToFile != None:
+                #                 ApiProcessor().set('chat-media', { 
+                #                     'chat-media': { "id": self.chat.id }, 
+                #                     'internalId': photo.id,
+                #                     'createdAt': formated_date(photo.date),
+                #                     'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
+                #                 })
 
-                        except Exception as ex:
-                            logging.error(f"Can\'t save channel {self.chat} media. Exception: {ex}.")
-                        else:
-                            logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
+                #         except Exception as ex:
+                #             logging.error(f"Can\'t save channel {self.chat} media. Exception: {ex}.")
+                #         else:
+                #             logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
 
                 all_messages = await client.get_messages(
                     entity=entity, 
