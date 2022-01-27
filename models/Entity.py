@@ -7,9 +7,6 @@ class Entity(object):
     _type = ''
     
     def __init__(self, _dict):
-        if type(_dict) == dict:
-            raise Exception('Unexpected entity dictionary')
-            
         if not 'id' in _dict or _dict['id'] is None:
             raise Exception('Unexpected entity id')
         
@@ -33,14 +30,3 @@ class Entity(object):
                 dict[components[0] + ''.join(x.title() for x in components[1:])] = self.__dict__[key]
                 
         ApiProcessor().set(self._type, dict)
-    
-    def from_api(self, _class: 'Entity', entity, nullable=False):
-        if isinstance(entity, dict):
-            api_entity = ApiProcessor().get(_class.api_path, entity)
-            
-            entity = _class(api_entity)
-            
-        if (nullable == False and entity == None) or not isinstance(entity, _class):
-            raise TypeError(f'Unexpected entity type {type(entity).__name__}. Expects dictionary{", NoneType" if nullable == True else ""} or {type(_class).__name__}.')
-        
-        return entity
