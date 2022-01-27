@@ -135,7 +135,7 @@ class MessagesParserThread(threading.Thread):
                     if not isinstance(message, types.Message):
                         continue
                     
-                    logging.debug(f'Chat {self.chat.id}. Received message \'{message.id}\' at \'{message.date}\'. {index}/{all_messages.total}')
+                    logging.debug(f'Chat {self.chat.id}. Receive message {index}/{all_messages.total}')
                     
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     
@@ -185,11 +185,11 @@ class MessagesParserThread(threading.Thread):
             else:
                 break
         else:
-            logging.error(f"Can\'t get chat {self.chat.id} messages.")
+            logging.error(f'Chat {self.chat.id} messages download failed. Exit code 1.')
 
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'Chat {self.chat.id} messages download failed. Exit code 1.')
+        self.chat.messages_thread = None
         
     def run(self):
         asyncio.run(self.async_run())

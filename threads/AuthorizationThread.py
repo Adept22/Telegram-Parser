@@ -110,6 +110,8 @@ class AuthorizationThread(threading.Thread):
                     self.phone.save()
                 
                 break
+            
+        self.phone.authorization_thread = None
                 
     def run(self):
         asyncio.run(self.async_run())

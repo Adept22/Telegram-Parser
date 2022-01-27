@@ -10,23 +10,23 @@ from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class ChatPulseThread(threading.Thread):
-    def __init__(self, chat, phones):
+    def __init__(self, chat):
         threading.Thread.__init__(self, name=f'ChatPulseThread-{chat.id}')
         
         self.chat = chat
-        self.phones = phones
         
+        self.exit_event = threading.Event()
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
             
     async def async_run(self):
         tg_chat = None
-        new_phones = dict([(p.id, p) for p in self.phones])
+        new_phones = dict([(p.id, p) for p in self.chat.phones])
         
         logging.debug(f"{len(new_phones.items())} phones initially wired with chat {self.chat.id}.")
         
-        for phone in self.phones:
+        for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
                 
@@ -52,7 +52,7 @@ class ChatPulseThread(threading.Thread):
         
         new_chat = { 'id': self.chat.id }
             
-        if len(new_phones) != len(self.phones):
+        if len(new_phones) != len(self.chat.phones):
             logging.info(f"Chat {self.chat.id} list of phones changed...")
             
             new_chat['phones'] = [{ 'id': p.id } for p in new_phones]
@@ -73,6 +73,8 @@ class ChatPulseThread(threading.Thread):
                 
         if len(new_chat.items()) > 1:
             ApiProcessor().set('chat', new_chat)
+            
+        self.chat.chat_pulse_thread = None
 
     def run(self):
         asyncio.run(self.async_run())

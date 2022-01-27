@@ -15,6 +15,8 @@ class ChatJoiningThread(threading.Thread):
         threading.Thread.__init__(self, name=f'ChatJoiningThread-{chat.id}')
         
         self.chat = chat
+        
+        self.exit_event = threading.Event()
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
@@ -125,6 +127,8 @@ class ChatJoiningThread(threading.Thread):
                     'id': self.chat.id, 
                     'phones': [{ 'id': id } for id in new_phones.keys()] 
                 })
+                
+        self.chat.chat_joining_thread = None
 
     def run(self):
         asyncio.run(self.async_run())

@@ -104,9 +104,11 @@ class MembersParserThread(threading.Thread):
                 
                 break
         else:
+            logging.error(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
+        
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
+        self.chat.members_thread = None
         
     def run(self):
         asyncio.run(self.async_run())
