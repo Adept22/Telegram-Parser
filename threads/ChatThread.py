@@ -22,8 +22,10 @@ class ChatThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-    async def check_phones(self, new_phones):
-        for phone in new_phones:
+    async def check_phones(self, phones):
+        new_phones = phones
+        
+        for phone in phones.values():
             try:
                 client = await phone.new_client(loop=self.loop)
                 
@@ -49,7 +51,7 @@ class ChatThread(threading.Thread):
         return new_phones
             
     async def get_tg_chat(self, phones):
-        for phone in phones:
+        for phone in phones.values():
             client = await phone.new_client(loop=self.loop)
             
             try:
