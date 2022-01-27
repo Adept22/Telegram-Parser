@@ -109,5 +109,7 @@ if __name__ == '__main__':
         level=logging.DEBUG
     )
     
+    logging.getLogger('telethon').setLevel(logging.CRITICAL)
+    
     runner = ApplicationRunner(os.environ['WEBSOCKET_URL'], os.environ['WEBSOCKET_REALM'])
     runner.run(Component)
