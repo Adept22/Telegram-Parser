@@ -109,6 +109,7 @@ if __name__ == '__main__':
         level=logging.DEBUG
     )
     
+    logging.getLogger('asyncio').setLevel(logging.CRITICAL)
     logging.getLogger('telethon').setLevel(logging.CRITICAL)
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)

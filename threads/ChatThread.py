@@ -23,7 +23,7 @@ class ChatThread(threading.Thread):
         asyncio.set_event_loop(self.loop)
         
     async def check_phones(self, new_phones):
-        for phone in self.chat.phones:
+        for phone in new_phones:
             try:
                 client = await phone.new_client(loop=self.loop)
                 
@@ -31,13 +31,14 @@ class ChatThread(threading.Thread):
                 
                 logging.info(f"Chat {self.chat.id} available for phone {phone.id}.")
             except (
+                errors.ChannelInvalidError, 
+                errors.ChannelPrivateError, 
+                errors.NeedChatInvalidError, 
+                errors.ChatIdInvalidError, 
+                errors.PeerIdInvalidError, 
+                ### ------------------------
                 ClientNotAvailableError, 
-                ChatNotAvailableError, 
-                errors.ChannelInvalidError,
-                errors.ChannelPrivateError,
-                errors.NeedChatInvalidError,
-                errors.ChatIdInvalidError,
-                errors.PeerIdInvalidError
+                ChatNotAvailableError
             ) as ex:
                 logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
                 
@@ -62,14 +63,14 @@ class ChatThread(threading.Thread):
                     else:
                         raise ChatNotAvailableError()
             except (
-                errors.ChannelInvalidError,
-                errors.ChannelPrivateError,
+                errors.ChannelInvalidError, 
+                errors.ChannelPrivateError, 
                 ### ------------------------
-                errors.InviteHashEmptyError,
-                errors.InviteHashExpiredError,
-                errors.InviteHashInvalidError,
+                errors.InviteHashEmptyError, 
+                errors.InviteHashExpiredError, 
+                errors.InviteHashInvalidError, 
                 ### ------------------------
-                ChatNotAvailableError,
+                ChatNotAvailableError, 
                 ClientNotAvailableError
             ):
                 pass
@@ -86,6 +87,10 @@ class ChatThread(threading.Thread):
                         functions.messages.ImportChatInviteRequest(hash=self.chat.hash)
             )
         except (
+            ValueError,
+            ### -----------------------------
+            errors.UsernameNotOccupiedError,
+            ### -----------------------------
             errors.ChannelsTooMuchError, 
             errors.ChannelPrivateError, 
             errors.InviteHashExpiredError, 
@@ -171,7 +176,7 @@ class ChatThread(threading.Thread):
                 new_chat['isAvailable'] = False
             else:
                 try:
-                    tg_chat = self.get_tg_chat(new_phones)
+                    tg_chat = await self.get_tg_chat(new_phones)
                 except ChatNotAvailableError:
                     new_chat['isAvailable'] = False
                 else:
