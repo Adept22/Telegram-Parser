@@ -57,13 +57,13 @@ class ChatThread(threading.Thread):
             try:
                 if self.chat.internal_id != None:
                     return await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
-                else:
+                elif self.chat.hash != None:
                     chat_invite = await client(functions.messages.CheckChatInviteRequest(hash=self.chat.hash))
                     
                     if isinstance(chat_invite, (types.ChatInviteAlready, types.ChatInvitePeek)):
                         return chat_invite.chat
-                    else:
-                        raise ChatNotAvailableError()
+                    
+                raise ChatNotAvailableError()
             except (
                 errors.ChannelInvalidError, 
                 errors.ChannelPrivateError, 
