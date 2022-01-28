@@ -106,7 +106,13 @@ class ChatThread(threading.Thread):
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
             return
+        except errors.FloodWaitError as ex:
+            logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
             
+            await asyncio.sleep(ex.seconds)
+            
+            await self.join_via_phone(phone)
+        
     async def join_via_phones(self, available_phones, new_phones):
         to_join = list(
             sorted(
@@ -128,10 +134,6 @@ class ChatThread(threading.Thread):
                 await asyncio.sleep(random.randint(2, 5))
                 
                 continue
-            except errors.FloodWaitError as ex:
-                logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
-                
-                await asyncio.sleep(ex.seconds)
             else:
                 logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
                 
