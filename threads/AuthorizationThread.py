@@ -95,13 +95,15 @@ class AuthorizationThread(threading.Thread):
                     except Exception as ex:
                         logging.error(f"Unable to sent code for {self.phone.id}. Exception: {ex}.")
                         
-                        self.phone.session = self.client.session.save()
+                        self.phone.session = None
                         self.phone.is_banned = True
                         self.phone.is_verified = False
                         self.phone.code = None
                         self.phone.code_hash = None
                         
                         self.phone.save()
+                        
+                        break
                 else:
                     await asyncio.sleep(10)
             else:

@@ -16,9 +16,6 @@ class MembersParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-        all_phones = ApiProcessor().get('phones')
-        self.our_phones_ids = [phone['internalId'] for phone in all_phones if phone.get('internalId') != None]
-        
     def get_member(self, user):
         new_member = {
             'internalId': user.id,
