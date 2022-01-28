@@ -109,9 +109,9 @@ class AuthorizationThread(threading.Thread):
                 
                 break
                 
-        internal_id = self.get_internal_id()
+        internal_id = await self.get_internal_id()
         
-        if internal_id != self.phone.internal_id:
+        if internal_id != None and internal_id != self.phone.internal_id:
             self.phone.internal_id = internal_id
             
             self.phone.save()
