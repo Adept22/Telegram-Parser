@@ -3,8 +3,8 @@ import random
 import threading
 import asyncio
 import logging
+import globalvars
 from telethon import types
-from utils import bcolors
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -19,7 +19,7 @@ class MessagesParserThread(threading.Thread):
         
     def get_member(self, peer_id):
         if isinstance(peer_id, types.PeerUser):
-            members = ApiProcessor().get('member', { 'internalId': peer_id })
+            members = ApiProcessor().get('member', { 'internalId': peer_id.user_id })
             
             if len(members) > 0:
                 chat_members = ApiProcessor().get('chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': members[0]['id'] } })
@@ -132,10 +132,16 @@ class MessagesParserThread(threading.Thread):
                 ):
                     index += 1
                     
+                    logging.debug(f'Chat {self.chat.id}. Receive message {index}/{all_messages.total}')
+                    
                     if not isinstance(message, types.Message):
                         continue
                     
-                    logging.debug(f'Chat {self.chat.id}. Receive message {index}/{all_messages.total}')
+                    if isinstance(message.peer_id, types.PeerUser):
+                        if message.peer_id.user_id in globalvars.phones_tg_ids:
+                            logging.debug(f'Chat {self.chat.id}. Message {index} is our phone message. Continue.')
+                            
+                            continue
                     
                     messages = ApiProcessor().get('message', { 'internalId': message.id, 'chat': { "id": self.chat.id } })
                     

@@ -24,6 +24,17 @@ class AuthorizationThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
+    async def get_internal_id(self):
+        try:
+            me = await self.client.get_me()
+            
+            if me != None:
+                return me.id
+        except:
+            pass
+        
+        return None
+        
     async def send_code(self):
         try:
             logging.debug(f"Try to send code for {self.phone.id}.")
@@ -84,7 +95,6 @@ class AuthorizationThread(threading.Thread):
                     except Exception as ex:
                         logging.error(f"Unable to sent code for {self.phone.id}. Exception: {ex}.")
                         
-                        self.phone.authorization_thread = None
                         self.phone.session = self.client.session.save()
                         self.phone.is_banned = True
                         self.phone.is_verified = False
@@ -97,19 +107,14 @@ class AuthorizationThread(threading.Thread):
             else:
                 logging.debug(f"Phone {self.phone.id} actually authorized.")
                 
-                self.phone.authorization_thread = None
-                
-                if self.phone.session != self.client.session.save():
-                    self.phone.session = self.client.session.save()
-                    
-                    self.phone.is_banned = False
-                    self.phone.is_verified = True
-                    self.phone.code = None
-                    self.phone.code_hash = None
-                            
-                    self.phone.save()
-                
                 break
+                
+        internal_id = self.get_internal_id()
+        
+        if internal_id != self.phone.internal_id:
+            self.phone.internal_id = internal_id
+            
+            self.phone.save()
             
         self.phone.authorization_thread = None
                 
