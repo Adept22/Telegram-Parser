@@ -22,6 +22,7 @@ class Phone(object):
         
         self.dict = dict
         
+        self.internal_id = None
         self.code = None
         self.code_hash = None
         self.session = None
