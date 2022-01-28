@@ -93,15 +93,13 @@ class ChatThread(threading.Thread):
             ### -----------------------------
             errors.UsernameNotOccupiedError,
             ### -----------------------------
-            errors.ChannelsTooMuchError, 
             errors.ChannelPrivateError, 
             errors.InviteHashExpiredError, 
             errors.UsersTooMuchError,
             ### -----------------------------
             errors.ChannelInvalidError, 
             errors.InviteHashEmptyError, 
-            errors.InviteHashInvalidError, 
-            errors.SessionPasswordNeededError
+            errors.InviteHashInvalidError
         ) as ex:
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
@@ -122,29 +120,40 @@ class ChatThread(threading.Thread):
         )
         
         logging.debug(f"{len(to_join)} phones ready for joining in chat {self.chat.id}.")
-        
-        for phone in to_join:
-            try:
-                await self.join_via_phone(phone)
-            except (ChatNotAvailableError, ClientNotAvailableError) as ex:
-                logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
-                
-                del available_phones[phone.id]
-                
-                await asyncio.sleep(random.randint(2, 5))
-                
-                continue
-            else:
-                logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
-                
-                new_phones[phone.id] = phone
-                
-                if len(new_phones.items()) >= 3:
-                    logging.debug(f"Wired phones limit reached for chat {self.chat.id}.")
+    
+        try:
+            for phone in to_join:
+                try:
+                    await self.join_via_phone(phone)
+                except (
+                    ClientNotAvailableError, 
+                    ### -----------------------------
+                    errors.ChannelsTooMuchError, 
+                    errors.SessionPasswordNeededError
+                ) as ex:
+                    logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
                     
-                    break
-                
-                await asyncio.sleep(random.randint(2, 5))
+                    del available_phones[phone.id]
+                    
+                    await asyncio.sleep(random.randint(2, 5))
+                    
+                    continue
+                else:
+                    logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
+                    
+                    new_phones[phone.id] = phone
+                    
+                    if len(new_phones.items()) >= 3:
+                        logging.debug(f"Wired phones limit reached for chat {self.chat.id}.")
+                        
+                        break
+                    
+                    await asyncio.sleep(random.randint(2, 5))
+        except ChatNotAvailableError as ex:
+            logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
+            
+            available_phones = []
+            new_phones = []
         
         return available_phones, new_phones
             

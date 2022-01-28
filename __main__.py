@@ -1,8 +1,8 @@
 from sys import stdout
 import os
 import asyncio
-import threading
 import logging
+import globalvars
 from logging.handlers import RotatingFileHandler
 from autobahn.wamp.types import SubscribeOptions
 from autobahn.asyncio.wamp import ApplicationSession
@@ -97,6 +97,8 @@ class Component(ApplicationSession):
         asyncio.get_event_loop().stop()
 
 if __name__ == '__main__':
+    globalvars.init()
+    
     fh = RotatingFileHandler(filename='log/dev.log', maxBytes=1048576, backupCount=10)
     fh.setLevel(logging.INFO)
 
