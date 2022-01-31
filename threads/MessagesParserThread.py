@@ -195,7 +195,9 @@ class MessagesParserThread(threading.Thread):
 
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-        self.chat.messages_parser_thread = None
+        # self.chat.messages_parser_thread = None
         
     def run(self):
+        self.chat.init_event.wait()
+        
         asyncio.run(self.async_run())

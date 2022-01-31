@@ -6,7 +6,6 @@ import logging
 from telethon import functions, errors, types
 
 from processors.ApiProcessor import ApiProcessor
-from core.PhonesManager import PhonesManager
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
@@ -155,8 +154,8 @@ class ChatThread(threading.Thread):
         except ChatNotAvailableError as ex:
             logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
             
-            available_phones = []
-            new_phones = []
+            available_phones = {}
+            new_phones = {}
         
         return available_phones, new_phones
             
@@ -164,52 +163,63 @@ class ChatThread(threading.Thread):
         if len(self.chat.available_phones) == 0:
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
         else:
+            new_chat = { 'id': self.chat.id }
+
             available_phones = dict([(p.id, p) for p in self.chat.available_phones])
             new_phones = dict([(p.id, p) for p in self.chat.phones])
             
             logging.debug(f"Chat {self.chat.id} has {len(available_phones.items())} available phones.")
             logging.debug(f"Chat {self.chat.id} has {len(new_phones.items())} wired phones.")
             
-            if len(new_phones.items()) >= 3 or len(available_phones.items()) <= len(new_phones.items()):
+            if (len(new_phones.items()) >= 3 or len(available_phones.items()) <= len(new_phones.items())):
                 new_phones = await self.check_phones(new_phones)
             elif len(new_phones.items()) < 3:
                 available_phones, new_phones = await self.join_via_phones(available_phones, new_phones)
-                
-            new_chat = { 'id': self.chat.id }
             
+
+
             if len(available_phones.items()) != len(self.chat.available_phones):
                 logging.info(f"Chat {self.chat.id} list of available phones changed. Now it\'s {len(available_phones.items())}.")
                 
-                new_chat['availablePhones'] = [{ 'id': id } for id in available_phones.keys()] 
+                self.chat.available_phones = [{ 'id': id } for id in available_phones.keys()]
+                new_chat['availablePhones'] = [{ 'id': id } for id in available_phones.keys()]
                 
             if len(new_phones.items()) != len(self.chat.phones) or \
                 any(x.id != y.id for x, y in zip(new_phones.values(), self.chat.phones)):
                 logging.info(f"Chat {self.chat.id} list of wired phones changed. Now it\'s {len(new_phones.items())}.")
                 
-                new_chat['phones'] = [{ 'id': id } for id in new_phones.keys()] 
-                
-            if len(available_phones.items()) == 0 or len(new_phones.items()) == 0:
+                self.chat.phones = [{ 'id': id } for id in new_phones.keys()]
+                new_chat['phones'] = [{ 'id': id } for id in new_phones.keys()]
+            
+            try:
+                tg_chat = await self.get_tg_chat(new_phones)
+            except ChatNotAvailableError:
+                self.chat.is_available = False
                 new_chat['isAvailable'] = False
-                
-            if self.chat.internal_id == None:
-                try:
-                    tg_chat = await self.get_tg_chat(new_phones)
-                except ChatNotAvailableError:
-                    new_chat['isAvailable'] = False
-                else:
+            else:
+                if self.chat.internal_id == None:
                     logging.info(f"Chat {self.chat.id} internal id getted.")
                     
+                    self.chat.internal_id = tg_chat.id
                     new_chat['internalId'] = tg_chat.id
+                
+                if self.chat.title == None:
+                    logging.info(f"Chat {self.chat.id} title getted.")
                     
-                    if self.chat.title == None:
-                        logging.info(f"Chat {self.chat.id} title getted.")
-                        
-                        new_chat['title'] = tg_chat.title
+                    self.chat.title = tg_chat.title
+                    new_chat['title'] = tg_chat.title
+                
+            if len(available_phones.items()) == 0 or len(new_phones.items()) == 0:
+                self.chat.is_available = False
+                new_chat['isAvailable'] = False
+
+            
             
             if len(new_chat.items()) > 1:
                 ApiProcessor().set('chat', new_chat)
-                
+        
         self.chat.chat_thread = None
 
     def run(self):
+
         asyncio.run(self.async_run())

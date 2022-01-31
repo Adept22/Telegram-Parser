@@ -1,5 +1,6 @@
 import re
 import logging
+import threading
 from utils import get_hash
 
 from core.PhonesManager import PhonesManager
@@ -7,6 +8,7 @@ from processors.ApiProcessor import ApiProcessor
 from threads.ChatThread import ChatThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
+from errors.ChatNotAvailableError import ChatNotAvailableError
 
 class Chat(object):
     def __init__(self, _dict):
@@ -31,6 +33,8 @@ class Chat(object):
         self._available_phones = []
         
         self.chat_thread = None
+
+        self.init_event = threading.Event()
         self.members_parser_thread = None
         self.messages_parser_thread = None
         
@@ -42,7 +46,7 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value: 'dict'):
-        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()] if self.internal_id != None else []
         
         # if len(self._phones) != len(new_value):
         #     ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })

@@ -64,7 +64,7 @@ class Phone(object):
         return self
     
     def save(self):
-        skip = ['dict', 'chats_count', 'code_hash', 'authorization_thread']
+        skip = ['dict', 'chats_count', 'code_hash', 'authorization_thread', 'joining_lock']
         
         dict = {}
         
