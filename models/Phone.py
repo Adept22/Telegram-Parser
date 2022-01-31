@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import logging
+import threading
 
 from telethon import sync, sessions
 
@@ -27,6 +28,7 @@ class Phone(object):
         self.code_hash = None
         self.session = None
         self.authorization_thread = None
+        self.joining_lock = threading.Lock()
         
         self.from_dict(dict)
     

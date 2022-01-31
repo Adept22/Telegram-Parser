@@ -1,4 +1,3 @@
-from distutils.log import error
 import threading
 import asyncio
 import random
@@ -104,12 +103,6 @@ class ChatThread(threading.Thread):
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
             return
-        except errors.FloodWaitError as ex:
-            logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
-            
-            await asyncio.sleep(ex.seconds)
-            
-            await self.join_via_phone(phone)
         
     async def join_via_phones(self, available_phones, new_phones):
         to_join = list(
@@ -123,32 +116,39 @@ class ChatThread(threading.Thread):
     
         try:
             for phone in to_join:
-                try:
-                    await self.join_via_phone(phone)
-                except (
-                    ClientNotAvailableError, 
-                    ### -----------------------------
-                    errors.ChannelsTooMuchError, 
-                    errors.SessionPasswordNeededError
-                ) as ex:
-                    logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
-                    
-                    del available_phones[phone.id]
-                    
-                    await asyncio.sleep(random.randint(2, 5))
-                    
-                    continue
-                else:
-                    logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
-                    
-                    new_phones[phone.id] = phone
-                    
-                    if len(new_phones.items()) >= 3:
-                        logging.debug(f"Wired phones limit reached for chat {self.chat.id}.")
+                with phone.joining_lock:
+                    try:
+                        await self.join_via_phone(phone)
+                    except (
+                        ClientNotAvailableError, 
+                        ### -----------------------------
+                        errors.ChannelsTooMuchError, 
+                        errors.SessionPasswordNeededError
+                    ) as ex:
+                        logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
                         
-                        break
-                    
-                    await asyncio.sleep(random.randint(2, 5))
+                        del available_phones[phone.id]
+                        
+                        await asyncio.sleep(random.randint(2, 5))
+                        
+                        continue
+                    except errors.FloodWaitError as ex:
+                        logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
+                        
+                        await asyncio.sleep(ex.seconds)
+                        
+                        await self.join_via_phone(phone)
+                    else:
+                        logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
+                        
+                        new_phones[phone.id] = phone
+                        
+                        if len(new_phones.items()) >= 3:
+                            logging.debug(f"Wired phones limit reached for chat {self.chat.id}.")
+                            
+                            break
+                        
+                        await asyncio.sleep(random.randint(2, 5))
         except ChatNotAvailableError as ex:
             logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
             
