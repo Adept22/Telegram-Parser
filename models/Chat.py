@@ -44,8 +44,8 @@ class Chat(object):
     def phones(self, new_value: 'dict'):
         self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
-        if len(self._phones) != len(new_value):
-            ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })
+        # if len(self._phones) != len(new_value):
+        #     ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })
         
     @property
     def available_phones(self):
@@ -55,8 +55,8 @@ class Chat(object):
     def available_phones(self, new_value: 'dict'):
         self._available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
-        if len(self._available_phones) != len(new_value):
-            ApiProcessor().set('chat', { 'id': self.id, 'availablePhones': self._available_phones })
+        # if len(self._available_phones) != len(new_value):
+        #     ApiProcessor().set('chat', { 'id': self.id, 'availablePhones': self._available_phones })
         
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')

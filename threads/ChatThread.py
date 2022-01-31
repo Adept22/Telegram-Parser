@@ -101,6 +101,12 @@ class ChatThread(threading.Thread):
             errors.InviteHashInvalidError
         ) as ex:
             raise ChatNotAvailableError(ex)
+        except errors.FloodWaitError as ex:
+            logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
+            
+            await asyncio.sleep(ex.seconds)
+            
+            await self.join_via_phone(phone)
         except errors.UserAlreadyParticipantError as ex:
             return
         
@@ -116,6 +122,9 @@ class ChatThread(threading.Thread):
     
         try:
             for phone in to_join:
+                if phone.joining_lock.locked():
+                    continue
+                
                 with phone.joining_lock:
                     try:
                         await self.join_via_phone(phone)
@@ -132,12 +141,6 @@ class ChatThread(threading.Thread):
                         await asyncio.sleep(random.randint(2, 5))
                         
                         continue
-                    except errors.FloodWaitError as ex:
-                        logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
-                        
-                        await asyncio.sleep(ex.seconds)
-                        
-                        await self.join_via_phone(phone)
                     else:
                         logging.info(f"Phone {phone.id} succesfully wired with chat {self.chat.id}.")
                         
@@ -187,16 +190,16 @@ class ChatThread(threading.Thread):
                 
             if len(available_phones.items()) == 0 or len(new_phones.items()) == 0:
                 new_chat['isAvailable'] = False
-            else:
+                
+            if self.chat.internal_id == None:
                 try:
                     tg_chat = await self.get_tg_chat(new_phones)
                 except ChatNotAvailableError:
                     new_chat['isAvailable'] = False
                 else:
-                    if self.chat.internal_id == None:
-                        logging.info(f"Chat {self.chat.id} internal id getted.")
-                        
-                        new_chat['internalId'] = tg_chat.id
+                    logging.info(f"Chat {self.chat.id} internal id getted.")
+                    
+                    new_chat['internalId'] = tg_chat.id
                     
                     if self.chat.title == None:
                         logging.info(f"Chat {self.chat.id} title getted.")
