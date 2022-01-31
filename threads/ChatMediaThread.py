@@ -6,7 +6,7 @@ import logging
 import random
 
 from telethon import types
-from utils import bcolors, formated_date
+from utils import formated_date
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -49,7 +49,7 @@ class ChatMediaThread(threading.Thread):
 
                 if path_to_file != None:
                     new_photo = { 
-                        'chat': {"id": self.chat.internal_id}, 
+                        'chat': {"id": self.chat.id}, 
                         'internalId': photo.id,
                         'createdAt': formated_date(photo.date),
                         'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
