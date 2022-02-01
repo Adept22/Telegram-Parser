@@ -1,6 +1,5 @@
 import re
 import logging
-from threads.ChatMediaThread import ChatMediaThread
 from utils import get_hash
 
 from core.PhonesManager import PhonesManager
@@ -9,6 +8,8 @@ from threads.ChatPulseThread import ChatPulseThread
 from threads.ChatJoiningThread import ChatJoiningThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
+from threads.MessagesPhotoParserThread import MessagesPhotoParserThread
+from threads.ChatMediaThread import ChatMediaThread
 
 class Chat(object):
     def __init__(self, dict):
@@ -35,6 +36,7 @@ class Chat(object):
         self.members_thread = None
         self.medias_thread = None
         self.messages_thread = None
+        self.messages_photo_thread = None
         
         self.valid_phones = []
         self._phones = []
@@ -107,14 +109,14 @@ class Chat(object):
                 logging.debug(f"Members parsing thread for chat {self.id} is running.")
             #--< MEMBERS --<#
 
-            #--> MEDIAS -->#
-            if self.medias_thread == None:
-                self.medias_thread = ChatMediaThread(self)
-                self.medias_thread.setDaemon(True)
-                self.medias_thread.start()
-            else:
-                logging.debug(f"Medias parsing thread for chat {self.id} is running.")
-            #--< MEDIAS --<#
+            #--> CHAT MEDIAS -->#
+            # if self.medias_thread == None:
+            #     self.medias_thread = ChatMediaThread(self)
+            #     self.medias_thread.setDaemon(True)
+            #     self.medias_thread.start()
+            # else:
+                # logging.debug(f"Medias parsing thread for chat {self.id} is running.")
+            #--< CHAT MEDIAS --<#
             
             #--> MESSAGES -->#
             if self.messages_thread == None:
@@ -124,5 +126,14 @@ class Chat(object):
             else:
                 logging.debug(f"Messages parsing thread for chat {self.id} is running.")
             #--< MESSAGES --<#
+            
+            #--> MESSAGES PHOTOS -->#
+            # if self.messages_photo_thread == None:
+            #     self.messages_photo_thread = MessagesPhotoParserThread(self)
+            #     self.messages_photo_thread.setDaemon(True)
+            #     self.messages_photo_thread.start()
+            # else:
+            #     logging.debug(f"Messages parsing thread for chat {self.id} is running.")
+            #--< MESSAGES PHOTOS --<#
         
         return self

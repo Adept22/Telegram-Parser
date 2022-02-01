@@ -17,9 +17,9 @@ class MessagesParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-    def get_member(self, peer_id):
-        if isinstance(peer_id, types.PeerUser):
-            members = ApiProcessor().get('member', { 'internalId': peer_id })
+    def get_member(self, peer_from):
+        if isinstance(peer_from, types.PeerUser):
+            members = ApiProcessor().get('member', { 'internalId': peer_from.user_id })
             
             if len(members) > 0:
                 chat_members = ApiProcessor().get('chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': members[0]['id'] } })
@@ -29,14 +29,14 @@ class MessagesParserThread(threading.Thread):
                 
         return None
     
-    def get_reply_to(self, reply_to):
-        if reply_to != None:
-            reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
+    # def get_reply_to(self, reply_to):
+    #     if reply_to != None:
+    #         reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
             
-            if len(reply_to_msgs) > 0:
-                return reply_to_msgs[0]
+    #         if len(reply_to_msgs) > 0:
+    #             return reply_to_msgs[0]
             
-        return None
+    #     return None
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -106,44 +106,6 @@ class MessagesParserThread(threading.Thread):
                 
                 index = 1
                 entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
-                
-                # try:
-                #     photos = await client.get_profile_photos(entity)
-                # except Exception as ex:
-                #     logging.error(f"Can\'t get {self.chat.title} media list. Exception: {ex}.")
-                # else:
-                #     logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
-                
-                # if photos:
-                #     for photo in photos:
-                #         savedPhotos = ApiProcessor().get('chat-media', { 'internalId': photo.id})
-                        
-                #         if len(savedPhotos) > 0:
-                #             logging.debug(f'Chat {self.chat.id}. Chat-media {savedPhotos[0]} exist. Continue.')
-                        
-                #             continue
-
-                #         try:
-                #             pathFolder = f'./uploads/chat-media/{self.chat.id}'
-
-                #             pathToFile = await client.download_media(
-                #                 message=photo,
-                #                 file=f'{pathFolder}/{photo.id}',
-                #                 thumb=photo.sizes[-2]
-                #             )
-
-                #             if pathToFile != None:
-                #                 ApiProcessor().set('chat-media', { 
-                #                     'chat-media': { "id": self.chat.id }, 
-                #                     'internalId': photo.id,
-                #                     'createdAt': formated_date(photo.date),
-                #                     'path': f'{pathFolder}/{split("/", pathToFile)[-1]}'
-                #                 })
-
-                #         except Exception as ex:
-                #             logging.error(f"Can\'t save channel {self.chat} media. Exception: {ex}.")
-                #         else:
-                #             logging.info(f'{bcolors.OKGREEN} Sucessfuly saved channel {self.chat.title} media!{bcolors.ENDC}')
 
                 all_messages = await client.get_messages(
                     entity=entity, 
@@ -181,8 +143,9 @@ class MessagesParserThread(threading.Thread):
                             'internalId': message.id, 
                             'text': message.message, 
                             'chat': { "id": self.chat.id }, 
-                            'member': self.get_member(message.peer_id), 
-                            'replyTo': self.get_reply_to(message.reply_to), 
+                            'member': self.get_member(message.from_id), 
+                            # 'replyTo': self.get_reply_to(message.reply_to), 
+                            'replyInternalId': message.reply_to_msg_id, 
                             'isPinned': message.pinned, 
                             'forwardedFromId': fwd_from_id, 
                             'forwardedFromName': fwd_from_name, 
@@ -194,11 +157,11 @@ class MessagesParserThread(threading.Thread):
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
                     else:
                         logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
-                        await self.download_media(
-                            client=client,
-                            last_message=last_message,
-                            message=message
-                        )
+                        # await self.download_media(
+                        #     client=client,
+                        #     last_message=last_message,
+                        #     message=message
+                        # )
                 else:
                     logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
             except Exception as ex:
