@@ -4,107 +4,82 @@ from utils import get_hash
 
 from core.PhonesManager import PhonesManager
 from processors.ApiProcessor import ApiProcessor
-from threads.ChatPulseThread import ChatPulseThread
-from threads.ChatJoiningThread import ChatJoiningThread
+from threads.ChatThread import ChatThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
 from threads.MessagesPhotoParserThread import MessagesPhotoParserThread
 from threads.ChatMediaThread import ChatMediaThread
 
 class Chat(object):
-    def __init__(self, dict):
-        if dict is None:
-            raise Exception('Unexpected chat dictionary')
-            
-        if not 'id' in dict or dict['id'] is None:
+    def __init__(self, _dict):
+        if not 'id' in _dict or _dict['id'] is None:
             raise Exception('Unexpected chat id')
 
-        if not 'link' in dict or dict['link'] is None:
+        if not 'link' in _dict or _dict['link'] is None:
             raise Exception('Unexpected chat link')
         
-        self.dict = dict
+        self.dict = _dict
+        
+        self.username, self.hash = get_hash(_dict['link'])
         
         self.title = None
-        self._link = None
-        self.username = None
-        self.hash = None
+        self.link = None
         self.internal_id = None
         self.is_available = False
         
-        self.chat_pulse_thread = None
-        self.joining_thread = None
-        self.members_thread = None
-        self.medias_thread = None
-        self.messages_thread = None
-        self.messages_photo_thread = None
-        
-        self.valid_phones = []
+        self.phones = []
+        self.available_phones = []
         self._phones = []
+        self._available_phones = []
         
-        self.messages = []
+        self.chat_thread = None
+        self.members_parser_thread = None
+        self.messages_parser_thread = None
         
-        self.from_dict(dict)
-        
-    @property
-    def link(self):
-        return self._link
-    
-    @link.setter
-    def link(self, new_value):
-        self.username, self.hash = get_hash(new_value)
-        
-        self._link = new_value
+        self.from_dict(_dict)
         
     @property
     def phones(self):
         return self._phones
     
     @phones.setter
-    def phones(self, new_value):
-        new_phones = []
-
-        if self.is_available:
-            for phone in new_value:
-                phone = PhonesManager().get(phone['id'])
-                    
-                if phone != None:
-                    new_phones.append(phone)
-                    
-            if len(new_phones) < 3:
-                if self.joining_thread == None:
-                    self.joining_thread = ChatJoiningThread(self)
-                    self.joining_thread.setDaemon(True)
-                    self.joining_thread.start()
-                else:
-                    logging.debug(f"Chat joining thread for chat {self.id} is running.")
-            else:
-                self.joining_thread = None
-                
-                if self.chat_pulse_thread == None:
-                    self.chat_pulse_thread = ChatPulseThread(self, new_phones)
-                    self.chat_pulse_thread.start()
-                else:
-                    logging.debug(f"Chat pulse thread for chat {self.id} is running.")
-                    
-        self._phones = new_phones
+    def phones(self, new_value: 'dict'):
+        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        
+        if len(self._phones) != len(new_value):
+            ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })
+        
+    @property
+    def available_phones(self):
+        return self._available_phones
     
+    @available_phones.setter
+    def available_phones(self, new_value: 'dict'):
+        self._available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        
+        if len(self._available_phones) != len(new_value):
+            ApiProcessor().set('chat', { 'id': self.id, 'availablePhones': self._available_phones })
+        
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
         
         for key in dict:
             setattr(self, pattern.sub('_', key).lower(), dict[key])
             
-        self.dict = dict
-        
         return self
     
     async def init(self):
-        if self.is_available and len(self.phones) > 0:
+        if self.chat_thread == None:
+            self.chat_thread = ChatThread(self)
+            self.chat_thread.setDaemon(True)
+            self.chat_thread.start()
+        
+        if len(self.phones) > 0:
             #--> MEMBERS -->#
-            if self.members_thread == None:
-                self.members_thread = MembersParserThread(self)
-                self.members_thread.setDaemon(True)
-                self.members_thread.start()
+            if self.members_parser_thread == None:
+                self.members_parser_thread = MembersParserThread(self)
+                self.members_parser_thread.setDaemon(True)
+                self.members_parser_thread.start()
             else:
                 logging.debug(f"Members parsing thread for chat {self.id} is running.")
             #--< MEMBERS --<#
@@ -119,10 +94,10 @@ class Chat(object):
             #--< CHAT MEDIAS --<#
             
             #--> MESSAGES -->#
-            if self.messages_thread == None:
-                self.messages_thread = MessagesParserThread(self)
-                self.messages_thread.setDaemon(True)
-                self.messages_thread.start()
+            if self.messages_parser_thread == None:
+                self.messages_parser_thread = MessagesParserThread(self)
+                self.messages_parser_thread.setDaemon(True)
+                self.messages_parser_thread.start()
             else:
                 logging.debug(f"Messages parsing thread for chat {self.id} is running.")
             #--< MESSAGES --<#

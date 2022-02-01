@@ -22,6 +22,7 @@ class Phone(object):
         
         self.dict = dict
         
+        self.internal_id = None
         self.code = None
         self.code_hash = None
         self.session = None
@@ -67,11 +68,11 @@ class Phone(object):
         
         for key in self.__dict__:
             if not key in skip:
-                dict[key] = self.__dict__[key]
+                components = key.split('_')
+                
+                dict[components[0] + ''.join(x.title() for x in components[1:])] = self.__dict__[key]
                 
         return ApiProcessor().set('phone', dict)
-                
-            
     
     async def init(self):
         if self.authorization_thread == None:

@@ -2,7 +2,7 @@ import random
 import threading
 import asyncio
 import logging
-from sys import stdout
+import globalvars
 from telethon import types
 import re
 import os.path
@@ -85,6 +85,11 @@ class MembersParserThread(threading.Thread):
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     logging.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
                     
+                    if user.id in globalvars.phones_tg_ids:
+                        logging.debug(f'Chat {self.chat.id}. User \'{user.first_name}\' is our phone. Continue.')
+                        
+                        continue
+                    
                     chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
                     
                     try:
@@ -152,9 +157,11 @@ class MembersParserThread(threading.Thread):
                 
                 break
         else:
+            logging.error(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
+        
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'{bcolors.FAIL} Cannot get chat {self.chat.title} participants. Exit code 1.{bcolors.ENDC}')
+        self.chat.members_parser_thread = None
         
     def run(self):
         asyncio.run(self.async_run())

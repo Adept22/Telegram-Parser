@@ -147,3 +147,4 @@ sessions/
 
 #for media downloads
 /uploads
+log/*

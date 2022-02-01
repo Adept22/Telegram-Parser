@@ -2,7 +2,8 @@ import os
 import asyncio
 import logging
 from sys import stdout
-# from logger import Logger
+import globalvars
+from logging.handlers import RotatingFileHandler
 from autobahn.wamp.types import SubscribeOptions
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
@@ -16,24 +17,24 @@ from core.PhonesManager import PhonesManager
 from autobahn.asyncio.component import Component
 
 async def update_chat(chat):
+    if chat['isAvailable'] == False:
+        if chat['id'] in ChatsManager():
+            del ChatsManager()[chat['id']]
+        
+        return
+    
     if chat['id'] in ChatsManager():
         logging.debug(f"Updating chat {chat['id']}.")
         
         chat = ChatsManager()[chat['id']].from_dict(chat)
-        
-        await chat.init()
-            
-        if not chat.is_available:
-            logging.warning(f"Chat {chat.id} actually not available.")
-            
-            del ChatsManager()[chat.id]
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
         
-        chat = await Chat(chat).init()
+        chat = Chat(chat)
         
-        if chat.is_available:
-            ChatsManager()[chat.id] = chat
+        ChatsManager()[chat.id] = chat
+        
+    await chat.init()
 
 async def update_chats():
     logging.debug("Getting chats...")
@@ -46,18 +47,24 @@ async def update_chats():
     logging.debug(f"Received {len(chats)} chats.")
     
 async def update_phone(phone):
+    if phone['isBanned'] == True:
+        if phone['id'] in PhonesManager():
+            del PhonesManager()[phone['id']]
+        
+        return
+    
     if phone['id'] in PhonesManager():
         logging.debug(f"Updating phone {phone['id']}.")
         
         phone = PhonesManager()[phone['id']].from_dict(phone)
-        
-        await phone.init()
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
         
-        phone = await Phone(phone).init()
+        phone = Phone(phone)
         
         PhonesManager()[phone.id] = phone
+        
+    await phone.init()
 
 async def update_phones():
     logging.debug("Getting phones...")
@@ -76,19 +83,23 @@ class Component(ApplicationSession):
         await update_phones()
         await update_chats()
 
-        async def on_event(event, details=None):
+        async def on_event(event):
+            logging.debug(f"Got event on entity: {event['_']}")
+            
             if event['_'] == 'TelegramPhone':
                 await update_phone(event['entity'])
             elif event['_'] == 'TelegramChat':
                 await update_chat(event['entity'])
 
-        await self.subscribe(on_event, 'com.app.entity', options=SubscribeOptions(details_arg='details'))
+        await self.subscribe(on_event, 'com.app.entity')
     
     def onDisconnect(self):
         asyncio.get_event_loop().stop()
 
 if __name__ == '__main__':
-    fh = logging.FileHandler(filename='log/dev.log', mode='a')
+    globalvars.init()
+    
+    fh = RotatingFileHandler(filename='log/dev.log', maxBytes=1048576, backupCount=10)
     fh.setLevel(logging.INFO)
 
     sh = logging.StreamHandler(stdout)
@@ -100,6 +111,11 @@ if __name__ == '__main__':
         handlers=[fh, sh],
         level=logging.DEBUG
     )
+    
+    logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+    logging.getLogger('telethon').setLevel(logging.CRITICAL)
+    logging.getLogger('requests').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
     
     runner = ApplicationRunner(os.environ['WEBSOCKET_URL'], os.environ['WEBSOCKET_REALM'])
     runner.run(Component)
