@@ -8,7 +8,7 @@ from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
 
-class MessagesParserThread(threading.Thread, phone):
+class MessagesParserThread(threading.Thread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'MessagesParserThread-{chat.id}')
         
@@ -56,71 +56,71 @@ class MessagesParserThread(threading.Thread, phone):
                 
         return fwd_from_id, fwd_from_name
 
-    # async def download_media(self, client, last_message, message):
-    #     def progress_callback(current, total):
-    #         logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
-    #     async def file_download():
-    #         path = await client.download_media(
-    #             message=message,
-    #             file=f'./uploads/messages/{self.chat.id}/{last_message["id"]}/{message.id}',
-    #             progress_callback=progress_callback
-    #         )
-
-    #         if path != None:
-    #             media = ApiProcessor().set('message-media', { 
-    #                 'message': { "id": last_message["id"] }, 
-    #                 'path': f'/uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}', 
-    #             })
-    #     try:
-    #         logging.debug(f'Try to save message \'{last_message["id"]}\' media.')
-            
-    #         if isinstance(message.media, types.MessageMediaPoll):
-    #             pass
-    #         elif isinstance(message.media, types.MessageMediaVenue):
-    #             pass
-    #         elif isinstance(message.media, types.MessageMediaContact):
-    #             pass
-    #         elif isinstance(message.media, types.MessageMediaPhoto):
-    #             await file_download()
-    #         elif isinstance(message.media, types.MessageMediaDocument):
-    #             await file_download()
-
-    #     except Exception as ex:
-    #         logging.error(f"Can\'t save message {last_message['id']} media. Exception: {ex}.")
-
-    async def async_run(self):
-        logging.info(f'Recieving messages from chat {self.chat.id}.')
-        
-        try:
-            client = await phone.new_client(loop=self.loop)
-            
-            last_message = { 'internalId': 0, 'groupedId': 0 }
-            
-            messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
-            
-            if len(messages) > 0:
-                logging.info(f'Last message in API exist. Continue.')
-
-                last_message = messages[0]
-            
-            index = 0
-            entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
-
-            messages_pack = await client.get_messages(
-                entity=entity, 
-                limit=3000,
-                reverse=True
+    async def download_media(self, client, last_message, message):
+        def progress_callback(current, total):
+            logging.debug(f'Message \'{last_message["id"]}\' media downloaded {current} out of {total} bytes: {current / total:.2%}')
+        async def file_download():
+            path = await client.download_media(
+                message=message,
+                file=f'./uploads/messages/{self.chat.id}/{last_message["id"]}/{message.id}',
+                progress_callback=progress_callback
             )
 
-            messages_total = messages_pack.total
+            if path != None:
+                media = ApiProcessor().set('message-media', { 
+                    'message': { "id": last_message["id"] }, 
+                    'path': f'/uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}', 
+                })
+        try:
+            logging.debug(f'Try to save message \'{last_message["id"]}\' media.')
+            
+            if isinstance(message.media, types.MessageMediaPoll):
+                pass
+            elif isinstance(message.media, types.MessageMediaVenue):
+                pass
+            elif isinstance(message.media, types.MessageMediaContact):
+                pass
+            elif isinstance(message.media, types.MessageMediaPhoto):
+                await file_download()
+            elif isinstance(message.media, types.MessageMediaDocument):
+                await file_download()
 
-            logging.info(f'Chat {self.chat.id} total messages {messages_pack.total}.')
+        except Exception as ex:
+            logging.error(f"Can\'t save message {last_message['id']} media. Exception: {ex}.")
 
-            while (index <= messages_total):
-                for message in messages_pack:
+    async def async_run(self):
+        for phone in self.chat.phones:
+            logging.info(f'Recieving messages from chat {self.chat.id}.')
+            
+            try:
+                client = await phone.new_client(loop=self.loop)
+                
+                last_message = { 'internalId': 0, 'groupedId': 0 }
+                
+                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
+                
+                if len(messages) > 0:
+                    logging.info(f'Last message in API exist. Continue.')
+
+                    last_message = messages[0]
+                
+                index = 1
+                entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
+
+                all_messages = await client.get_messages(
+                    entity=entity, 
+                    limit=0,
+                    max_id=last_message['internalId']
+                )
+                logging.info(f'Chat {self.chat.id} total messages {all_messages.total}.')
+
+                async for message in client.iter_messages(
+                    entity=entity,
+                    max_id=last_message['internalId']
+                ):
                     index += 1
                     
-                    logging.debug(f'Chat {self.chat.id}. Receive message {index}/{messages_total}')
+                    logging.debug(f'Chat {self.chat.id}. Receive message {index}/{all_messages.total}')
                     
                     if not isinstance(message, types.Message):
                         continue
@@ -163,18 +163,22 @@ class MessagesParserThread(threading.Thread, phone):
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
                     else:
                         logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
-
-                messages_pack = await client.get_messages(
-                    entity=entity, 
-                    limit=3000,
-                    reverse=True,
-                    min_id=index
-                )
-
-        except Exception as ex:
-            logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
-            
-            await asyncio.sleep(random.randint(2, 5))
+                        # await self.download_media(
+                        #     client=client,
+                        #     last_message=last_message,
+                        #     message=message
+                        # )
+                else:
+                    logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
+            except Exception as ex:
+                logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
+                
+                await asyncio.sleep(random.randint(2, 5))
+                
+                continue
+            else:
+                break
+        else:
             logging.error(f'Chat {self.chat.id} messages download failed. Exit code 1.')
 
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })

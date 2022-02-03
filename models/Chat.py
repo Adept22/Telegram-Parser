@@ -5,11 +5,10 @@ from utils import get_hash
 from core.PhonesManager import PhonesManager
 from processors.ApiProcessor import ApiProcessor
 from threads.ChatThread import ChatThread
-# from threads.MembersParserThread import MembersParserThread
-# from threads.MessagesParserThread import MessagesParserThread
-# from threads.MessagesPhotoParserThread import MessagesPhotoParserThread
-# from threads.ChatMediaThread import ChatMediaThread
-from threads.ChatParserThread import ChatParserThread
+from threads.MembersParserThread import MembersParserThread
+from threads.MessagesParserThread import MessagesParserThread
+from threads.MessagesPhotoParserThread import MessagesPhotoParserThread
+from threads.ChatMediaThread import ChatMediaThread
 
 class Chat(object):
     def __init__(self, _dict):
@@ -34,7 +33,6 @@ class Chat(object):
         self._available_phones = []
         
         self.chat_thread = None
-        self.chat_parser_thread = None
         self.members_parser_thread = None
         self.messages_parser_thread = None
         
@@ -77,22 +75,13 @@ class Chat(object):
             self.chat_thread.start()
         
         if len(self.phones) > 0:
-            #--> CHAT PARSER -->#
-            if self.chat_parser_thread == None:
-                self.chat_parser_thread = ChatParserThread(self)
-                self.chat_parser_thread.setDaemon(True)
-                self.chat_parser_thread.start()
+            #--> MEMBERS -->#
+            if self.members_parser_thread == None:
+                self.members_parser_thread = MembersParserThread(self)
+                self.members_parser_thread.setDaemon(True)
+                self.members_parser_thread.start()
             else:
                 logging.debug(f"Members parsing thread for chat {self.id} is running.")
-            #--< CHAT PARSER --<#
-
-            #--> MEMBERS -->#
-            # if self.members_parser_thread == None:
-            #     self.members_parser_thread = MembersParserThread(self)
-            #     self.members_parser_thread.setDaemon(True)
-            #     self.members_parser_thread.start()
-            # else:
-            #     logging.debug(f"Members parsing thread for chat {self.id} is running.")
             #--< MEMBERS --<#
 
             #--> CHAT MEDIAS -->#
@@ -105,12 +94,12 @@ class Chat(object):
             #--< CHAT MEDIAS --<#
             
             #--> MESSAGES -->#
-            # if self.messages_parser_thread == None:
-            #     self.messages_parser_thread = MessagesParserThread(self)
-            #     self.messages_parser_thread.setDaemon(True)
-            #     self.messages_parser_thread.start()
-            # else:
-            #     logging.debug(f"Messages parsing thread for chat {self.id} is running.")
+            if self.messages_parser_thread == None:
+                self.messages_parser_thread = MessagesParserThread(self)
+                self.messages_parser_thread.setDaemon(True)
+                self.messages_parser_thread.start()
+            else:
+                logging.debug(f"Messages parsing thread for chat {self.id} is running.")
             #--< MESSAGES --<#
             
             #--> MESSAGES PHOTOS -->#
