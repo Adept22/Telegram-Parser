@@ -53,43 +53,21 @@ class MessagesParserThread(threading.Thread):
 
         return None
         
-    def get_reply_to(self, message):
-        reply_to = message.reply_to.reply_to_msg_id
-
+    def get_reply_to(self, reply_to):
         if reply_to != None:
-            reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
+            reply_to_msgs = ApiProcessor().get('message', {
+                'internalId': reply_to.reply_to_msg_id
+            })
             
             if len(reply_to_msgs) > 0:
                 return reply_to_msgs[0]
 
-        else:
-            try: 
-                logging.debug(f'Saving message \'{message.id}\' at \'{message.date}\'')
-                
-                fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
-                
-                # if (message.grouped_id != last_message['groupedId']):
-                member = self.get_chat_member(message)
-                logging.info(f'{member}')
-                
-                last_message = ApiProcessor().set('message', { 
-                    'internalId': message.id, 
-                    'text': message.message, 
-                    'chat': { 'id': self.chat.id }, 
-                    'member': self.get_chat_member(message), 
-                    'replyTo': self.get_reply_to(message.reply_to), 
-                    'isPinned': message.pinned, 
-                    'forwardedFromId': fwd_from_id, 
-                    'forwardedFromName': fwd_from_name, 
-                    'groupedId': message.grouped_id, 
-                    'createdAt': message.date.isoformat() 
-                })
-
-            except Exception as ex:
-                logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
             else:
-                logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
-            return last_message
+                return ApiProcessor().set('message', {
+                    'internalId': reply_to.reply_to_msg_id,
+                    'chat': { 'id': self.chat.id }
+                })
+        return None
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -199,19 +177,26 @@ class MessagesParserThread(threading.Thread):
                         # if (message.grouped_id != last_message['groupedId']):
                         member = self.get_chat_member(message)
                         logging.info(f'{member}')
-                        
-                        last_message = ApiProcessor().set('message', { 
+
+                        new_message = { 
                             'internalId': message.id, 
                             'text': message.message, 
                             'chat': { 'id': self.chat.id }, 
                             'member': self.get_chat_member(message), 
-                            # 'replyTo': self.get_reply_to(message.reply_to), 
-                            'isPinned': message.pinned, 
+                            'replyTo': self.get_reply_to(message.reply_to), 
+                            'isPinned': message.pinned,     
                             'forwardedFromId': fwd_from_id, 
                             'forwardedFromName': fwd_from_name, 
                             'groupedId': message.grouped_id, 
                             'createdAt': message.date.isoformat() 
-                        })
+                        }
+
+                        exist_messages = ApiProcessor().get('message', { 'internalId': message.id })
+            
+                        if len(exist_messages) > 0:
+                            new_message['id'] = exist_messages[0]['id']
+                        
+                        last_message = ApiProcessor().set('message', new_message)
 
                     except Exception as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
