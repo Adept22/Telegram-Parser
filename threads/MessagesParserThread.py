@@ -16,27 +16,80 @@ class MessagesParserThread(threading.Thread):
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
-        
-    def get_member(self, peer_from):
-        if isinstance(peer_from, types.PeerUser):
-            members = ApiProcessor().get('member', { 'internalId': peer_from.user_id })
-            
+
+    def get_chat_member(self, message):
+        sender = message.sender
+
+        if isinstance(sender, types.User):
+            new_member = {
+                'internalId': sender.id,
+                'username': sender.username,
+                'firstName': sender.first_name,
+                'lastName': sender.last_name,
+                'phone': sender.phone
+            }
+
+            members = ApiProcessor().get('member', { 'internalId': sender.id })
+
             if len(members) > 0:
-                chat_members = ApiProcessor().get('chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': members[0]['id'] } })
+                logging.debug(f'Member \'{sender.id}\' exists in API.')
+                
+                if members[0].get('id') != None:
+                    new_member['id'] = members[0].get('id')
+
+            new_chat_member = {
+                'chat': { 'id': self.chat.id },
+                'member': new_member
+            }
+
+            if new_chat_member['member'].get('id') != None:
+                chat_members = ApiProcessor().get('chat-member', new_chat_member)
                 
                 if len(chat_members) > 0:
-                    return chat_members[0]
-                
+                    if chat_members[0].get('id') != None:
+                        new_chat_member['id'] = chat_members[0]['id']
+            
+            return new_chat_member
+
         return None
-    
-    # def get_reply_to(self, reply_to):
-    #     if reply_to != None:
-    #         reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
+        
+    def get_reply_to(self, message):
+        reply_to = message.reply_to.reply_to_msg_id
+
+        if reply_to != None:
+            reply_to_msgs = ApiProcessor().get('message', { 'internalId': reply_to.reply_to_msg_id })
             
-    #         if len(reply_to_msgs) > 0:
-    #             return reply_to_msgs[0]
-            
-    #     return None
+            if len(reply_to_msgs) > 0:
+                return reply_to_msgs[0]
+
+        else:
+            try: 
+                logging.debug(f'Saving message \'{message.id}\' at \'{message.date}\'')
+                
+                fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
+                
+                # if (message.grouped_id != last_message['groupedId']):
+                member = self.get_chat_member(message)
+                logging.info(f'{member}')
+                
+                last_message = ApiProcessor().set('message', { 
+                    'internalId': message.id, 
+                    'text': message.message, 
+                    'chat': { 'id': self.chat.id }, 
+                    'member': self.get_chat_member(message), 
+                    'replyTo': self.get_reply_to(message.reply_to), 
+                    'isPinned': message.pinned, 
+                    'forwardedFromId': fwd_from_id, 
+                    'forwardedFromName': fwd_from_name, 
+                    'groupedId': message.grouped_id, 
+                    'createdAt': message.date.isoformat() 
+                })
+
+            except Exception as ex:
+                logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
+            else:
+                logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
+            return last_message
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -144,14 +197,15 @@ class MessagesParserThread(threading.Thread):
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
                         
                         # if (message.grouped_id != last_message['groupedId']):
+                        member = self.get_chat_member(message)
+                        logging.info(f'{member}')
                         
                         last_message = ApiProcessor().set('message', { 
                             'internalId': message.id, 
                             'text': message.message, 
-                            'chat': { "id": self.chat.id }, 
-                            'member': self.get_member(message.from_id), 
+                            'chat': { 'id': self.chat.id }, 
+                            'member': self.get_chat_member(message), 
                             # 'replyTo': self.get_reply_to(message.reply_to), 
-                            'replyInternalId': message.reply_to_msg_id, 
                             'isPinned': message.pinned, 
                             'forwardedFromId': fwd_from_id, 
                             'forwardedFromName': fwd_from_name, 

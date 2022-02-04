@@ -25,8 +25,7 @@ class MembersParserThread(threading.Thread):
             'username': user.username,
             'firstName': user.first_name,
             'lastName': user.last_name,
-            'phone': user.phone
-        }
+            'phone': user.phone        }
         
         members = ApiProcessor().get('member', { 'internalId': user.id })
         
@@ -89,8 +88,10 @@ class MembersParserThread(threading.Thread):
                         logging.debug(f'Chat {self.chat.id}. User \'{user.first_name}\' is our phone. Continue.')
                         
                         continue
-                    
-                    chat_member_role = self.get_chat_member_role(user.participant, self.get_chat_member(self.get_member(user)))
+
+                    member = self.get_member(user)
+                    chat_member = self.get_chat_member(member)
+                    chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     
                     try:
                         chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
