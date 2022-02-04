@@ -56,7 +56,7 @@ class MessagesParserThread(threading.Thread):
     def get_reply_to(self, reply_to):
         if reply_to != None:
             reply_to_msgs = ApiProcessor().get('message', {
-                'internalId': reply_to.reply_to_msg_id
+                'internalId': reply_to.reply_to_msg_id,
             })
             
             if len(reply_to_msgs) > 0:
@@ -128,12 +128,12 @@ class MessagesParserThread(threading.Thread):
                 
                 last_message = { 'internalId': 0, 'groupedId': 0 }
                 
-                messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
+                # messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
                 
-                if len(messages) > 0:
-                    logging.info(f'Last message in API exist. Continue.')
+                # if len(messages) > 0:
+                #     logging.info(f'Last message in API exist. Continue.')
 
-                    last_message = messages[0]
+                #     last_message = messages[0]
                 
                 index = 1
                 entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
