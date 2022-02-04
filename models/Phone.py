@@ -63,19 +63,6 @@ class Phone(object):
             
         return self
     
-    def save(self):
-        skip = ['dict', 'chats_count', 'code_hash', 'authorization_thread', 'joining_lock']
-        
-        dict = {}
-        
-        for key in self.__dict__:
-            if not key in skip:
-                components = key.split('_')
-                
-                dict[components[0] + ''.join(x.title() for x in components[1:])] = self.__dict__[key]
-                
-        return ApiProcessor().set('phone', dict)
-    
     async def init(self):
         if self.authorization_thread == None:
             self.authorization_thread = AuthorizationThread(self)

@@ -54,6 +54,8 @@ class AuthorizationThread(threading.Thread):
             await self.send_code()
 
     async def async_run(self):
+        new_phone = { "id": self.phone.id }
+        
         if not self.client.is_connected():
             await self.client.connect()
             
@@ -71,22 +73,23 @@ class AuthorizationThread(threading.Thread):
                     except Exception as ex:
                         logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}.")
                         
-                        logging.warning(f"Sleep 1 minute before sending new code for phone {self.phone.id}.")
-
-                        await asyncio.sleep(60)
-                        
                         self.phone.is_verified = False
                         self.phone.code = None
                         self.phone.code_hash = None
                         
-                        self.phone.save()
+                        new_phone['isVerified'] = self.phone.is_verified
+                        new_phone['code'] = self.phone.code
+                        
+                        break
                     else:
                         self.phone.session = self.client.session.save()
                         self.phone.is_verified = True
                         self.phone.code = None
                         self.phone.code_hash = None
                         
-                        self.phone.save()
+                        new_phone['session'] = self.phone.session
+                        new_phone['isVerified'] = self.phone.is_verified
+                        new_phone['code'] = self.phone.code
                         
                         break
                 elif self.phone.code_hash == None:
@@ -101,7 +104,10 @@ class AuthorizationThread(threading.Thread):
                         self.phone.code = None
                         self.phone.code_hash = None
                         
-                        self.phone.save()
+                        new_phone['session'] = self.phone.session
+                        new_phone['isBanned'] = self.phone.is_banned
+                        new_phone['isVerified'] = self.phone.is_verified
+                        new_phone['code'] = self.phone.code
                         
                         break
                 else:
@@ -116,7 +122,10 @@ class AuthorizationThread(threading.Thread):
         if internal_id != None and internal_id != self.phone.internal_id:
             self.phone.internal_id = internal_id
             
-            self.phone.save()
+            new_phone['internalId'] = self.phone.internal_id
+            
+        if len(new_phone.items()) > 1:
+            ApiProcessor().set('phone', new_phone)
             
         self.phone.authorization_thread = None
                 

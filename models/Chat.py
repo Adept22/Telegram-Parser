@@ -46,7 +46,7 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value: 'dict'):
-        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()] if self.internal_id != None else []
+        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
         # if len(self._phones) != len(new_value):
         #     ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })
