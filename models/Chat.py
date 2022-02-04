@@ -33,6 +33,7 @@ class Chat(object):
         self._available_phones = []
         
         self.chat_thread = None
+        self.chat_media_thread = None
         self.members_parser_thread = None
         self.messages_parser_thread = None
         
@@ -85,12 +86,12 @@ class Chat(object):
             #--< MEMBERS --<#
 
             #--> CHAT MEDIAS -->#
-            # if self.medias_thread == None:
-            #     self.medias_thread = ChatMediaThread(self)
-            #     self.medias_thread.setDaemon(True)
-            #     self.medias_thread.start()
-            # else:
-                # logging.debug(f"Medias parsing thread for chat {self.id} is running.")
+            if self.chat_media_thread == None:
+                self.chat_media_thread = ChatMediaThread(self)
+                self.chat_media_thread.setDaemon(True)
+                self.chat_media_thread.start()
+            else:
+                logging.debug(f"Medias parsing thread for chat {self.id} is running.")
             #--< CHAT MEDIAS --<#
             
             #--> MESSAGES -->#

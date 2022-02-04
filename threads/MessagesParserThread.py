@@ -122,7 +122,7 @@ class MessagesParserThread(threading.Thread):
             if path != None:
                 media = ApiProcessor().set('message-media', { 
                     'message': { "id": last_message["id"] }, 
-                    'path': f'/uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}', 
+                    'path': f'./uploads/{self.chat.id}/{last_message["id"]}/{split("/", path)[-1]}', 
                 })
         try:
             logging.debug(f'Try to save message \'{last_message["id"]}\' media.')
@@ -217,11 +217,11 @@ class MessagesParserThread(threading.Thread):
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
                     else:
                         logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
-                        # await self.download_media(
-                        #     client=client,
-                        #     last_message=last_message,
-                        #     message=message
-                        # )
+                        await self.download_media(
+                            client=client,
+                            last_message=last_message,
+                            message=message
+                        )
                 else:
                     logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
             except Exception as ex:

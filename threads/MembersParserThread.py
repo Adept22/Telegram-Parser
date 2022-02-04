@@ -1,9 +1,10 @@
+import functools
 import random
 import threading
 import asyncio
 import logging
 import globalvars
-from telethon import types
+from telethon import types, functions
 import re
 import os.path
 
@@ -19,13 +20,17 @@ class MembersParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-    def get_member(self, user):
+    def get_member(self, full_user):
+        user = full_user.user
+
         new_member = {
             'internalId': user.id,
             'username': user.username,
             'firstName': user.first_name,
             'lastName': user.last_name,
-            'phone': user.phone        }
+            'phone': user.phone,
+            'about': full_user.about
+        }
         
         members = ApiProcessor().get('member', { 'internalId': user.id })
         
@@ -82,14 +87,18 @@ class MembersParserThread(threading.Thread):
                 client = await phone.new_client(loop=self.loop)
 
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
+
                     logging.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
+                    full_user = await client(functions.users.GetFullUserRequest(
+                        id=user.id
+                    ))
                     
                     if user.id in globalvars.phones_tg_ids:
                         logging.debug(f'Chat {self.chat.id}. User \'{user.first_name}\' is our phone. Continue.')
                         
                         continue
 
-                    member = self.get_member(user)
+                    member = self.get_member(full_user)
                     chat_member = self.get_chat_member(member)
                     chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     
