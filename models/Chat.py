@@ -1,14 +1,12 @@
 import re
-import logging
 import threading
 from utils import get_hash
 
 from core.PhonesManager import PhonesManager
-from processors.ApiProcessor import ApiProcessor
 from threads.ChatThread import ChatThread
+from threads.ChatMediaThread import ChatMediaThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
-from errors.ChatNotAvailableError import ChatNotAvailableError
 
 class Chat(object):
     def __init__(self, _dict):
@@ -29,6 +27,10 @@ class Chat(object):
         
         self.phones = []
         self.available_phones = []
+        self.joining_thread = None
+        self.members_thread = None
+        self.medias_thread = None
+        self.messages_thread = None
         self._phones = []
         self._available_phones = []
 
@@ -70,6 +72,10 @@ class Chat(object):
         self.chat_thread = ChatThread(self)
         self.chat_thread.setDaemon(True)
         self.chat_thread.start()
+        
+        self.medias_thread = ChatMediaThread(self)
+        self.medias_thread.setDaemon(True)
+        self.medias_thread.start()
 
         self.members_parser_thread = MembersParserThread(self)
         self.members_parser_thread.setDaemon(True)

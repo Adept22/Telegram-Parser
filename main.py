@@ -1,9 +1,10 @@
-from sys import stdout
 import os
 import asyncio
 import logging
 import globalvars
 from logging.handlers import RotatingFileHandler
+from sys import stdout
+# from logger import Logger
 from autobahn.wamp.types import SubscribeOptions
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner

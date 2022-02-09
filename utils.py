@@ -1,7 +1,9 @@
 import re
+import logging
 import json
 from errors.InvalidLinkError import InvalidLinkError
 from datetime import datetime
+from processors.ApiProcessor import ApiProcessor
 
 class bcolors:
     HEADER = '\033[95m'
@@ -38,3 +40,50 @@ class DateTimeEncoder(json.JSONEncoder):
         if isinstance(item, bytes):
             return list(item)
         return json.JSONEncoder.default(self, item)
+
+async def profile_media_process(client, entity, uuid, media_type):
+    pathFolder = f'./uploads/{media_type}-media/{uuid}/'
+
+    pathToFile = await client.download_profile_photo(
+        entity=entity,
+        file=f'{pathFolder}0',
+        download_big=True
+    )
+
+    if pathToFile != None:
+        ApiProcessor().set(f'{media_type}-media', { 
+            media_type: { "id": uuid }, 
+			'internalId': f'{entity.id}',
+            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+        })
+
+async def get_media(client, media, uuid, media_type):
+    pathFolder = f'./uploads/{media_type}-media/{uuid}/'
+
+    pathToFile = await client.download_media(
+        message=media,
+        file=f'{pathFolder}/{media.id}',
+        thumb=media.sizes[-2]
+    )
+
+    if pathToFile != None:
+        ApiProcessor().set(f'{media_type}-media', { 
+            media_type: { "id": uuid }, 
+			'internalId': {f'{media.id}'},
+            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
+        })
+
+def user_title(user):
+    if user.username != None:
+        return user.username
+    elif user.first_name or user.last_name:
+        return user.first_name or user.last_name
+    else:
+        return user.id
+
+def formated_date(date):
+    try:
+        return datetime.strftime(date,'%Y-%m-%dT%H:%m:%S+00:00')
+    except Exception as ex:
+        logging.warning(f"Can\'t format date {date}. Exception: {ex}.")
+        return datetime.strftime(datetime.now(), '%Y-%m-%dT%H:%m:%S+00:00')
