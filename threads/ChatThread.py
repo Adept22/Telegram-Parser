@@ -36,6 +36,8 @@ class ChatThread(threading.Thread):
             
             raise ChatNotAvailableError()
         except (
+            ValueError,
+            ### ------------------------
             errors.ChannelInvalidError, 
             errors.ChannelPrivateError, 
             errors.ChannelPublicGroupNaError, 

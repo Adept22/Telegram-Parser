@@ -1,12 +1,11 @@
-import functools
+import re
+import os.path
 import random
 import threading
 import asyncio
 import logging
 import globalvars
 from telethon import types, functions
-import re
-import os.path
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
@@ -20,9 +19,7 @@ class MembersParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
         
-    def get_member(self, full_user):
-        user = full_user.user
-
+    def get_member(self, user, full_user):
         new_member = {
             'internalId': user.id,
             'username': user.username,
@@ -32,13 +29,11 @@ class MembersParserThread(threading.Thread):
             'about': full_user.about
         }
         
-        members = ApiProcessor().get('member', { 'internalId': user.id })
+        members = ApiProcessor().get('member', { 'internalId': new_member['internalId'] })
         
         if len(members) > 0:
-            logging.debug(f'Member \'{user.first_name}\' exists in API.')
-            
             if members[0].get('id') != None:
-                new_member['id'] = members[0].get('id')
+                new_member['id'] = members[0]['id']
         
         return new_member
         
@@ -61,14 +56,14 @@ class MembersParserThread(threading.Thread):
         new_chat_member_role = { 'member': chat_member }
         
         if isinstance(participant, types.ChannelParticipantAdmin):
-            new_chat_member_role["title"] = (participant.rank if participant.rank != None else 'Администратор')
-            new_chat_member_role["code"] = "admin"
+            new_chat_member_role['title'] = (participant.rank if participant.rank != None else "Администратор")
+            new_chat_member_role['code'] = "admin"
         elif isinstance(participant, types.ChannelParticipantCreator):
-            new_chat_member_role["title"] = (participant.rank if participant.rank != None else 'Создатель')
-            new_chat_member_role["code"] = "creator"
+            new_chat_member_role['title'] = (participant.rank if participant.rank != None else "Создатель")
+            new_chat_member_role['code'] = "creator"
         else:
-            new_chat_member_role["title"] = "Участник"
-            new_chat_member_role["code"] = "member"
+            new_chat_member_role['title'] = "Участник"
+            new_chat_member_role['code'] = "member"
         
         if new_chat_member_role['member'].get('id') != None:
             chat_member_roles = ApiProcessor().get('chat-member-role', new_chat_member_role)
@@ -81,40 +76,37 @@ class MembersParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            logging.info(f'Recieving members from chat {self.chat.title}.')
+            logging.info(f"Recieving members from chat {self.chat.title}.")
             
             try:
                 client = await phone.new_client(loop=self.loop)
 
                 async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
-
-                    logging.debug(f'Chat {self.chat.title}. Received user \'{user_title(user)}\'')
-
-                    full_user = await client(functions.users.GetFullUserRequest(id=user.id))
+                    logging.debug(f"Chat {self.chat.title}. Received user '{user_title(user)}'")
                     
                     if user.id in globalvars.phones_tg_ids:
-                        logging.debug(f'Chat {self.chat.id}. User \'{user.first_name}\' is our phone. Continue.')
+                        logging.debug(f"Chat {self.chat.id}. User '{user.first_name}' is our phone. Continue.")
                         
                         continue
 
-                    member = self.get_member(full_user)
+                    full_user = await client(functions.users.GetFullUserRequest(id=user.id))
+
+                    member = self.get_member(user, full_user)
                     chat_member = self.get_chat_member(member)
                     chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     
                     try:
                         chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
                     except Exception as ex:
-                        logging.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
+                        logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}. Exception: {ex}.")
 
                         continue
                     
-                    logging.debug(f"Member \'{user_title(user)}\' with role saved.")
+                    logging.debug(f"Member '{user_title(user)}' with role saved.")
 
                     member = chat_member_role['member']['member']
-
-                    photos = await client.get_profile_photos(entity=types.PeerUser(user_id=user.id))
                     
-                    for photo in photos:
+                    async for photo in client.iter_profile_photos(entity=types.PeerUser(user_id=user.id)):
                         saved_photo = { 'internalId': photo.id }
 
                         saved_photos = ApiProcessor().get('member-media', saved_photo)
@@ -123,13 +115,13 @@ class MembersParserThread(threading.Thread):
                             saved_photo = saved_photos[0]
 
                             if os.path.exists(saved_photo['path']):
-                                logging.debug(f'Chat {member["id"]}. Member-media {saved_photo["id"]} exist. Continue.')
+                                logging.debug(f"Chat {member['id']}. Member-media {saved_photo['id']} exist. Continue.")
                             
                                 await asyncio.sleep(1)
                                 continue
 
                         try:
-                            path_folder = f'./uploads/member-media/{member["id"]}'
+                            path_folder = f"./uploads/member-media/{member['id']}"
 
                             path_to_file = await client.download_media(
                                 message=photo,
@@ -146,11 +138,10 @@ class MembersParserThread(threading.Thread):
                                     'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
                                 }
 
-                                if 'id' in saved_photo:
+                                if saved_photo.get('id') != None:
                                     new_photo['id'] = saved_photo['id']
                                     
                                 ApiProcessor().set('member-media', new_photo)
-
                         except Exception as ex:
                             logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
                         else:
@@ -166,9 +157,7 @@ class MembersParserThread(threading.Thread):
                 
                 break
         else:
-            logging.error(f'Cannot get chat {self.chat.id} participants. Exit code 1.')
-        
-            ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
+            logging.error(f"Cannot get chat {self.chat.id} participants. Exit code 1.")
         
     def run(self):
         self.chat.run_event.wait()

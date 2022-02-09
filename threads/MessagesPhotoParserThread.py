@@ -4,7 +4,6 @@ import threading
 import asyncio
 import logging
 import random
-from utils import formated_date
 
 from telethon import types
 
@@ -54,8 +53,7 @@ class MessagesPhotoParserThread(threading.Thread):
                     new_photo = { 
                         'chat': {"id": self.chat.id}, 
                         'internalId': photo.id,
-                        # 'createdAt': photo.date.isoformat(),
-                        'createdAt': formated_date(photo.date),
+                        'createdAt': photo.date.isoformat(),
                         'path': f'{path_folder}/{split("/", path_to_file)[-1]}'
                     }
 
@@ -85,9 +83,6 @@ class MessagesPhotoParserThread(threading.Thread):
                 break
         else:
             logging.error(f"Can\'t get chat {self.chat.id} photo messages.")
-
-            # ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
             
-            raise Exception(f'Chat {self.chat.id} photo messages download failed. Exit code 1.')
     def run(self):
         asyncio.run(self.async_run())

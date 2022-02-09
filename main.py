@@ -15,7 +15,7 @@ from core.PhonesManager import PhonesManager
 
 from autobahn.asyncio.component import Component
 
-async def update_chat(chat):
+def update_chat(chat):
     if chat['isAvailable'] == False:
         if chat['id'] in ChatsManager():
             del ChatsManager()[chat['id']]
@@ -28,20 +28,26 @@ async def update_chat(chat):
         ChatsManager()[chat['id']].from_dict(chat)
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
-        
-        ChatsManager()[chat.id] = Chat(chat).run()
 
-async def update_chats():
-    logging.debug("Getting chats...")
+        ChatsManager()[chat['id']] = Chat(chat).run()
+
+def get_all_chats(chats=[], start=0, limit=50):
+    new_chats = ApiProcessor().get('chat', {"isAvailable": True, "_start": start, "_limit": limit})
+
+    if len(new_chats) > 0:
+        chats += get_all_chats(new_chats, start+limit, limit)
     
-    chats = ApiProcessor().get('chat', { "isAvailable": True })
-    
-    for chat in chats:
-        await update_chat(chat)
-        
+    return chats
+
+def update_chats():
+    chats = get_all_chats()
+
     logging.debug(f"Received {len(chats)} chats.")
     
-async def update_phone(phone):
+    for chat in chats:
+        update_chat(chat)
+    
+def update_phone(phone):
     if phone['isBanned'] == True:
         if phone['id'] in PhonesManager():
             del PhonesManager()[phone['id']]
@@ -57,30 +63,28 @@ async def update_phone(phone):
 
         PhonesManager()[phone['id']] = Phone(phone).run()
 
-async def update_phones():
-    logging.debug("Getting phones...")
-    
+def update_phones():
     phones = ApiProcessor().get('phone', { "isBanned": False })
+
+    logging.debug(f"Received {len(phones)} phones.")
     
     for phone in phones:
-        await update_phone(phone)
-        
-    logging.debug(f"Received {len(phones)} phones.")
+        update_phone(phone)
 
 class Component(ApplicationSession):
     async def onJoin(self, details):
         logging.info(f"session on_join: {details}")
         
-        await update_phones()
-        await update_chats()
+        update_phones()
+        update_chats()
 
         async def on_event(event):
             logging.debug(f"Got event on entity: {event['_']}")
             
             if event['_'] == 'TelegramPhone':
-                await update_phone(event['entity'])
+                update_phone(event['entity'])
             elif event['_'] == 'TelegramChat':
-                await update_chat(event['entity'])
+                update_chat(event['entity'])
 
         await self.subscribe(on_event, 'com.app.entity')
     
@@ -97,8 +101,8 @@ if __name__ == '__main__':
     sh.setLevel(logging.DEBUG)
 
     logging.basicConfig(
-        format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s",
-        datefmt='%H:%M:%S',
+        format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
+        datefmt='%d.%m.%Y %H:%M:%S',
         handlers=[fh, sh],
         level=logging.DEBUG
     )

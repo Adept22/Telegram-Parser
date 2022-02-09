@@ -30,7 +30,7 @@ class MessagesParserThread(threading.Thread):
                 }
             }
 
-            members = ApiProcessor().get('member', { 'internalId': user.id })
+            members = ApiProcessor().get('member', {'internalId': new_chat_member['member']['internalId']})
 
             if len(members) > 0:
                 new_chat_member['member']['id'] = members[0]['id']
@@ -52,11 +52,11 @@ class MessagesParserThread(threading.Thread):
             }
 
             messages = ApiProcessor().get('message', new_reply_to)
-            
+
             if len(messages) > 0:
-                return messages[0]
-            else:
-                return ApiProcessor().set('message', new_reply_to)
+                new_reply_to['id'] = messages[0]['id']
+                
+            return new_reply_to
 
         return None
     
@@ -189,6 +189,7 @@ class MessagesParserThread(threading.Thread):
                         logging.error(f"Can\'t save chat {self.chat.id} message. Exception: {ex}.")
                     else:
                         logging.debug(f'Message \'{last_message["id"]}\' at \'{last_message["createdAt"]}\' saved.')
+                        
                         await self.download_media(
                             client=client,
                             last_message=last_message,
@@ -206,8 +207,6 @@ class MessagesParserThread(threading.Thread):
                 break
         else:
             logging.error(f'Chat {self.chat.id} messages download failed. Exit code 1.')
-
-            ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
         
     def run(self):
         self.chat.run_event.wait()

@@ -7,7 +7,6 @@ from threads.ChatThread import ChatThread
 from threads.ChatMediaThread import ChatMediaThread
 from threads.MembersParserThread import MembersParserThread
 from threads.MessagesParserThread import MessagesParserThread
-from threads.MessagesPhotoParserThread import MessagesPhotoParserThread
 from threads.ChatMediaThread import ChatMediaThread
 
 class Chat(object):

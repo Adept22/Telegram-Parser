@@ -57,10 +57,8 @@ class Phone(object):
                 
                 return client
             else:
-                raise ClientNotAvailableError(f'Phone {self.id} not authorized.')
+                raise ClientNotAvailableError(f'Phone {self.id} not authorized')
         except Exception as ex:
-            logging.error(f"Can\'t get phone {self.id} client. Exception: {ex}")
-            
             raise ClientNotAvailableError(ex)
         
     def from_dict(self, dict):

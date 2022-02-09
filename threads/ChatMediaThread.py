@@ -19,9 +19,7 @@ class ChatMediaThread(threading.Thread):
         asyncio.set_event_loop(self.loop)
         
     async def get_profile_media(self, client):
-        photos = await client.get_profile_photos(
-            entity = types.PeerChannel(channel_id=self.chat.internal_id)
-        )
+        photos = await client.get_profile_photos(entity=types.PeerChannel(channel_id=self.chat.internal_id))
 
         for photo in photos:
             saved_photo = { 'internalId': photo.id }
@@ -35,30 +33,30 @@ class ChatMediaThread(threading.Thread):
                     logging.debug(f'Chat {self.chat.id}. Member-media {saved_photo["id"]} exist. Continue.')
                 
                     await asyncio.sleep(1)
+
                     continue
 
             try:
-                path_folder = f'./uploads/chat-media/{self.chat.id}'
+                chat_path = f'./uploads/chat-media/{self.chat.id}'
 
-                path_to_file = await client.download_media(
+                media_path = await client.download_media(
                     message=photo,
-                    file=f'{path_folder}/{photo.id}',
+                    file=f'{chat_path}/{photo.id}',
                     thumb=photo.sizes[-2]
                 )
 
-                if path_to_file != None:
+                if media_path != None:
                     new_photo = { 
                         'chat': {"id": self.chat.id}, 
                         'internalId': photo.id,
                         'createdAt': photo.date.isoformat(),
-                        'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
+                        'path': f'{chat_path}/{re.split("/", media_path)[-1]}'
                     }
 
-                    if 'id' in saved_photo:
+                    if saved_photo.get('id') != None:
                         new_photo['id'] = saved_photo['id']
                         
                     ApiProcessor().set('chat-media', new_photo)
-
             except Exception as ex:
                 logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
             else:
@@ -79,10 +77,9 @@ class ChatMediaThread(threading.Thread):
             else:
                 break
         else:
-            logging.error(f"Can\'t get chat {self.chat.id} messages.")
+            logging.error(f"Can't get chat {self.chat.id} messages.")
 
-            ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
-            
-            raise Exception(f'Chat {self.chat.id} messages download failed. Exit code 1.')
     def run(self):
+        self.chat.run_event.wait()
+
         asyncio.run(self.async_run())
