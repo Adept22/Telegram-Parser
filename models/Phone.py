@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import logging
+import threading
 
 from telethon import sync, sessions
 
@@ -26,9 +27,18 @@ class Phone(object):
         self.code = None
         self.code_hash = None
         self.session = None
-        self.authorization_thread = None
+
+        self.run_event = threading.Event()
+
+        self.joining_lock = threading.Lock()
         
         self.from_dict(dict)
+
+    def __del__(self):
+        if self.run_event.is_set():
+            self.run_event.clear()
+        # TODO: Мы должны убивать треды при удалении чата.
+        pass
     
     async def new_client(self, loop = asyncio.get_event_loop()):
         client = sync.TelegramClient(
@@ -60,24 +70,10 @@ class Phone(object):
             setattr(self, pattern.sub('_', key).lower(), dict[key])
             
         return self
-    
-    def save(self):
-        skip = ['dict', 'chats_count', 'code_hash', 'authorization_thread']
-        
-        dict = {}
-        
-        for key in self.__dict__:
-            if not key in skip:
-                components = key.split('_')
-                
-                dict[components[0] + ''.join(x.title() for x in components[1:])] = self.__dict__[key]
-                
-        return ApiProcessor().set('phone', dict)
-    
-    async def init(self):
-        if self.authorization_thread == None:
-            self.authorization_thread = AuthorizationThread(self)
-            self.authorization_thread.setDaemon(True)
-            self.authorization_thread.start()
+
+    def run(self):
+        self.authorization_thread = AuthorizationThread(self)
+        self.authorization_thread.setDaemon(True)
+        self.authorization_thread.start()
 
         return self

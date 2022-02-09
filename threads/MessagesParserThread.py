@@ -17,37 +17,28 @@ class MessagesParserThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
 
-    def get_chat_member(self, message):
-        sender = message.sender
-
-        if isinstance(sender, types.User):
-            new_member = {
-                'internalId': sender.id,
-                'username': sender.username,
-                'firstName': sender.first_name,
-                'lastName': sender.last_name,
-                'phone': sender.phone
-            }
-
-            members = ApiProcessor().get('member', { 'internalId': sender.id })
-
-            if len(members) > 0:
-                logging.debug(f'Member \'{sender.id}\' exists in API.')
-                
-                if members[0].get('id') != None:
-                    new_member['id'] = members[0].get('id')
-
+    def get_chat_member(self, user):
+        if isinstance(user, types.User):
             new_chat_member = {
                 'chat': { 'id': self.chat.id },
-                'member': new_member
+                'member': {
+                    'internalId': user.id,
+                    'username': user.username,
+                    'firstName': user.first_name,
+                    'lastName': user.last_name,
+                    'phone': user.phone
+                }
             }
 
-            if new_chat_member['member'].get('id') != None:
+            members = ApiProcessor().get('member', { 'internalId': user.id })
+
+            if len(members) > 0:
+                new_chat_member['member']['id'] = members[0]['id']
+
                 chat_members = ApiProcessor().get('chat-member', new_chat_member)
                 
                 if len(chat_members) > 0:
-                    if chat_members[0].get('id') != None:
-                        new_chat_member['id'] = chat_members[0]['id']
+                    new_chat_member['id'] = chat_members[0]['id']
             
             return new_chat_member
 
@@ -55,18 +46,18 @@ class MessagesParserThread(threading.Thread):
         
     def get_reply_to(self, reply_to):
         if reply_to != None:
-            reply_to_msgs = ApiProcessor().get('message', {
+            new_reply_to = {
                 'internalId': reply_to.reply_to_msg_id,
-            })
-            
-            if len(reply_to_msgs) > 0:
-                return reply_to_msgs[0]
+                'chat': { 'id': self.chat.id }
+            }
 
+            messages = ApiProcessor().get('message', new_reply_to)
+            
+            if len(messages) > 0:
+                return messages[0]
             else:
-                return ApiProcessor().set('message', {
-                    'internalId': reply_to.reply_to_msg_id,
-                    'chat': { 'id': self.chat.id }
-                })
+                return ApiProcessor().set('message', new_reply_to)
+
         return None
     
     def get_fwd(self, fwd_from):
@@ -173,16 +164,12 @@ class MessagesParserThread(threading.Thread):
                         logging.debug(f'Saving message \'{message.id}\' at \'{message.date}\'')
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
-                        
-                        # if (message.grouped_id != last_message['groupedId']):
-                        member = self.get_chat_member(message)
-                        logging.info(f'{member}')
 
                         new_message = { 
                             'internalId': message.id, 
                             'text': message.message, 
                             'chat': { 'id': self.chat.id }, 
-                            'member': self.get_chat_member(message), 
+                            'member': self.get_chat_member(message.sender),
                             'replyTo': self.get_reply_to(message.reply_to), 
                             'isPinned': message.pinned,     
                             'forwardedFromId': fwd_from_id, 
@@ -208,7 +195,7 @@ class MessagesParserThread(threading.Thread):
                             message=message
                         )
                 else:
-                    logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
+                    logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 
@@ -221,8 +208,8 @@ class MessagesParserThread(threading.Thread):
             logging.error(f'Chat {self.chat.id} messages download failed. Exit code 1.')
 
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
-            
-        self.chat.messages_parser_thread = None
         
     def run(self):
+        self.chat.run_event.wait()
+        
         asyncio.run(self.async_run())

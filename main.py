@@ -1,10 +1,9 @@
 import os
 import asyncio
 import logging
-from sys import stdout
 import globalvars
 from logging.handlers import RotatingFileHandler
-from autobahn.wamp.types import SubscribeOptions
+from sys import stdout
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
 
@@ -26,15 +25,11 @@ async def update_chat(chat):
     if chat['id'] in ChatsManager():
         logging.debug(f"Updating chat {chat['id']}.")
         
-        chat = ChatsManager()[chat['id']].from_dict(chat)
+        ChatsManager()[chat['id']].from_dict(chat)
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
         
-        chat = Chat(chat)
-        
-        ChatsManager()[chat.id] = chat
-        
-    await chat.init()
+        ChatsManager()[chat.id] = Chat(chat).run()
 
 async def update_chats():
     logging.debug("Getting chats...")
@@ -56,15 +51,11 @@ async def update_phone(phone):
     if phone['id'] in PhonesManager():
         logging.debug(f"Updating phone {phone['id']}.")
         
-        phone = PhonesManager()[phone['id']].from_dict(phone)
+        PhonesManager()[phone['id']].from_dict(phone)
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
-        
-        phone = Phone(phone)
-        
-        PhonesManager()[phone.id] = phone
-        
-    await phone.init()
+
+        PhonesManager()[phone['id']] = Phone(phone).run()
 
 async def update_phones():
     logging.debug("Getting phones...")
