@@ -143,8 +143,6 @@ class MessagesParserThread(threading.Thread):
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(message.fwd_from)
                         
-                        # if (message.grouped_id != last_message['groupedId']):
-                        
                         last_message = ApiProcessor().set('message', { 
                             'internalId': message.id, 
                             'text': message.message, 
@@ -168,7 +166,7 @@ class MessagesParserThread(threading.Thread):
                             message=message
                         )
                 else:
-                    logging.info(f"🏁 Chat {self.chat.id} messages download success. Exit code 0 🏁")
+                    logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 

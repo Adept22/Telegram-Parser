@@ -80,10 +80,3 @@ def user_title(user):
         return user.first_name or user.last_name
     else:
         return user.id
-
-def formated_date(date):
-    try:
-        return datetime.strftime(date,'%Y-%m-%dT%H:%m:%S+00:00')
-    except Exception as ex:
-        logging.warning(f"Can\'t format date {date}. Exception: {ex}.")
-        return datetime.strftime(datetime.now(), '%Y-%m-%dT%H:%m:%S+00:00')

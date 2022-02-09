@@ -8,7 +8,7 @@ import re
 import os.path
 
 from processors.ApiProcessor import ApiProcessor
-from utils import bcolors, user_title, formated_date
+from utils import user_title
 
 class MembersParserThread(threading.Thread):
     def __init__(self, chat):
@@ -77,7 +77,7 @@ class MembersParserThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            logging.info(f'{bcolors.OKGREEN} Recieving members from chat {self.chat.title}.{bcolors.ENDC}')
+            logging.info(f'Recieving members from chat {self.chat.title}.')
             
             try:
                 client = await phone.new_client(loop=self.loop)
@@ -95,7 +95,7 @@ class MembersParserThread(threading.Thread):
                     try:
                         chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
                     except Exception as ex:
-                        logging.error(f"{bcolors.FAIL} Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.{bcolors.ENDC}")
+                        logging.error(f"Can\'t save member \'{user.first_name}\' with role: chat - {self.chat.title}. Exception: {ex}.")
 
                         continue
                     
@@ -133,7 +133,7 @@ class MembersParserThread(threading.Thread):
                                 new_photo = { 
                                     'member': member, 
                                     'internalId': photo.id,
-                                    'createdAt': formated_date(photo.date),
+                                    'createdAt': photo.date.isoformat(),
                                     'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
                                 }
 
@@ -143,17 +143,17 @@ class MembersParserThread(threading.Thread):
                                 ApiProcessor().set('member-media', new_photo)
 
                         except Exception as ex:
-                            logging.error(f"{bcolors.FAIL} Can\'t save member {member['id']} media. Exception: {ex}.{bcolors.ENDC}")
+                            logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
                         else:
-                            logging.info(f"{bcolors.OKGREEN} Sucessfuly saved member {member['id']} media!{bcolors.ENDC}")
+                            logging.info(f"Sucessfuly saved member {member['id']} media!")
             except Exception as ex:
-                logging.error(f"{bcolors.FAIL} Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.{bcolors.ENDC}")
+                logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
                 
                 await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             else:
-                logging.info(f"{bcolors.OKGREEN} 🏁 Chat \'{self.chat.title}\' participants download success. Exit code 0 🏁{bcolors.ENDC}")
+                logging.info(f"Chat \'{self.chat.title}\' participants download success. Exit code 0.")
                 
                 break
         else:

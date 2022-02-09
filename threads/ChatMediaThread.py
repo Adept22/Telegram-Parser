@@ -6,7 +6,6 @@ import logging
 import random
 
 from telethon import types
-from utils import bcolors, formated_date
 
 from processors.ApiProcessor import ApiProcessor
 
@@ -51,7 +50,7 @@ class ChatMediaThread(threading.Thread):
                     new_photo = { 
                         'chat': {"id": self.chat.internal_id}, 
                         'internalId': photo.id,
-                        'createdAt': formated_date(photo.date),
+                        'createdAt': photo.date.isoformat(),
                         'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
                     }
 
