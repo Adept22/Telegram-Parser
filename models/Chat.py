@@ -31,14 +31,16 @@ class Chat(object):
         self.available_phones = []
         self._phones = []
         self._available_phones = []
-        
-        self.chat_thread = None
 
-        self.init_event = threading.Event()
-        self.members_parser_thread = None
-        self.messages_parser_thread = None
+        self.run_event = threading.Event()
         
         self.from_dict(_dict)
+
+    def __del__(self):
+        if self.run_event.is_set():
+            self.run_event.clear()
+        # TODO: Мы должны убивать треды при удалении чата.
+        pass
         
     @property
     def phones(self):
@@ -48,9 +50,6 @@ class Chat(object):
     def phones(self, new_value: 'dict'):
         self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
-        # if len(self._phones) != len(new_value):
-        #     ApiProcessor().set('chat', { 'id': self.id, 'phones': self._phones })
-        
     @property
     def available_phones(self):
         return self._available_phones
@@ -59,9 +58,6 @@ class Chat(object):
     def available_phones(self, new_value: 'dict'):
         self._available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
-        # if len(self._available_phones) != len(new_value):
-        #     ApiProcessor().set('chat', { 'id': self.id, 'availablePhones': self._available_phones })
-        
     def from_dict(self, dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
         
@@ -69,28 +65,18 @@ class Chat(object):
             setattr(self, pattern.sub('_', key).lower(), dict[key])
             
         return self
-    
-    async def init(self):
-        if self.chat_thread == None:
-            self.chat_thread = ChatThread(self)
-            self.chat_thread.setDaemon(True)
-            self.chat_thread.start()
-        
-        if len(self.phones) > 0:
-            #--> MEMBERS -->#
-            if self.members_parser_thread == None:
-                self.members_parser_thread = MembersParserThread(self)
-                self.members_parser_thread.setDaemon(True)
-                self.members_parser_thread.start()
-            else:
-                logging.debug(f"Members parsing thread for chat {self.id} is running.")
-            #--< MEMBERS --<#
-            
-            #--> MESSAGES -->#
-            if self.messages_parser_thread == None:
-                self.messages_parser_thread = MessagesParserThread(self)
-                self.messages_parser_thread.setDaemon(True)
-                self.messages_parser_thread.start()
-            else:
-                logging.debug(f"Messages parsing thread for chat {self.id} is running.")
-            #--< MESSAGES --<#
+
+    def run(self):
+        self.chat_thread = ChatThread(self)
+        self.chat_thread.setDaemon(True)
+        self.chat_thread.start()
+
+        self.members_parser_thread = MembersParserThread(self)
+        self.members_parser_thread.setDaemon(True)
+        self.members_parser_thread.start()
+
+        self.messages_parser_thread = MessagesParserThread(self)
+        self.messages_parser_thread.setDaemon(True)
+        self.messages_parser_thread.start()
+
+        return self

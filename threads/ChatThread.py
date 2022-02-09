@@ -148,6 +148,9 @@ class ChatThread(threading.Thread):
             
     async def async_run(self):
         if len(self.chat.available_phones) == 0:
+            if self.chat.run_event.is_set():
+                self.chat.run_event.clear()
+
             ApiProcessor().set('chat', { 'id': self.chat.id, 'isAvailable': False })
         else:
             new_chat = { 'id': self.chat.id }
@@ -168,18 +171,24 @@ class ChatThread(threading.Thread):
             if len(available_phones.items()) != len(self.chat.available_phones):
                 logging.info(f"Chat {self.chat.id} list of available phones changed. Now it\'s {len(available_phones.items())}.")
                 
+                self.chat.available_phones = [{'id': id} for id in available_phones.keys()]
                 new_chat['availablePhones'] = [{ 'id': id } for id in available_phones.keys()]
                 
             if len(phones.items()) != len(self.chat.phones) or \
                 any(x.id != y.id for x, y in zip(phones.values(), self.chat.phones)):
                 logging.info(f"Chat {self.chat.id} list of wired phones changed. Now it\'s {len(phones.items())}.")
-                
+
+                self.chat.phones = [{'id': id} for id in phones.keys()]
                 new_chat['phones'] = [{ 'id': id } for id in phones.keys()]
             
-                
             if len(available_phones.items()) == 0 or len(phones.items()) == 0:
+                self.chat.is_available = False
+
                 new_chat['isAvailable'] = False
             elif len(phones.items()) > 0:
+                if not self.chat.run_event.is_set():
+                    self.chat.run_event.set()
+
                 for phone in phones.values():
                     try:
                         tg_chat = await self.get_tg_chat(phone)
@@ -188,21 +197,24 @@ class ChatThread(threading.Thread):
                     else:
                         if self.chat.internal_id == None:
                             logging.info(f"Chat {self.chat.id} internal id getted.")
-                            
-                            new_chat['internalId'] = tg_chat.id
+
+                            self.chat.internal_id = tg_chat.id
+                            new_chat['internalId'] = self.chat.internal_id
                         
                         if self.chat.title == None:
                             logging.info(f"Chat {self.chat.id} title getted.")
-                            
-                            new_chat['title'] = tg_chat.title
+
+                            self.chat.title = tg_chat.title
+                            new_chat['title'] = self.chat.title
                         
                         break
             
             if len(new_chat.items()) > 1:
                 ApiProcessor().set('chat', new_chat)
         
-        self.chat.chat_thread = None
+        await asyncio.sleep(60)
+
+        await self.async_run()
 
     def run(self):
-
         asyncio.run(self.async_run())

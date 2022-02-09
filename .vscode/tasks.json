@@ -21,7 +21,7 @@
             },
             "python": {
                 "args": [ "run" ],
-                "file": "__main__.py"
+                "file": "main.py"
             }
         },
         {

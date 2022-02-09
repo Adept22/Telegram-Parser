@@ -127,7 +127,11 @@ class AuthorizationThread(threading.Thread):
         if len(new_phone.items()) > 1:
             ApiProcessor().set('phone', new_phone)
             
-        self.phone.authorization_thread = None
+        await asyncio.sleep(60)
+
+        await self.async_run()
                 
     def run(self):
+        self.phone.run_event.wait()
+        
         asyncio.run(self.async_run())

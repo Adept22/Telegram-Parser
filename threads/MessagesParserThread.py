@@ -198,6 +198,6 @@ class MessagesParserThread(threading.Thread):
         # self.chat.messages_parser_thread = None
         
     def run(self):
-        # self.chat.init_event.wait()
+        self.chat.run_event.wait()
         
         asyncio.run(self.async_run())
