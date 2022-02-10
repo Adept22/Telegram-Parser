@@ -5,8 +5,8 @@ from utils import get_hash
 from core.PhonesManager import PhonesManager
 from threads.ChatThread import ChatThread
 from threads.ChatMediaThread import ChatMediaThread
-from threads.MembersParserThread import MembersParserThread
-from threads.MessagesParserThread import MessagesParserThread
+from threads.MembersThread import MembersThread
+from threads.MessagesThread import MessagesThread
 from threads.ChatMediaThread import ChatMediaThread
 
 class Chat(object):
@@ -16,9 +16,7 @@ class Chat(object):
 
         if not 'link' in _dict or _dict['link'] is None:
             raise Exception('Unexpected chat link')
-        
-        self.dict = _dict
-        
+
         self.username, self.hash = get_hash(_dict['link'])
         
         self.title = None
@@ -33,9 +31,9 @@ class Chat(object):
         self._available_phones = []
 
         self.chat_thread = None
-        self.medias_thread = None
-        self.members_parser_thread = None
-        self.messages_parser_thread = None
+        self.chat_media_thread = None
+        self.members_thread = None
+        self.messages_thread = None
 
         self.run_event = threading.Event()
         
@@ -52,7 +50,7 @@ class Chat(object):
         return self._phones
     
     @phones.setter
-    def phones(self, new_value: 'dict'):
+    def phones(self, new_value):
         self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
     @property
@@ -60,14 +58,14 @@ class Chat(object):
         return self._available_phones
     
     @available_phones.setter
-    def available_phones(self, new_value: 'dict'):
+    def available_phones(self, new_value):
         self._available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
-    def from_dict(self, dict):
+    def from_dict(self, _dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
         
-        for key in dict:
-            setattr(self, pattern.sub('_', key).lower(), dict[key])
+        for key in _dict:
+            setattr(self, pattern.sub('_', key).lower(), _dict[key])
             
         return self
 
@@ -75,17 +73,17 @@ class Chat(object):
         self.chat_thread = ChatThread(self)
         self.chat_thread.setDaemon(True)
         self.chat_thread.start()
-        
-        self.medias_thread = ChatMediaThread(self)
-        self.medias_thread.setDaemon(True)
-        self.medias_thread.start()
 
-        self.members_parser_thread = MembersParserThread(self)
-        self.members_parser_thread.setDaemon(True)
-        self.members_parser_thread.start()
+        self.chat_media_thread = ChatMediaThread(self)
+        self.chat_media_thread.setDaemon(True)
+        self.chat_media_thread.start()
 
-        self.messages_parser_thread = MessagesParserThread(self)
-        self.messages_parser_thread.setDaemon(True)
-        self.messages_parser_thread.start()
+        self.members_thread = MembersThread(self)
+        self.members_thread.setDaemon(True)
+        self.members_thread.start()
+
+        self.messages_thread = MessagesThread(self)
+        self.messages_thread.setDaemon(True)
+        self.messages_thread.start()
 
         return self

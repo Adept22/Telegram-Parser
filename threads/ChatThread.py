@@ -182,16 +182,19 @@ class ChatThread(threading.Thread):
 
                 self.chat.phones = [{'id': id} for id in phones.keys()]
                 new_chat['phones'] = [{ 'id': id } for id in phones.keys()]
+
+
+                
             
-            if len(available_phones.items()) == 0 or len(phones.items()) == 0:
+            if len(self.chat.available_phones) == 0 or len(self.chat.phones) == 0:
+                if self.chat.run_event.is_set():
+                    self.chat.run_event.clear()
+
                 self.chat.is_available = False
 
                 new_chat['isAvailable'] = False
-            elif len(phones.items()) > 0:
-                if not self.chat.run_event.is_set():
-                    self.chat.run_event.set()
-
-                for phone in phones.values():
+            elif len(self.chat.phones) > 0:
+                for phone in self.chat.phones:
                     try:
                         tg_chat = await self.get_tg_chat(phone)
                     except (ClientNotAvailableError, ChatNotAvailableError):
@@ -210,6 +213,10 @@ class ChatThread(threading.Thread):
                             new_chat['title'] = self.chat.title
                         
                         break
+
+            if len(self.chat.phones) > 0 and self.chat.internal_id != None:
+                if not self.chat.run_event.is_set():
+                    self.chat.run_event.set()
             
             if len(new_chat.items()) > 1:
                 ApiProcessor().set('chat', new_chat)

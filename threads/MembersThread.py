@@ -1,18 +1,18 @@
-import re
-import os.path
 import random
 import threading
 import asyncio
 import logging
 import globalvars
+import os
 from telethon import types, functions
 
+from threads.MemberMediaThread import MemberMediaThread
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
 
-class MembersParserThread(threading.Thread):
+class MembersThread(threading.Thread):
     def __init__(self, chat):
-        threading.Thread.__init__(self, name=f'MembersParserThread-{chat.id}')
+        threading.Thread.__init__(self, name=f'MembersThread-{chat.id}')
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -101,51 +101,58 @@ class MembersParserThread(threading.Thread):
                         logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}. Exception: {ex}.")
 
                         continue
-                    
-                    logging.debug(f"Member '{user_title(user)}' with role saved.")
+                    else:
+                        logging.debug(f"Member '{user_title(user)}' with role saved.")
 
-                    member = chat_member_role['member']['member']
-                    
-                    async for photo in client.iter_profile_photos(entity=types.PeerUser(user_id=user.id)):
-                        saved_photo = { 'internalId': photo.id }
-
-                        saved_photos = ApiProcessor().get('member-media', saved_photo)
-
-                        if len(saved_photos) > 0:
-                            saved_photo = saved_photos[0]
-
-                            if os.path.exists(saved_photo['path']):
-                                logging.debug(f"Chat {member['id']}. Member-media {saved_photo['id']} exist. Continue.")
-                            
-                                await asyncio.sleep(1)
-                                continue
+                        member = chat_member_role['member']['member']
 
                         try:
-                            path_folder = f"./uploads/member-media/{member['id']}"
+                            async for photo in client.iter_profile_photos(user.id):
+                                new_media = { 'internalId': photo.id }
 
-                            path_to_file = await client.download_media(
-                                message=photo,
-                                file=f'{path_folder}/{photo.id}',
-                                # TODO: здесь надо проверить как обрабатываются видео
-                                thumb=photo.sizes[-2]
-                            )
+                                medias = ApiProcessor().get('member-media', new_media)
 
-                            if path_to_file != None:
-                                new_photo = { 
-                                    'member': member, 
-                                    'internalId': photo.id,
-                                    'createdAt': photo.date.isoformat(),
-                                    'path': f'{path_folder}/{re.split("/", path_to_file)[-1]}'
-                                }
+                                if len(medias) > 0:
+                                    new_media = medias[0]
 
-                                if saved_photo.get('id') != None:
-                                    new_photo['id'] = saved_photo['id']
+                                    if os.path.exists(new_media['path']):
+                                        logging.debug(f"Member {member['id']} media {new_media['id']} exist. Continue.")
                                     
-                                ApiProcessor().set('member-media', new_photo)
+                                        await asyncio.sleep(1)
+
+                                        continue
+
+                                try:
+                                    def progress_callback(current, total):
+                                        logging.debug(f"Member {member['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
+
+                                    path = await client.download_media(
+                                        message=photo,
+                                        file=f"./uploads/member/{member['id']}/{photo.id}",
+                                        thumb=photo.sizes[-2],
+                                        progress_callback=progress_callback
+                                    )
+
+                                    if path != None:
+                                        new_media = { 
+                                            **new_media,
+                                            'member': {"id": member['id']}, 
+                                            'internalId': photo.id,
+                                            'createdAt': photo.date.isoformat(),
+                                            'path': path[2:]
+                                        }
+                                            
+                                        ApiProcessor().set('member-media', new_media)
+                                except Exception as ex:
+                                    logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
+                                else:
+                                    logging.info(f"Sucessfuly saved member {member['id']} media.")
                         except Exception as ex:
-                            logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
-                        else:
-                            logging.info(f"Sucessfuly saved member {member['id']} media!")
+                            logging.error(f"Can't get member {member['id']} media using phone {phone.id}. Exception: {ex}.")
+
+                        # member_media_thread = MemberMediaThread(phone, chat_member_role['member']['member'], user)
+                        # member_media_thread.setDaemon(True)
+                        # member_media_thread.start()
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
                 

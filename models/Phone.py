@@ -1,27 +1,23 @@
 import os
 import re
 import asyncio
-import logging
 import threading
 
 from telethon import sync, sessions
 
-from processors.ApiProcessor import ApiProcessor
 from threads.AuthorizationThread import AuthorizationThread
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Phone(object):
-    def __init__(self, dict):
-        if dict is None:
+    def __init__(self, _dict):
+        if _dict is None:
             raise Exception('Unexpected phone dictionary')
             
-        if not 'id' in dict or dict['id'] is None:
+        if not 'id' in _dict or _dict['id'] is None:
             raise Exception('Unexpected phone id')
 
-        if not 'number' in dict or dict['number'] is None:
+        if not 'number' in _dict or _dict['number'] is None:
             raise Exception('Unexpected phone number')
-        
-        self.dict = dict
         
         self.internal_id = None
         self.code = None
@@ -31,8 +27,10 @@ class Phone(object):
         self.run_event = threading.Event()
 
         self.joining_lock = threading.Lock()
+
+        self.authorization_thread = None
         
-        self.from_dict(dict)
+        self.from_dict(_dict)
 
     def __del__(self):
         if self.run_event.is_set():
@@ -61,11 +59,11 @@ class Phone(object):
         except Exception as ex:
             raise ClientNotAvailableError(ex)
         
-    def from_dict(self, dict):
+    def from_dict(self, _dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
         
-        for key in dict:
-            setattr(self, pattern.sub('_', key).lower(), dict[key])
+        for key in _dict:
+            setattr(self, pattern.sub('_', key).lower(), _dict[key])
             
         return self
 
