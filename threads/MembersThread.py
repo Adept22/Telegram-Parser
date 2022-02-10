@@ -75,8 +75,6 @@ class MembersThread(threading.Thread):
     
     async def async_run(self):
         for phone in self.chat.phones:
-            logging.info(f"Recieving members from chat {self.chat.title}.")
-            
             try:
                 client = await phone.new_client(loop=self.loop)
 

@@ -1,3 +1,4 @@
+from multiprocessing.connection import wait
 import threading
 import asyncio
 import random
@@ -25,8 +26,12 @@ class ChatThread(threading.Thread):
         
         try:
             if self.chat.internal_id != None:
-                return await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
-            elif self.chat.hash != None:
+                try:
+                    return await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
+                except:
+                    pass
+
+            if self.chat.hash != None:
                 chat_invite = await client(functions.messages.CheckChatInviteRequest(hash=self.chat.hash))
                 
                 if isinstance(chat_invite, (types.ChatInviteAlready, types.ChatInvitePeek)):
@@ -34,7 +39,7 @@ class ChatThread(threading.Thread):
             elif self.chat.username != None:
                 return await client.get_entity(self.chat.username)
             
-            raise ChatNotAvailableError()
+            raise ChatNotAvailableError("Unrecognized chat")
         except (
             ValueError,
             ### ------------------------
@@ -49,8 +54,8 @@ class ChatThread(threading.Thread):
             errors.InviteHashEmptyError, 
             errors.InviteHashExpiredError, 
             errors.InviteHashInvalidError
-        ):
-            raise ChatNotAvailableError()
+        ) as ex:
+            raise ChatNotAvailableError(ex)
         
     async def check_phones(self, phones):
         new_phones = dict(phones)
@@ -58,6 +63,10 @@ class ChatThread(threading.Thread):
         for phone in phones.values():
             try:
                 await self.get_tg_chat(phone)
+            except errors.FloodWaitError as ex:
+                logging.error(f"Get chat {self.chat.id} by phone {phone.id} must wait. Exception: {ex}.")
+                
+                continue
             except (ClientNotAvailableError, ChatNotAvailableError) as ex:
                 logging.error(f"Chat {self.chat.id} not available for phone {phone.id}. Exception: {ex}.")
                 
@@ -70,37 +79,30 @@ class ChatThread(threading.Thread):
         return new_phones
         
     async def join_via_phone(self, phone):
-        with phone.joining_lock:
-            client = await phone.new_client(loop=self.loop)
-            
-            try:
-                await client(
-                    functions.channels.JoinChannelRequest(channel=self.chat.username) 
-                        if self.chat.hash is None else 
-                            functions.messages.ImportChatInviteRequest(hash=self.chat.hash)
-                )
-            except (
-                ValueError,
-                ### -----------------------------
-                errors.UsernameNotOccupiedError,
-                ### -----------------------------
-                errors.ChannelPrivateError, 
-                errors.InviteHashExpiredError, 
-                errors.UsersTooMuchError,
-                ### -----------------------------
-                errors.ChannelInvalidError, 
-                errors.InviteHashEmptyError, 
-                errors.InviteHashInvalidError
-            ) as ex:
-                raise ChatNotAvailableError(ex)
-            except errors.FloodWaitError as ex:
-                logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
-                
-                await asyncio.sleep(ex.seconds)
-                
-                await self.join_via_phone(phone)
-            except errors.UserAlreadyParticipantError as ex:
-                return
+        client = await phone.new_client(loop=self.loop, wait=False)
+        
+        try:
+            await client(
+                functions.channels.JoinChannelRequest(channel=self.chat.username) 
+                    if self.chat.hash is None else 
+                        functions.messages.ImportChatInviteRequest(hash=self.chat.hash)
+            )
+        except (
+            ValueError,
+            ### -----------------------------
+            errors.UsernameNotOccupiedError,
+            ### -----------------------------
+            errors.ChannelPrivateError, 
+            errors.InviteHashExpiredError, 
+            errors.UsersTooMuchError,
+            ### -----------------------------
+            errors.ChannelInvalidError, 
+            errors.InviteHashEmptyError, 
+            errors.InviteHashInvalidError
+        ) as ex:
+            raise ChatNotAvailableError(ex)
+        except errors.UserAlreadyParticipantError as ex:
+            return
         
     async def join_via_phones(self, available_phones, new_phones):
         to_join = list(
@@ -116,6 +118,10 @@ class ChatThread(threading.Thread):
             for phone in to_join:
                 try:
                     await self.join_via_phone(phone)
+                except errors.FloodWaitError as ex:
+                    logging.error(f"Chat {self.chat.id} wiring for phone {phone.id} must wait. Exception: {ex}.")
+                    
+                    continue
                 except (
                     ClientNotAvailableError, 
                     ### -----------------------------
@@ -197,7 +203,7 @@ class ChatThread(threading.Thread):
                 for phone in self.chat.phones:
                     try:
                         tg_chat = await self.get_tg_chat(phone)
-                    except (ClientNotAvailableError, ChatNotAvailableError):
+                    except (ClientNotAvailableError, ChatNotAvailableError, errors.FloodWaitError):
                         continue
                     else:
                         if self.chat.internal_id == None:

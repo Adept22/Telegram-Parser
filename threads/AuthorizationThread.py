@@ -43,8 +43,6 @@ class AuthorizationThread(threading.Thread):
             
             logging.debug(f"Code sended for {self.phone.id}.")
             
-            self.phone.is_verified = False
-            self.phone.code = None
             self.phone.code_hash = sent.phone_code_hash
         except errors.rpcerrorlist.FloodWaitError as ex:
             logging.error(f"Flood exception for phone {self.phone.id}. Sleep {ex.seconds}.")
@@ -61,6 +59,9 @@ class AuthorizationThread(threading.Thread):
             
         while True:
             if not await self.client.is_user_authorized():
+                if self.phone.run_event.is_set():
+                    self.phone.run_event.clear()
+
                 if self.phone.code != None and self.phone.code_hash != None:
                     logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
         
@@ -114,6 +115,9 @@ class AuthorizationThread(threading.Thread):
                     await asyncio.sleep(10)
             else:
                 logging.debug(f"Phone {self.phone.id} actually authorized.")
+
+                if not self.phone.run_event.is_set():
+                    self.phone.run_event.set()
                 
                 break
                 
@@ -132,6 +136,4 @@ class AuthorizationThread(threading.Thread):
         await self.async_run()
                 
     def run(self):
-        self.phone.run_event.wait()
-        
         asyncio.run(self.async_run())

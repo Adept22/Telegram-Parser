@@ -26,8 +26,6 @@ class Phone(object):
 
         self.run_event = threading.Event()
 
-        self.joining_lock = threading.Lock()
-
         self.authorization_thread = None
         
         self.from_dict(_dict)
@@ -38,7 +36,10 @@ class Phone(object):
         # TODO: Мы должны убивать треды при удалении чата.
         pass
     
-    async def new_client(self, loop = asyncio.get_event_loop()):
+    async def new_client(self, loop = asyncio.get_event_loop(), wait=True):
+        if wait and not self.run_event.is_set():
+            self.run_event.wait()
+
         client = sync.TelegramClient(
             session=sessions.StringSession(self.session), 
             api_id=os.environ['TELEGRAM_API_ID'],

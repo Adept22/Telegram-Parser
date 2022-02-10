@@ -17,8 +17,6 @@ class MessageMediaThread(threading.Thread):
         self.tg_message = tg_message
 
         self.loop = asyncio.new_event_loop()
-        
-        asyncio.set_event_loop(self.loop)
     
     async def file_download(self, client, media):
         new_media = { 'internalId': media.id }
@@ -37,12 +35,11 @@ class MessageMediaThread(threading.Thread):
 
         try:
             def progress_callback(current, total):
-                logging.debug(f"Message '{self.message['id']}' media downloaded {current} out of {total} bytes: {current / total:.2%}")
+                logging.debug(f"Message {self.message['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
 
             path = await client.download_media(
                 message=media,
                 file=f"{self.media_path}/{self.message['id']}",
-                thumb=media.sizes[-2],
                 progress_callback=progress_callback
             )
 
@@ -56,9 +53,9 @@ class MessageMediaThread(threading.Thread):
 
                 ApiProcessor().set('message-media', new_media)
         except Exception as ex:
-            logging.error(f"Can't save chat {self.chat.id} media. Exception: {ex}.")
+            logging.error(f"Can't save message {self.message['id']} media. Exception: {ex}.")
         else:
-            logging.info(f"Sucessfuly saved chat {self.chat.id} media!")
+            logging.info(f"Sucessfuly saved message {self.message['id']} media!")
 
     async def async_run(self):
         try:
@@ -82,4 +79,6 @@ class MessageMediaThread(threading.Thread):
             logging.info(f"Message {self.message['id']} media download success. Exit code 0.")
         
     def run(self):
+        asyncio.set_event_loop(self.loop)
+        
         asyncio.run(self.async_run())
