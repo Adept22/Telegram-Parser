@@ -20,8 +20,8 @@ class MessageMediaThread(threading.Thread):
         
         asyncio.set_event_loop(self.loop)
     
-    async def file_download(self, client):
-        new_media = { 'internalId': self.tg_message.media.id }
+    async def file_download(self, client, media):
+        new_media = { 'internalId': media.id }
 
         medias = ApiProcessor().get('message-media', new_media)
 
@@ -40,9 +40,9 @@ class MessageMediaThread(threading.Thread):
                 logging.debug(f"Message '{self.message['id']}' media downloaded {current} out of {total} bytes: {current / total:.2%}")
 
             path = await client.download_media(
-                message=self.tg_message,
+                message=media,
                 file=f"{self.media_path}/{self.message['id']}",
-                thumb=self.tg_message.media.sizes[-2],
+                thumb=media.sizes[-2],
                 progress_callback=progress_callback
             )
 
@@ -50,7 +50,7 @@ class MessageMediaThread(threading.Thread):
                 new_media = {
                     **new_media,
                     'message': {"id": self.message['id']}, 
-                    'createdAt': self.tg_message.date.isoformat(), 
+                    'createdAt': media.date.isoformat(), 
                     'path': path[2:]
                 }
 
@@ -73,9 +73,9 @@ class MessageMediaThread(threading.Thread):
             elif isinstance(self.tg_message.media, types.MessageMediaContact):
                 pass
             elif isinstance(self.tg_message.media, types.MessageMediaPhoto):
-                await self.file_download(client)
+                await self.file_download(client, self.tg_message.photo)
             elif isinstance(self.tg_message.media, types.MessageMediaDocument):
-                await self.file_download(client)
+                await self.file_download(client, self.tg_message.document)
         except Exception as ex:
             logging.error(f"Message {self.message['id']} media download failed. Exit code 1. Exception: {ex}.")
         else:

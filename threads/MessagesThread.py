@@ -142,7 +142,7 @@ class MessagesThread(threading.Thread):
                     else:
                         logging.debug(f"Message '{new_message['id']}' at '{new_message['createdAt']}' saved.")
 
-                        if tg_message.media == None:
+                        if tg_message.media != None:
                             meessage_media_thread = MessageMediaThread(phone, new_message, tg_message)
                             meessage_media_thread.setDaemon(True)
                             meessage_media_thread.start()

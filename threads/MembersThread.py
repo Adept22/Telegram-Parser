@@ -6,7 +6,6 @@ import globalvars
 import os
 from telethon import types, functions
 
-from threads.MemberMediaThread import MemberMediaThread
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
 
@@ -149,10 +148,6 @@ class MembersThread(threading.Thread):
                                     logging.info(f"Sucessfuly saved member {member['id']} media.")
                         except Exception as ex:
                             logging.error(f"Can't get member {member['id']} media using phone {phone.id}. Exception: {ex}.")
-
-                        # member_media_thread = MemberMediaThread(phone, chat_member_role['member']['member'], user)
-                        # member_media_thread.setDaemon(True)
-                        # member_media_thread.start()
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
                 
