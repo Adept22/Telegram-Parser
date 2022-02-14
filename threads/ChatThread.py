@@ -9,8 +9,9 @@ from telethon import functions, errors, types
 from processors.ApiProcessor import ApiProcessor
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from errors.ClientNotAvailableError import ClientNotAvailableError
+from threads.KillableThread import KillableThread
 
-class ChatThread(threading.Thread):
+class ChatThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'ChatThread-{chat.id}')
         
@@ -79,7 +80,7 @@ class ChatThread(threading.Thread):
         return new_phones
         
     async def join_via_phone(self, phone):
-        client = await phone.new_client(loop=self.loop, wait=False)
+        client = await phone.new_client(loop=self.loop)
         
         try:
             await client(

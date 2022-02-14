@@ -1,6 +1,7 @@
 import re
 import threading
 from utils import get_hash
+from telethon import types, functions, errors
 
 from core.PhonesManager import PhonesManager
 from threads.ChatThread import ChatThread
@@ -8,6 +9,8 @@ from threads.ChatMediaThread import ChatMediaThread
 from threads.MembersThread import MembersThread
 from threads.MessagesThread import MessagesThread
 from threads.ChatMediaThread import ChatMediaThread
+from errors.ChatNotAvailableError import ChatNotAvailableError
+from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Chat(object):
     def __init__(self, _dict):
@@ -24,17 +27,18 @@ class Chat(object):
         self.internal_id = None
         self.is_available = False
         
-        self.phones = []
         self.available_phones = []
+        self.phones = []
 
-        self._phones = []
         self._available_phones = []
+        self._phones = []
 
         self.chat_thread = None
         self.chat_media_thread = None
         self.members_thread = None
         self.messages_thread = None
 
+        self.join_lock = threading.Lock()
         self.run_event = threading.Event()
         
         self.from_dict(_dict)
@@ -87,3 +91,61 @@ class Chat(object):
         self.messages_thread.start()
 
         return self
+            
+    async def get_internal_id(self, client):
+        try:
+            if self.internal_id != None:
+                try:
+                    return await client.get_entity(types.PeerChannel(channel_id=self.internal_id))
+                except:
+                    pass
+
+            if self.hash != None:
+                chat_invite = await client(functions.messages.CheckChatInviteRequest(hash=self.hash))
+                
+                if isinstance(chat_invite, (types.ChatInviteAlready, types.ChatInvitePeek)):
+                    return chat_invite.chat
+            elif self.username != None:
+                return await client.get_entity(self.username)
+            
+            raise ChatNotAvailableError("Unrecognized chat")
+        except (
+            ValueError,
+            ### ------------------------
+            errors.ChannelInvalidError, 
+            errors.ChannelPrivateError, 
+            errors.ChannelPublicGroupNaError, 
+            ### ------------------------
+            errors.NeedChatInvalidError, 
+            errors.ChatIdInvalidError, 
+            errors.PeerIdInvalidError, 
+            ### ------------------------
+            errors.InviteHashEmptyError, 
+            errors.InviteHashExpiredError, 
+            errors.InviteHashInvalidError
+        ) as ex:
+            raise ChatNotAvailableError(ex)
+
+    async def join_channel(self, client):
+        try:
+            await client(
+                functions.channels.JoinChannelRequest(channel=self.username) 
+                    if self.hash is None else 
+                        functions.messages.ImportChatInviteRequest(hash=self.hash)
+            )
+        except (
+            ValueError,
+            ### -----------------------------
+            errors.UsernameNotOccupiedError,
+            ### -----------------------------
+            errors.ChannelPrivateError, 
+            errors.InviteHashExpiredError, 
+            errors.UsersTooMuchError,
+            ### -----------------------------
+            errors.ChannelInvalidError, 
+            errors.InviteHashEmptyError, 
+            errors.InviteHashInvalidError
+        ) as ex:
+            raise ChatNotAvailableError(ex)
+        except errors.UserAlreadyParticipantError as ex:
+            return

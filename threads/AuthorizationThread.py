@@ -5,8 +5,9 @@ import logging
 
 from telethon import sync, errors, sessions
 from processors.ApiProcessor import ApiProcessor
+from threads.KillableThread import KillableThread
 
-class AuthorizationThread(threading.Thread):
+class AuthorizationThread(KillableThread):
     def __init__(self, phone):
         threading.Thread.__init__(self, name=f'AuthorizationThread-{phone.id}')
         

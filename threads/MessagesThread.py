@@ -7,8 +7,9 @@ from telethon import types
 
 from threads.MessageMediaThread import MessageMediaThread
 from processors.ApiProcessor import ApiProcessor
+from threads.KillableThread import KillableThread
 
-class MessagesThread(threading.Thread):
+class MessagesThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f"MessagesThread-{chat.id}")
         
@@ -147,7 +148,7 @@ class MessagesThread(threading.Thread):
                             meessage_media_thread.setDaemon(True)
                             meessage_media_thread.start()
                 else:
-                    logging.info(f"Chat {self.chat.id} messages download success. Exit code 0.")
+                    logging.info(f"Chat {self.chat.id} messages download success.")
 
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
@@ -158,7 +159,7 @@ class MessagesThread(threading.Thread):
             else:
                 break
         else:
-            logging.error(f"Chat {self.chat.id} messages download failed. Exit code 1.")
+            logging.error(f"Chat {self.chat.id} messages download failed.")
         
     def run(self):
         self.chat.run_event.wait()

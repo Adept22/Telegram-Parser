@@ -1,4 +1,5 @@
 import os
+import queue
 import re
 import asyncio
 import threading
@@ -6,6 +7,7 @@ import threading
 from telethon import sync, sessions
 
 from threads.AuthorizationThread import AuthorizationThread
+from threads.JoinThread import JoinThread
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Phone(object):
@@ -26,20 +28,25 @@ class Phone(object):
 
         self.run_event = threading.Event()
 
+        self.joining_queue = queue.Queue()
+        self.join_thread = None
         self.authorization_thread = None
         
         self.from_dict(_dict)
 
     def __del__(self):
-        if self.run_event.is_set():
-            self.run_event.clear()
         # TODO: Мы должны убивать треды при удалении чата.
         pass
+        
+    def from_dict(self, _dict):
+        pattern = re.compile(r'(?<!^)(?=[A-Z])')
+        
+        for key in _dict:
+            setattr(self, pattern.sub('_', key).lower(), _dict[key])
+            
+        return self
     
-    async def new_client(self, loop = asyncio.get_event_loop(), wait=True):
-        if wait and not self.run_event.is_set():
-            self.run_event.wait()
-
+    async def new_client(self, loop = asyncio.get_event_loop()):
         client = sync.TelegramClient(
             session=sessions.StringSession(self.session), 
             api_id=os.environ['TELEGRAM_API_ID'],
@@ -59,16 +66,12 @@ class Phone(object):
                 raise ClientNotAvailableError(f'Phone {self.id} not authorized')
         except Exception as ex:
             raise ClientNotAvailableError(ex)
-        
-    def from_dict(self, _dict):
-        pattern = re.compile(r'(?<!^)(?=[A-Z])')
-        
-        for key in _dict:
-            setattr(self, pattern.sub('_', key).lower(), _dict[key])
-            
-        return self
 
     def run(self):
+        self.join_thread = JoinThread(self)
+        self.join_thread.setDaemon(True)
+        self.join_thread.start()
+
         self.authorization_thread = AuthorizationThread(self)
         self.authorization_thread.setDaemon(True)
         self.authorization_thread.start()

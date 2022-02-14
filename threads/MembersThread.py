@@ -8,8 +8,9 @@ from telethon import types, functions
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
+from threads.KillableThread import KillableThread
 
-class MembersThread(threading.Thread):
+class MembersThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'MembersThread-{chat.id}')
         
@@ -153,11 +154,11 @@ class MembersThread(threading.Thread):
                 
                 continue
             else:
-                logging.info(f"Chat \'{self.chat.title}\' participants download success. Exit code 0.")
+                logging.info(f"Chat \'{self.chat.title}\' participants download success.")
                 
                 break
         else:
-            logging.error(f"Cannot get chat {self.chat.id} participants. Exit code 1.")
+            logging.error(f"Cannot get chat {self.chat.id} participants.")
         
     def run(self):
         self.chat.run_event.wait()

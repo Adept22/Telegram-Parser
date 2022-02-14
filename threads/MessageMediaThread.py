@@ -5,8 +5,9 @@ import logging
 from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
+from threads.KillableThread import KillableThread
 
-class MessageMediaThread(threading.Thread):
+class MessageMediaThread(KillableThread):
     def __init__(self, phone, message, tg_message):
         threading.Thread.__init__(self, name=f"MessageMediaThread-{message['id']}")
 
@@ -17,6 +18,8 @@ class MessageMediaThread(threading.Thread):
         self.tg_message = tg_message
 
         self.loop = asyncio.new_event_loop()
+        
+        asyncio.set_event_loop(self.loop)
     
     async def file_download(self, client, media):
         new_media = { 'internalId': media.id }
@@ -74,11 +77,9 @@ class MessageMediaThread(threading.Thread):
             elif isinstance(self.tg_message.media, types.MessageMediaDocument):
                 await self.file_download(client, self.tg_message.document)
         except Exception as ex:
-            logging.error(f"Message {self.message['id']} media download failed. Exit code 1. Exception: {ex}.")
+            logging.error(f"Message {self.message['id']} media download failed. Exception: {ex}.")
         else:
-            logging.info(f"Message {self.message['id']} media download success. Exit code 0.")
+            logging.info(f"Message {self.message['id']} media download success.")
         
     def run(self):
-        asyncio.set_event_loop(self.loop)
-        
         asyncio.run(self.async_run())

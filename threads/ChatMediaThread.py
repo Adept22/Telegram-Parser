@@ -7,8 +7,9 @@ import random
 from telethon import types
 
 from processors.ApiProcessor import ApiProcessor
+from threads.KillableThread import KillableThread
 
-class ChatMediaThread(threading.Thread):
+class ChatMediaThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'ChatMediaThread-{chat.id}')
         
