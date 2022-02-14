@@ -13,6 +13,7 @@ from threads.KillableThread import KillableThread
 class MembersThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'MembersThread-{chat.id}')
+        self.daemon = True
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -161,6 +162,6 @@ class MembersThread(KillableThread):
             logging.error(f"Cannot get chat {self.chat.id} participants.")
         
     def run(self):
-        self.chat.run_event.wait()
+        self.chat.init_event.wait()
         
         asyncio.run(self.async_run())

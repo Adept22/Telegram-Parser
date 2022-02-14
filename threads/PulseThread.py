@@ -8,9 +8,9 @@ from errors.ClientNotAvailableError import ClientNotAvailableError
 from errors.ChatNotAvailableError import ChatNotAvailableError
 from threads.KillableThread import KillableThread
 
-class JoinThread(KillableThread):
+class PulseThread(KillableThread):
     def __init__(self, phone):
-        threading.Thread.__init__(self, name=f'JoinThread-{phone.id}')
+        threading.Thread.__init__(self, name=f'PulseThread-{phone.id}')
         self.daemon = True
         self.lock = threading.Lock()
         
@@ -20,19 +20,19 @@ class JoinThread(KillableThread):
         
         asyncio.set_event_loop(self.loop)
         
-    async def join_channel(self, chat, available_phones, phones):
+    async def get_channel(self, chat, available_phones, phones):
         tg_chat = None
         
         try:
             client = await self.phone.new_client(loop=self.loop)
 
-            tg_chat = await chat.join_channel(client)
+            tg_chat = await chat.get_internal_id(client)
         except errors.FloodWaitError as ex:
             logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait. Exception: {ex}.")
             
             await asyncio.sleep(ex.seconds)
             
-            return await self.join_channel(chat, available_phones, phones)
+            return await self.get_channel(chat, available_phones, phones)
         except (
             ClientNotAvailableError, 
             ChatNotAvailableError, 
@@ -56,14 +56,11 @@ class JoinThread(KillableThread):
         return tg_chat, available_phones, phones
             
     async def async_run(self, chat):
-        if len(chat.phones) >= 3:
-            return
-        
         with chat.phones_lock:
             available_phones = dict([(p.id, p) for p in chat.available_phones])
             phones = dict([(p.id, p) for p in chat.phones])
             
-            tg_chat, available_phones, phones = await self.join_channel(chat, available_phones, phones)
+            tg_chat, available_phones, phones = await self.get_channel(chat, available_phones, phones)
             
             if tg_chat != None:
                 if chat.internal_id == None:
@@ -71,9 +68,9 @@ class JoinThread(KillableThread):
                     
                 if chat.title == None:
                     chat.title = tg_chat.title
-            
-            chat.available_phones = [{'id': id} for id in available_phones.keys()]
-            chat.phones = [{'id': id} for id in phones.keys()]
+
+            chat.available_phones = [{ 'id': id } for id in available_phones.keys()]
+            chat.phones = [{ 'id': id } for id in phones.keys()]
 
     def run(self):
         self.phone.init_event.wait()

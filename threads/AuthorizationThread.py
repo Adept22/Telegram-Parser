@@ -10,6 +10,7 @@ from threads.KillableThread import KillableThread
 class AuthorizationThread(KillableThread):
     def __init__(self, phone):
         threading.Thread.__init__(self, name=f'AuthorizationThread-{phone.id}')
+        self.daemon = True
         
         self.retry = 0
         self.phone = phone
@@ -60,8 +61,8 @@ class AuthorizationThread(KillableThread):
             
         while True:
             if not await self.client.is_user_authorized():
-                if self.phone.run_event.is_set():
-                    self.phone.run_event.clear()
+                if self.phone.init_event.is_set():
+                    self.phone.init_event.clear()
 
                 if self.phone.code != None and self.phone.code_hash != None:
                     logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
@@ -117,8 +118,8 @@ class AuthorizationThread(KillableThread):
             else:
                 logging.debug(f"Phone {self.phone.id} actually authorized.")
 
-                if not self.phone.run_event.is_set():
-                    self.phone.run_event.set()
+                if not self.phone.init_event.is_set():
+                    self.phone.init_event.set()
                 
                 break
                 

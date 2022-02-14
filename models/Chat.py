@@ -1,8 +1,10 @@
+import logging
 import re
 import threading
 from utils import get_hash
 from telethon import types, functions, errors
 
+from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 from threads.ChatThread import ChatThread
 from threads.ChatMediaThread import ChatMediaThread
@@ -22,13 +24,10 @@ class Chat(object):
 
         self.username, self.hash = get_hash(_dict['link'])
         
-        self.title = None
+        self._title = None
         self.link = None
-        self.internal_id = None
+        self._internal_id = None
         self.is_available = False
-        
-        self.available_phones = []
-        self.phones = []
 
         self._available_phones = []
         self._phones = []
@@ -38,14 +37,14 @@ class Chat(object):
         self.members_thread = None
         self.messages_thread = None
 
-        self.join_lock = threading.Lock()
-        self.run_event = threading.Event()
+        self.phones_lock = threading.Lock()
+        self.init_event = threading.Event()
         
         self.from_dict(_dict)
 
     def __del__(self):
-        if self.run_event.is_set():
-            self.run_event.clear()
+        if self.init_event.is_set():
+            self.init_event.clear()
         # TODO: Мы должны убивать треды при удалении чата.
         pass
         
@@ -55,7 +54,18 @@ class Chat(object):
     
     @phones.setter
     def phones(self, new_value):
-        self._phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        new_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        
+        if len(new_phones) != len(self._phones) or \
+            any(x.id != y.id for x, y in zip(new_phones, self._phones)):
+            logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_phones)}.")
+            
+            ApiProcessor().set('chat', { 
+                'id': self.id, 
+                'phones': [{ 'id': phone.id } for phone in new_phones] 
+            })
+        
+        self._phones = new_phones
         
     @property
     def available_phones(self):
@@ -63,7 +73,50 @@ class Chat(object):
     
     @available_phones.setter
     def available_phones(self, new_value):
-        self._available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        new_available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        
+        if len(new_available_phones) != len(self._available_phones) or \
+            any(x.id != y.id for x, y in zip(new_available_phones, self._available_phones)):
+            logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_available_phones)}.")
+            
+            ApiProcessor().set('chat', { 
+                'id': self.id, 
+                'availablePhones': [{ 'id': phone.id } for phone in new_available_phones] 
+            })
+            
+        self._available_phones = new_available_phones
+        
+    @property
+    def internal_id(self):
+        return self._internal_id
+    
+    @internal_id.setter
+    def internal_id(self, new_value):
+        if self._internal_id != new_value:
+            logging.info(f"Chat {self.id} internal id changed.")
+            
+            ApiProcessor().set('chat', { 
+                'id': self.id, 
+                'internalId': new_value
+            })
+
+        self._internal_id = new_value
+        
+    @property
+    def title(self):
+        return self._title
+    
+    @title.setter
+    def title(self, new_value):
+        if self._title != new_value:
+            logging.info(f"Chat {self.id} title changed.")
+            
+            ApiProcessor().set('chat', { 
+                'id': self.id, 
+                'title': new_value
+            })
+
+        self._title = new_value
         
     def from_dict(self, _dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
@@ -75,19 +128,15 @@ class Chat(object):
 
     def run(self):
         self.chat_thread = ChatThread(self)
-        self.chat_thread.setDaemon(True)
         self.chat_thread.start()
 
         self.chat_media_thread = ChatMediaThread(self)
-        self.chat_media_thread.setDaemon(True)
         self.chat_media_thread.start()
 
         self.members_thread = MembersThread(self)
-        self.members_thread.setDaemon(True)
         self.members_thread.start()
 
         self.messages_thread = MessagesThread(self)
-        self.messages_thread.setDaemon(True)
         self.messages_thread.start()
 
         return self
@@ -128,7 +177,7 @@ class Chat(object):
 
     async def join_channel(self, client):
         try:
-            await client(
+            updates = await client(
                 functions.channels.JoinChannelRequest(channel=self.username) 
                     if self.hash is None else 
                         functions.messages.ImportChatInviteRequest(hash=self.hash)
@@ -149,3 +198,5 @@ class Chat(object):
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
             return
+        else:
+            return updates.chats[0]

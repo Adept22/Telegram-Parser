@@ -12,6 +12,7 @@ from threads.KillableThread import KillableThread
 class ChatMediaThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f'ChatMediaThread-{chat.id}')
+        self.daemon = True
         
         self.media_path = f"./uploads/chat/{chat.id}/avatars"
 
@@ -77,6 +78,6 @@ class ChatMediaThread(KillableThread):
             logging.error(f"Can't get chat {self.chat.id} messages.")
 
     def run(self):
-        self.chat.run_event.wait()
+        self.chat.init_event.wait()
 
         asyncio.run(self.async_run())

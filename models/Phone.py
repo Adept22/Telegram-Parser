@@ -6,8 +6,9 @@ import threading
 
 from telethon import sync, sessions
 
-from threads.AuthorizationThread import AuthorizationThread
 from threads.JoinThread import JoinThread
+from threads.PulseThread import PulseThread
+from threads.AuthorizationThread import AuthorizationThread
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Phone(object):
@@ -26,11 +27,16 @@ class Phone(object):
         self.code_hash = None
         self.session = None
 
-        self.run_event = threading.Event()
+        self.init_event = threading.Event()
 
-        self.joining_queue = queue.Queue()
-        self.join_thread = None
         self.authorization_thread = None
+        
+        self.joining_queue = queue.Queue()
+        self.pulse_queue = queue.Queue()
+        
+        self.join_thread = None
+        self.pulse_thread = None
+        
         
         self.from_dict(_dict)
 
@@ -68,12 +74,13 @@ class Phone(object):
             raise ClientNotAvailableError(ex)
 
     def run(self):
-        self.join_thread = JoinThread(self)
-        self.join_thread.setDaemon(True)
-        self.join_thread.start()
-
         self.authorization_thread = AuthorizationThread(self)
-        self.authorization_thread.setDaemon(True)
         self.authorization_thread.start()
+        
+        self.join_thread = JoinThread(self)
+        self.join_thread.start()
+        
+        self.pulse_thread = PulseThread(self)
+        self.pulse_thread.start()
 
         return self

@@ -5,16 +5,48 @@ from logging.handlers import RotatingFileHandler
 from sys import stdout
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
+from core.ChatsManager import ChatsManager
 
 import globalvars
+from models.Chat import Chat
 from models.Phone import Phone
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 
 from autobahn.asyncio.component import Component
 
-from threads.ChatsThread import ChatsThread
+def set_chat(chat):
+    if chat['isAvailable'] == False:
+        if chat['id'] in ChatsManager():
+            del ChatsManager()[chat['id']]
+        
+        return
     
+    if chat['id'] in ChatsManager():
+        logging.debug(f"Updating chat {chat['id']}.")
+        
+        ChatsManager()[chat['id']].from_dict(chat)
+    else:
+        logging.debug(f"Setting up new chat {chat['id']}.")
+
+        ChatsManager()[chat['id']] = Chat(chat).run()
+
+def get_all_chats(chats=[], start=0, limit=50):
+    new_chats = ApiProcessor().get('chat', {"isAvailable": True, "_start": start, "_limit": limit})
+
+    if len(new_chats) > 0:
+        chats += get_all_chats(new_chats, start+limit, limit)
+    
+    return chats
+
+def get_chats():
+    chats = get_all_chats()
+
+    logging.debug(f"Received {len(chats)} chats.")
+    
+    for chat in chats:
+        set_chat(chat)
+        
 def set_phone(phone):
     if phone['isBanned'] == True:
         if phone['id'] in PhonesManager():
@@ -44,18 +76,15 @@ class Component(ApplicationSession):
         logging.info(f"session on_join: {details}")
         
         get_phones()
-
-        get_chats_thread = ChatsThread()
-        get_chats_thread.setDaemon(True)
-        get_chats_thread.start()
+        get_chats()
 
         async def on_event(event):
-            logging.debug(f"Got event on entity: {event['_']}")
+            logging.debug(f"Got event on entity: {event['_']} {event['entity']['id']}")
             
-            if event['_'] == 'TelegramPhone':
+            if event['_'] == 'Phone':
                 set_phone(event['entity'])
-            elif event['_'] == 'TelegramChat':
-                get_chats_thread.set_chat(event['entity'])
+            elif event['_'] == 'Chat':
+                set_chat(event['entity'])
 
         await self.subscribe(on_event, 'com.app.entity')
     

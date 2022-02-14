@@ -12,6 +12,7 @@ from threads.KillableThread import KillableThread
 class MessagesThread(KillableThread):
     def __init__(self, chat):
         threading.Thread.__init__(self, name=f"MessagesThread-{chat.id}")
+        self.daemon = True
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -145,7 +146,6 @@ class MessagesThread(KillableThread):
 
                         if tg_message.media != None:
                             meessage_media_thread = MessageMediaThread(phone, new_message, tg_message)
-                            meessage_media_thread.setDaemon(True)
                             meessage_media_thread.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success.")
@@ -162,6 +162,6 @@ class MessagesThread(KillableThread):
             logging.error(f"Chat {self.chat.id} messages download failed.")
         
     def run(self):
-        self.chat.run_event.wait()
+        self.chat.init_event.wait()
         
         asyncio.run(self.async_run())

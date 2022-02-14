@@ -10,6 +10,7 @@ from threads.KillableThread import KillableThread
 class MessageMediaThread(KillableThread):
     def __init__(self, phone, message, tg_message):
         threading.Thread.__init__(self, name=f"MessageMediaThread-{message['id']}")
+        self.daemon = True
 
         self.media_path = f"./uploads/chat/{message['chat']['id']}/messages"
         
