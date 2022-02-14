@@ -56,10 +56,10 @@ class JoinThread(KillableThread):
         return tg_chat, available_phones, phones
             
     async def async_run(self, chat):
-        if len(chat.phones) >= 3:
-            return
-        
         with chat.phones_lock:
+            if len(chat.phones) >= 3:
+                return
+                
             available_phones = dict([(p.id, p) for p in chat.available_phones])
             phones = dict([(p.id, p) for p in chat.phones])
             

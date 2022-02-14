@@ -81,9 +81,9 @@ class Component(ApplicationSession):
         async def on_event(event):
             logging.debug(f"Got event on entity: {event['_']} {event['entity']['id']}")
             
-            if event['_'] == 'Phone':
+            if event['_'] == 'TelegramPhone':
                 set_phone(event['entity'])
-            elif event['_'] == 'Chat':
+            elif event['_'] == 'TelegramChat':
                 set_chat(event['entity'])
 
         await self.subscribe(on_event, 'com.app.entity')

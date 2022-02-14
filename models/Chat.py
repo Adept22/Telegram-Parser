@@ -92,7 +92,7 @@ class Chat(object):
     
     @internal_id.setter
     def internal_id(self, new_value):
-        if self._internal_id != new_value:
+        if new_value != None and self._internal_id != new_value:
             logging.info(f"Chat {self.id} internal id changed.")
             
             ApiProcessor().set('chat', { 
@@ -108,7 +108,7 @@ class Chat(object):
     
     @title.setter
     def title(self, new_value):
-        if self._title != new_value:
+        if new_value != None and self._title != new_value:
             logging.info(f"Chat {self.id} title changed.")
             
             ApiProcessor().set('chat', { 
