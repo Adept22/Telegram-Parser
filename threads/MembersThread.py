@@ -2,9 +2,10 @@ import random
 import threading
 import asyncio
 import logging
+from errors.ClientNotAvailableError import ClientNotAvailableError
 import globalvars
 import os
-from telethon import types, functions
+from telethon import types, functions, errors
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
@@ -148,6 +149,18 @@ class MembersThread(KillableThread):
                                     logging.info(f"Sucessfuly saved member {member['id']} media.")
                         except Exception as ex:
                             logging.error(f"Can't get member {member['id']} media using phone {phone.id}. Exception: {ex}.")
+            except (
+                errors.ChannelInvalidError,
+                errors.ChannelPrivateError,
+                errors.ChatAdminRequiredError
+            ) as ex:
+                logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
+                
+                self.chat.is_available = False
+            except ClientNotAvailableError as ex:
+                logging.error(f"Phone {phone.id} not available for chat {self.chat.id}. Exception: {ex}.")
+
+                self.chat.remove_phone(phone)
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
                 

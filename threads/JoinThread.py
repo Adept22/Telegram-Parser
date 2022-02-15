@@ -20,60 +20,42 @@ class JoinThread(KillableThread):
         
         asyncio.set_event_loop(self.loop)
         
-    async def join_channel(self, chat, available_phones, phones):
-        tg_chat = None
-        
-        try:
-            client = await self.phone.new_client(loop=self.loop)
-
-            tg_chat = await chat.join_channel(client)
-        except errors.FloodWaitError as ex:
-            logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait. Exception: {ex}.")
-            
-            await asyncio.sleep(ex.seconds)
-            
-            return await self.join_channel(chat, available_phones, phones)
-        except (
-            ClientNotAvailableError, 
-            ChatNotAvailableError, 
-            ### -----------------------------
-            errors.ChannelsTooMuchError, 
-            errors.SessionPasswordNeededError
-        ) as ex:
-            logging.error(f"Chat {chat.id} not available for phone {self.phone.id}. Exception: {ex}.")
-            
-            if self.phone.id in available_phones:
-                del available_phones[self.phone.id]
-
-            if self.phone.id in phones:
-                del phones[self.phone.id]
-        else:
-            logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
-            
-            if not self.phone.id in phones:
-                phones[self.phone.id] = self.phone
-                
-        return tg_chat, available_phones, phones
-            
     async def async_run(self, chat):
         with chat.phones_lock:
             if len(chat.phones) >= 3:
                 return
-                
-            available_phones = dict([(p.id, p) for p in chat.available_phones])
-            phones = dict([(p.id, p) for p in chat.phones])
-            
-            tg_chat, available_phones, phones = await self.join_channel(chat, available_phones, phones)
-            
-            if tg_chat != None:
+
+            try:
+                client = await self.phone.new_client(loop=self.loop)
+
+                tg_chat = await chat.join_channel(client)
+            except errors.FloodWaitError as ex:
+                logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait. Exception: {ex}.")
+
+                await asyncio.sleep(ex.seconds)
+
+                return await self.join_channel(chat)
+            except (
+                ClientNotAvailableError,
+                ChatNotAvailableError,
+                ### -----------------------------
+                errors.ChannelsTooMuchError,
+                errors.SessionPasswordNeededError
+            ) as ex:
+                logging.error(f"Chat {chat.id} not available for phone {self.phone.id}. Exception: {ex}.")
+
+                chat.remove_available_phone(self.phone)
+                chat.remove_phone(self.phone)
+            else:
+                logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
+
                 if chat.internal_id == None:
                     chat.internal_id = tg_chat.id
-                    
+
                 if chat.title == None:
                     chat.title = tg_chat.title
-            
-            chat.available_phones = [{'id': id} for id in available_phones.keys()]
-            chat.phones = [{'id': id} for id in phones.keys()]
+
+                chat.add_phone(self.phone)
 
     def run(self):
         self.phone.init_event.wait()

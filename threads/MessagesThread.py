@@ -2,8 +2,9 @@ import random
 import threading
 import asyncio
 import logging
+from errors.ClientNotAvailableError import ClientNotAvailableError
 import globalvars
-from telethon import types
+from telethon import types, errors
 
 from threads.MessageMediaThread import MessageMediaThread
 from processors.ApiProcessor import ApiProcessor
@@ -149,7 +150,19 @@ class MessagesThread(KillableThread):
                             meessage_media_thread.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success.")
+            except (
+                errors.ChannelInvalidError,
+                errors.ChannelPrivateError,
+                errors.ChatIdInvalidError,
+                errors.PeerIdInvalidError
+            ) as ex:
+                logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
 
+                self.chat.is_available = False
+            except ClientNotAvailableError as ex:
+                logging.error(f"Phone {phone.id} not available for chat {self.chat.id}. Exception: {ex}.")
+
+                self.chat.remove_phone(phone)
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
                 

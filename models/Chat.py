@@ -6,7 +6,6 @@ from telethon import types, functions, errors
 
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
-from threads.ChatThread import ChatThread
 from threads.ChatMediaThread import ChatMediaThread
 from threads.MembersThread import MembersThread
 from threads.MessagesThread import MessagesThread
@@ -27,12 +26,11 @@ class Chat(object):
         self._title = None
         self.link = None
         self._internal_id = None
-        self.is_available = False
+        self._is_available = False
 
         self._available_phones = []
         self._phones = []
 
-        self.chat_thread = None
         self.chat_media_thread = None
         self.members_thread = None
         self.messages_thread = None
@@ -55,6 +53,15 @@ class Chat(object):
     @phones.setter
     def phones(self, new_value):
         new_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+
+        if len(new_phones) < 3 and len(self.available_phones) > len(new_phones):
+            a_ps = dict([(p.id, p) for p in self.available_phones])
+            phones = dict([(p.id, p) for p in self.phones])
+
+            logging.debug(f"{len(a_ps) - len(phones)} phones ready for joining in chat {self.id}.")
+
+            for id in list(set(a_ps) - set(phones)):
+                a_ps[id].joining_queue.put(self)
         
         if len(new_phones) != len(self._phones) or \
             any(x.id != y.id for x, y in zip(new_phones, self._phones)):
@@ -66,6 +73,19 @@ class Chat(object):
             })
         
         self._phones = new_phones
+
+        if len(self._phones) > 0:
+            self.init_event.set()
+
+    def add_phone(self, new_phone):
+        if not new_phone.id in [_p.id for _p in self._phones]:
+            new_phones = [{"id": _p.id} for _p in self._phones]
+            new_phones.append({"id": new_phone.id})
+            self.phones = new_phones
+
+    def remove_phone(self, phone):
+        if phone.id in [_p.id for _p in self._phones]:
+            self.phones = [{ "id": _p.id } for _p in self._phones if _p.id != phone.id]
         
     @property
     def available_phones(self):
@@ -85,6 +105,16 @@ class Chat(object):
             })
             
         self._available_phones = new_available_phones
+
+    def add_available_phone(self, new_available_phone):
+        if not new_available_phone.id in [_a_p.id for _a_p in self._available_phones]:
+            new_available_phones = [{"id": _a_p.id} for _a_p in self._available_phones]
+            new_available_phones.append({"id": new_available_phone.id})
+            self.available_phones = new_available_phones
+
+    def remove_available_phone(self, available_phone):
+        if available_phone.id in [_a_p.id for _a_p in self._available_phones]:
+            self._available_phones = [_a_p for _a_p in self._available_phones if _a_p.id != available_phone.id]
         
     @property
     def internal_id(self):
@@ -95,10 +125,7 @@ class Chat(object):
         if new_value != None and self._internal_id != new_value:
             logging.info(f"Chat {self.id} internal id changed.")
             
-            ApiProcessor().set('chat', { 
-                'id': self.id, 
-                'internalId': new_value
-            })
+            ApiProcessor().set('chat', { 'id': self.id, 'internalId': new_value })
 
         self._internal_id = new_value
         
@@ -111,12 +138,25 @@ class Chat(object):
         if new_value != None and self._title != new_value:
             logging.info(f"Chat {self.id} title changed.")
             
-            ApiProcessor().set('chat', { 
-                'id': self.id, 
-                'title': new_value
-            })
+            ApiProcessor().set('chat', { 'id': self.id, 'title': new_value })
 
         self._title = new_value
+        
+    @property
+    def is_available(self):
+        return self._is_available
+    
+    @is_available.setter
+    def is_available(self, new_value):
+        if self._is_available != new_value:
+            logging.info(f"Chat {self.id} is_available changed.")
+            
+            ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': new_value })
+
+        if not new_value:
+            self.init_event.clear()
+
+        self._is_available = new_value
         
     def from_dict(self, _dict):
         pattern = re.compile(r'(?<!^)(?=[A-Z])')
@@ -127,8 +167,8 @@ class Chat(object):
         return self
 
     def run(self):
-        self.chat_thread = ChatThread(self)
-        self.chat_thread.start()
+        logging.debug(f"Chat {self.id} has {len(self.available_phones)} available phones.")
+        logging.debug(f"Chat {self.id} has {len(self.phones)} wired phones.")
 
         self.chat_media_thread = ChatMediaThread(self)
         self.chat_media_thread.start()

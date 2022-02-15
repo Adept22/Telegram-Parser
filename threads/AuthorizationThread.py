@@ -54,88 +54,66 @@ class AuthorizationThread(KillableThread):
             await self.send_code()
 
     async def async_run(self):
-        new_phone = { "id": self.phone.id }
-        
         if not self.client.is_connected():
             await self.client.connect()
+
+        with self.phone.session_lock:
+            while True:
+                if not await self.client.is_user_authorized():
+                    if self.phone.init_event.is_set():
+                        self.phone.init_event.clear()
+
+                    if self.phone.code != None and self.phone.code_hash != None:
+                        logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
             
-        while True:
-            if not await self.client.is_user_authorized():
-                if self.phone.init_event.is_set():
-                    self.phone.init_event.clear()
-
-                if self.phone.code != None and self.phone.code_hash != None:
-                    logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
-        
-                    try:
-                        await self.client.sign_in(
-                            phone=self.phone.number, 
-                            code=self.phone.code, 
-                            phone_code_hash=self.phone.code_hash
-                        )
-                    except Exception as ex:
-                        logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}.")
-                        
-                        self.phone.is_verified = False
-                        self.phone.code = None
-                        self.phone.code_hash = None
-                        
-                        new_phone['isVerified'] = self.phone.is_verified
-                        new_phone['code'] = self.phone.code
-                        
-                        break
+                        try:
+                            await self.client.sign_in(
+                                phone=self.phone.number, 
+                                code=self.phone.code, 
+                                phone_code_hash=self.phone.code_hash
+                            )
+                        except Exception as ex:
+                            logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}.")
+                            
+                            self.phone.is_verified = False
+                            self.phone.code = None
+                            self.phone.code_hash = None
+                            
+                            break
+                        else:
+                            self.phone.session = self.client.session.save()
+                            self.phone.is_verified = True
+                            self.phone.code = None
+                            self.phone.code_hash = None
+                            
+                            break
+                    elif self.phone.code_hash == None:
+                        try:
+                            await self.send_code()
+                        except Exception as ex:
+                            logging.error(f"Unable to sent code for {self.phone.id}. Exception: {ex}.")
+                            
+                            self.phone.session = None
+                            self.phone.is_banned = True
+                            self.phone.is_verified = False
+                            self.phone.code = None
+                            self.phone.code_hash = None
+                            
+                            break
                     else:
-                        self.phone.session = self.client.session.save()
-                        self.phone.is_verified = True
-                        self.phone.code = None
-                        self.phone.code_hash = None
-                        
-                        new_phone['session'] = self.phone.session
-                        new_phone['isVerified'] = self.phone.is_verified
-                        new_phone['code'] = self.phone.code
-                        
-                        break
-                elif self.phone.code_hash == None:
-                    try:
-                        await self.send_code()
-                    except Exception as ex:
-                        logging.error(f"Unable to sent code for {self.phone.id}. Exception: {ex}.")
-                        
-                        self.phone.session = None
-                        self.phone.is_banned = True
-                        self.phone.is_verified = False
-                        self.phone.code = None
-                        self.phone.code_hash = None
-                        
-                        new_phone['session'] = self.phone.session
-                        new_phone['isBanned'] = self.phone.is_banned
-                        new_phone['isVerified'] = self.phone.is_verified
-                        new_phone['code'] = self.phone.code
-                        
-                        break
+                        await asyncio.sleep(10)
                 else:
-                    await asyncio.sleep(10)
-            else:
-                logging.debug(f"Phone {self.phone.id} actually authorized.")
+                    logging.debug(f"Phone {self.phone.id} actually authorized.")
 
-                if not self.phone.init_event.is_set():
-                    self.phone.init_event.set()
-                
-                break
+                    if not self.phone.init_event.is_set():
+                        self.phone.init_event.set()
+                    
+                    break
                 
         internal_id = await self.get_internal_id()
         
-        if internal_id != None and internal_id != self.phone.internal_id:
+        if internal_id != None:
             self.phone.internal_id = internal_id
-            
-            new_phone['internalId'] = self.phone.internal_id
-            
-        if len(new_phone.items()) > 1:
-            ApiProcessor().set('phone', new_phone)
-            
-        await asyncio.sleep(60)
-
-        await self.async_run()
                 
     def run(self):
         asyncio.run(self.async_run())
