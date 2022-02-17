@@ -5,10 +5,11 @@ services:
         build:
             context: .
             dockerfile: ./Dockerfile
-        network_mode: "host"
+        extra_hosts:
+            - host.docker.internal:host-gateway
         environment:
             TELEGRAM_API_ID: ${TELEGRAM_API_ID}
             TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-            API_URL: ${API_URL:-https://localhost:7006/api/v1/telegram}
-            WEBSOCKET_URL: ${WEBSOCKET_URL:-ws://localhost:7015}
+            API_URL: ${API_URL:-https://host.docker.internal:7006/api/v1/telegram}
+            WEBSOCKET_URL: ${WEBSOCKET_URL:-ws://host.docker.internal:7015}
             WEBSOCKET_REALM: ${WEBSOCKET_REALM:-realm1}
