@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
+import socket
 from sys import stdout
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
@@ -71,9 +72,21 @@ def get_phones():
     for phone in phones:
         set_phone(phone)
 
+def init_api_parser():
+    hostname = socket.gethostname()
+
+    parser = {
+        "ip": socket.gethostbyname("host.docker.internal"),
+        "containerName": hostname
+    }
+
+    print(parser)
+
 class Component(ApplicationSession):
     async def onJoin(self, details):
         logging.info(f"session on_join: {details}")
+        
+        init_api_parser()
         
         get_phones()
         get_chats()
@@ -92,6 +105,7 @@ class Component(ApplicationSession):
         asyncio.get_event_loop().stop()
 
 if __name__ == '__main__':
+    init_api_parser()
     globalvars.init()
     
     fh = RotatingFileHandler(filename='log/dev.log', maxBytes=1048576, backupCount=10)
