@@ -6,6 +6,7 @@ import socket
 from sys import stdout
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
+from requests import get
 from core.ChatsManager import ChatsManager
 
 import globalvars
@@ -73,11 +74,10 @@ def get_phones():
         set_phone(phone)
 
 def init_api_parser():
-    hostname = socket.gethostname()
-
     parser = {
-        "ip": socket.gethostbyname("host.docker.internal"),
-        "containerName": hostname
+        "ip": get('https://api.ipify.org').content.decode('utf8'),
+        "containerId": socket.gethostname(),
+        "containerName": os.environ["HOSTNAME"]
     }
 
     print(parser)
