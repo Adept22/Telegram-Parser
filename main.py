@@ -2,11 +2,9 @@ import os
 import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
-import socket
 from sys import stdout
 from autobahn.asyncio.wamp import ApplicationSession
 from core.ApplicationRunner import ApplicationRunner
-from requests import get
 from core.ChatsManager import ChatsManager
 
 import globalvars
@@ -34,7 +32,7 @@ def set_chat(chat):
         ChatsManager()[chat['id']] = Chat(chat).run()
 
 def get_all_chats(chats=[], start=0, limit=50):
-    new_chats = ApiProcessor().get('chat', {"isAvailable": True, "_start": start, "_limit": limit})
+    new_chats = ApiProcessor().get('telegram/chat', {"isAvailable": True, "_start": start, "_limit": limit})
 
     if len(new_chats) > 0:
         chats += get_all_chats(new_chats, start+limit, limit)
@@ -66,27 +64,16 @@ def set_phone(phone):
         PhonesManager()[phone['id']] = Phone(phone).run()
 
 def get_phones():
-    phones = ApiProcessor().get('phone', { "isBanned": False })
+    phones = ApiProcessor().get('telegram/phone', { "isBanned": False })
 
     logging.debug(f"Received {len(phones)} phones.")
     
     for phone in phones:
         set_phone(phone)
 
-def init_api_parser():
-    parser = {
-        "ip": get('https://api.ipify.org').content.decode('utf8'),
-        "containerId": socket.gethostname(),
-        "containerName": os.environ["HOSTNAME"]
-    }
-
-    print(parser)
-
 class Component(ApplicationSession):
     async def onJoin(self, details):
         logging.info(f"session on_join: {details}")
-        
-        init_api_parser()
         
         get_phones()
         get_chats()
@@ -94,9 +81,9 @@ class Component(ApplicationSession):
         async def on_event(event):
             logging.debug(f"Got event on entity: {event['_']} {event['entity']['id']}")
             
-            if event['_'] == 'TelegramPhone':
+            if event['_'] == 'Telegram\Phone':
                 set_phone(event['entity'])
-            elif event['_'] == 'TelegramChat':
+            elif event['_'] == 'Telegram\Chat':
                 set_chat(event['entity'])
 
         await self.subscribe(on_event, 'com.app.entity')
@@ -105,7 +92,6 @@ class Component(ApplicationSession):
         asyncio.get_event_loop().stop()
 
 if __name__ == '__main__':
-    init_api_parser()
     globalvars.init()
     
     fh = RotatingFileHandler(filename='log/dev.log', maxBytes=1048576, backupCount=10)

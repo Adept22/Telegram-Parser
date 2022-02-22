@@ -29,7 +29,7 @@ class ChatMediaThread(KillableThread):
                 async for photo in client.iter_profile_photos(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
                     new_media = { 'internalId': photo.id }
 
-                    medias = ApiProcessor().get('chat-media', new_media)
+                    medias = ApiProcessor().get('telegram/chat-media', new_media)
 
                     if len(medias) > 0:
                         new_media = medias[0]
@@ -61,7 +61,7 @@ class ChatMediaThread(KillableThread):
                                 'path': path[2:] 
                             }
                                 
-                            ApiProcessor().set('chat-media', new_media)
+                            ApiProcessor().set('telegram/chat-media', new_media)
                     except Exception as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
                     else:

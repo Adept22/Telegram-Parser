@@ -31,7 +31,7 @@ class MembersThread(KillableThread):
             'about': full_user.about
         }
         
-        members = ApiProcessor().get('member', { 'internalId': new_member['internalId'] })
+        members = ApiProcessor().get('telegram/member', { 'internalId': new_member['internalId'] })
         
         if len(members) > 0:
             if members[0].get('id') != None:
@@ -46,7 +46,7 @@ class MembersThread(KillableThread):
         }
         
         if new_chat_member['member'].get('id') != None:
-            chat_members = ApiProcessor().get('chat-member', new_chat_member)
+            chat_members = ApiProcessor().get('telegram/chat-member', new_chat_member)
             
             if len(chat_members) > 0:
                 if chat_members[0].get('id') != None:
@@ -68,7 +68,7 @@ class MembersThread(KillableThread):
             new_chat_member_role['code'] = "member"
         
         if new_chat_member_role['member'].get('id') != None:
-            chat_member_roles = ApiProcessor().get('chat-member-role', new_chat_member_role)
+            chat_member_roles = ApiProcessor().get('telegram/chat-member-role', new_chat_member_role)
             
             if len(chat_member_roles) > 0:
                 if chat_member_roles[0].get('id') != None:
@@ -96,7 +96,7 @@ class MembersThread(KillableThread):
                     chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     
                     try:
-                        chat_member_role = ApiProcessor().set('chat-member-role', chat_member_role) 
+                        chat_member_role = ApiProcessor().set('telegram/chat-member-role', chat_member_role) 
                     except Exception as ex:
                         logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}. Exception: {ex}.")
 
@@ -110,7 +110,7 @@ class MembersThread(KillableThread):
                             async for photo in client.iter_profile_photos(user.id):
                                 new_media = { 'internalId': photo.id }
 
-                                medias = ApiProcessor().get('member-media', new_media)
+                                medias = ApiProcessor().get('telegram/member-media', new_media)
 
                                 if len(medias) > 0:
                                     new_media = medias[0]
@@ -142,7 +142,7 @@ class MembersThread(KillableThread):
                                             'path': path[2:]
                                         }
                                             
-                                        ApiProcessor().set('member-media', new_media)
+                                        ApiProcessor().set('telegram/member-media', new_media)
                                 except Exception as ex:
                                     logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
                                 else:

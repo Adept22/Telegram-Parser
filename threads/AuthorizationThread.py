@@ -2,6 +2,7 @@ import os
 import threading
 import asyncio
 import logging
+import globalvars
 
 from telethon import sync, errors, sessions
 from processors.ApiProcessor import ApiProcessor
@@ -19,8 +20,8 @@ class AuthorizationThread(KillableThread):
         
         self.client = sync.TelegramClient(
             session=sessions.StringSession(self.phone.session), 
-            api_id=os.environ['TELEGRAM_API_ID'],
-            api_hash=os.environ['TELEGRAM_API_HASH'],
+            api_id=globalvars.parser['api_id'], 
+            api_hash=globalvars.parser['api_hash'], 
             loop=self.loop
         )
         

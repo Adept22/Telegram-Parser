@@ -4,6 +4,7 @@ import queue
 import re
 import asyncio
 import threading
+import globalvars
 
 from telethon import sync, sessions, errors
 from processors.ApiProcessor import ApiProcessor
@@ -55,7 +56,7 @@ class Phone(object):
         if new_value != None and self._internal_id != new_value:
             logging.info(f"Phone {self.id} internal_id changed.")
 
-            ApiProcessor().set('phone', {'id': self.id, 'internalId': new_value})
+            ApiProcessor().set('telegram/phone', {'id': self.id, 'internalId': new_value})
 
         self._internal_id = new_value
 
@@ -68,7 +69,7 @@ class Phone(object):
         if self._is_verified != new_value:
             logging.info(f"Phone {self.id} is_verified changed.")
 
-            ApiProcessor().set('phone', {'id': self.id, 'isVerified': new_value})
+            ApiProcessor().set('telegram/phone', {'id': self.id, 'isVerified': new_value})
 
         self._is_verified = new_value
 
@@ -81,7 +82,7 @@ class Phone(object):
         if self._code != new_value:
             logging.info(f"Phone {self.id} code changed.")
 
-            ApiProcessor().set('phone', {'id': self.id, 'code': new_value})
+            ApiProcessor().set('telegram/phone', {'id': self.id, 'code': new_value})
 
         self._code = new_value
 
@@ -94,7 +95,7 @@ class Phone(object):
         if self._session != new_value:
             logging.info(f"Phone {self.id} session changed.")
 
-            ApiProcessor().set('phone', {'id': self.id, 'session': new_value})
+            ApiProcessor().set('telegram/phone', {'id': self.id, 'session': new_value})
 
         self._session = new_value
 
@@ -107,7 +108,7 @@ class Phone(object):
         if self._is_banned != new_value:
             logging.info(f"Phone {self.id} is_banned changed.")
 
-            ApiProcessor().set('phone', {'id': self.id, 'isBanned': new_value})
+            ApiProcessor().set('telegram/phone', {'id': self.id, 'isBanned': new_value})
 
         self._is_banned = new_value
         
@@ -123,8 +124,8 @@ class Phone(object):
         with self.session_lock:
             client = sync.TelegramClient(
                 session=sessions.StringSession(self.session), 
-                api_id=os.environ['TELEGRAM_API_ID'],
-                api_hash=os.environ['TELEGRAM_API_HASH'],
+                api_id=globalvars.parser['api_id'],
+                api_hash=globalvars.parser['api_hash'],
                 loop=loop
             )
             

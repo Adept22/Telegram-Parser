@@ -67,7 +67,7 @@ class Chat(object):
             any(x.id != y.id for x, y in zip(new_phones, self._phones)):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_phones)}.")
             
-            ApiProcessor().set('chat', { 
+            ApiProcessor().set('telegram/chat', { 
                 'id': self.id, 
                 'phones': [{ 'id': phone.id } for phone in new_phones] 
             })
@@ -99,7 +99,7 @@ class Chat(object):
             any(x.id != y.id for x, y in zip(new_available_phones, self._available_phones)):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_available_phones)}.")
             
-            ApiProcessor().set('chat', { 
+            ApiProcessor().set('telegram/chat', { 
                 'id': self.id, 
                 'availablePhones': [{ 'id': phone.id } for phone in new_available_phones] 
             })
@@ -125,7 +125,7 @@ class Chat(object):
         if new_value != None and self._internal_id != new_value:
             logging.info(f"Chat {self.id} internal id changed.")
             
-            ApiProcessor().set('chat', { 'id': self.id, 'internalId': new_value })
+            ApiProcessor().set('telegram/chat', { 'id': self.id, 'internalId': new_value })
 
         self._internal_id = new_value
         
@@ -138,7 +138,7 @@ class Chat(object):
         if new_value != None and self._title != new_value:
             logging.info(f"Chat {self.id} title changed.")
             
-            ApiProcessor().set('chat', { 'id': self.id, 'title': new_value })
+            ApiProcessor().set('telegram/chat', { 'id': self.id, 'title': new_value })
 
         self._title = new_value
         
@@ -151,7 +151,7 @@ class Chat(object):
         if self._is_available != new_value:
             logging.info(f"Chat {self.id} is_available changed.")
             
-            ApiProcessor().set('chat', { 'id': self.id, 'isAvailable': new_value })
+            ApiProcessor().set('telegram/chat', { 'id': self.id, 'isAvailable': new_value })
 
         if not new_value:
             self.init_event.clear()

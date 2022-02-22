@@ -25,7 +25,7 @@ class MessageMediaThread(KillableThread):
     async def file_download(self, client, media):
         new_media = { 'internalId': media.id }
 
-        medias = ApiProcessor().get('message-media', new_media)
+        medias = ApiProcessor().get('telegram/message-media', new_media)
 
         if len(medias) > 0:
             new_media = medias[0]
@@ -55,7 +55,7 @@ class MessageMediaThread(KillableThread):
                     'path': path[2:]
                 }
 
-                ApiProcessor().set('message-media', new_media)
+                ApiProcessor().set('telegram/message-media', new_media)
         except Exception as ex:
             logging.error(f"Can't save message {self.message['id']} media. Exception: {ex}.")
         else:

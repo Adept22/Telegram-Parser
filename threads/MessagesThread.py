@@ -33,12 +33,12 @@ class MessagesThread(KillableThread):
                 }
             }
 
-            members = ApiProcessor().get('member', {'internalId': new_chat_member['member']['internalId']})
+            members = ApiProcessor().get('telegram/member', {'internalId': new_chat_member['member']['internalId']})
 
             if len(members) > 0:
                 new_chat_member['member']['id'] = members[0]['id']
 
-                chat_members = ApiProcessor().get('chat-member', new_chat_member)
+                chat_members = ApiProcessor().get('telegram/chat-member', new_chat_member)
                 
                 if len(chat_members) > 0:
                     new_chat_member['id'] = chat_members[0]['id']
@@ -54,7 +54,7 @@ class MessagesThread(KillableThread):
                 'chat': { 'id': self.chat.id }
             }
 
-            messages = ApiProcessor().get('message', new_reply_to)
+            messages = ApiProcessor().get('telegram/message', new_reply_to)
 
             if len(messages) > 0:
                 new_reply_to['id'] = messages[0]['id']
@@ -133,13 +133,13 @@ class MessagesThread(KillableThread):
                             'createdAt': tg_message.date.isoformat() 
                         }
 
-                        messages = ApiProcessor().get('message', { 'internalId': tg_message.id })
+                        messages = ApiProcessor().get('telegram/message', { 'internalId': tg_message.id })
             
                         if len(messages) > 0:
                             if messages[0].get('id') != None:
                                 new_message['id'] = messages[0]['id']
                         
-                        new_message = ApiProcessor().set('message', new_message)
+                        new_message = ApiProcessor().set('telegram/message', new_message)
                     except Exception as ex:
                         logging.error(f"Can't save chat {self.chat.id} message. Exception: {ex}.")
                     else:

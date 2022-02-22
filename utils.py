@@ -33,30 +33,6 @@ def get_hash(link):
 
     return channel, hash
 
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, item):
-        if isinstance(item, datetime):
-            return item.isoformat()
-        if isinstance(item, bytes):
-            return list(item)
-        return json.JSONEncoder.default(self, item)
-
-async def profile_media_process(client, entity, uuid, media_type):
-    pathFolder = f'./uploads/{media_type}-media/{uuid}/'
-
-    pathToFile = await client.download_profile_photo(
-        entity=entity,
-        file=f'{pathFolder}0',
-        download_big=True
-    )
-
-    if pathToFile != None:
-        ApiProcessor().set(f'{media_type}-media', { 
-            media_type: { "id": uuid }, 
-			'internalId': f'{entity.id}',
-            'path': f'{pathFolder}/{re.split("/", pathToFile)[-1]}'
-        })
-
 def user_title(user):
     if user.username != None:
         return user.username

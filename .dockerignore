@@ -1,7 +1,8 @@
 **/__pycache__
 **/.classpath
 **/.dockerignore
-**/.env
+**/.env.local
+**/.env.*.local
 **/.git
 **/.gitignore
 **/.project
@@ -22,6 +23,6 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
-README.md
 **/log/*
 **/uploads/*
+README.md

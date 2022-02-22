@@ -1,9 +1,10 @@
 import os
 import requests
+from requests import exceptions
 from urllib.parse import urlencode
 
 class ApiProcessor():
-    def get_sort(self, body = None):
+    def get_sort(self, body=None):
         if body != None:
             sort_props = ['_start', '_limit', '_order', '_sort']
             
@@ -18,9 +19,10 @@ class ApiProcessor():
                     del body[key]
                 
                 return '?' + urlencode(sort)
+            
         return ''
 
-    def get(self, type, body = None):
+    def get(self, type, body=None):
         if body and 'id' in body:
             method = 'GET'
             url = os.environ['API_URL'] + '/' + type + '/' + body['id']
@@ -30,7 +32,7 @@ class ApiProcessor():
 
         return self.send(method, url, body)
 
-    def set(self, type, body = None):
+    def set(self, type, body=None):
         if body and 'id' in body:
             method = 'PUT'
             url = os.environ['API_URL'] + '/' + type + '/' + body['id']
@@ -40,14 +42,14 @@ class ApiProcessor():
 
         return self.send(method, url, body)
 
-    def delete(self, type, body = None):
+    def delete(self, type, body=None):
         if not body or not 'id' in body:
             raise Exception('Не указан идентификатор')
 
-        return requests.delete(os.environ['API_URL'] + '/' + type + '/' + body['id'])
+        return self.send("DELETE", os.environ['API_URL'] + '/' + type + '/' + body['id'])
 
-    def send(self, method, url, body = None):
-        r = requests.request(method, url, json = body, verify = False)
+    def send(self, method, url, body=None):
+        r = requests.request(method, url, json=body, verify=False)
         r.raise_for_status()
 
         return r.json()
