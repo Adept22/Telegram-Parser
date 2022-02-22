@@ -237,6 +237,6 @@ class Chat(object):
         ) as ex:
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
-            return
+            return await self.get_internal_id(client)
         else:
             return updates.chats[0]
