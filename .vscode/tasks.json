@@ -8,7 +8,10 @@
             "dockerRun": {
                 "containerName": "telegram-parser",
                 "image": "telegram-parser:latest",
-                "envFiles": [ ".env", ".env.local" ],
+                "envFiles": [ 
+                    ".env", 
+                    ".env.local",
+                    ".env.debug" ],
                 "volumes": [
                     {
                         "localPath": "${workspaceFolder}",
