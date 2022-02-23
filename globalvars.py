@@ -16,8 +16,8 @@ def init():
     if "PARSER_ID" in os.environ:
         parser = ApiProcessor().get('telegram/parser', {'id': os.environ['PARSER_ID']})
         
-        if parser["host"]["localIp"] != socket.gethostbyname(socket.gethostname()):
-            raise Exception("Can't start parser. Parser host local id doesn't equal with current host local ip.")
+        # if parser["host"]["localIp"] != socket.gethostbyname(socket.gethostname()):
+        #     raise Exception("Can't start parser. Parser host local ip doesn't equal with current host local ip.")
         
         ApiProcessor().set('telegram/parser', {'id': parser['id'], 'status': 'running'})
     else:

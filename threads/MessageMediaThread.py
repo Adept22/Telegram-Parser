@@ -12,7 +12,7 @@ class MessageMediaThread(KillableThread):
         threading.Thread.__init__(self, name=f"MessageMediaThread-{message['id']}")
         self.daemon = True
 
-        self.media_path = f"./uploads/chat/{message['chat']['id']}/messages"
+        self.media_path = f"./downloads/chat/{message['chat']['id']}/messages/{message['id']}"
         
         self.phone = phone
         self.message = message
@@ -29,21 +29,19 @@ class MessageMediaThread(KillableThread):
 
         if len(medias) > 0:
             new_media = medias[0]
-
-            if os.path.exists(new_media['path']):
-                logging.debug(f"Message media {new_media['id']} exist. Continue.")
-            
-                await asyncio.sleep(1)
+                                
+            if 'path' in new_media and new_media['path'] != None:
+                logging.debug(f"Message {self.message['id']} media {new_media['id']} exist on server. Continue.")
 
                 return
 
-        try:
-            def progress_callback(current, total):
-                logging.debug(f"Message {self.message['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
+        def progress_callback(current, total):
+            logging.debug(f"Message {self.message['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
 
+        try:
             path = await client.download_media(
                 message=media,
-                file=f"{self.media_path}/{self.message['id']}",
+                file=f"{self.media_path}/{media.id}",
                 progress_callback=progress_callback
             )
 
@@ -51,11 +49,22 @@ class MessageMediaThread(KillableThread):
                 new_media = {
                     **new_media,
                     'message': {"id": self.message['id']}, 
-                    'createdAt': media.date.isoformat(), 
-                    'path': path[2:]
+                    'createdAt': media.date.isoformat()
                 }
 
-                ApiProcessor().set('telegram/message-media', new_media)
+                new_media = ApiProcessor().set('telegram/message-media', new_media)
+
+                try:
+                    ApiProcessor().upload('telegram/message-media', new_media, path)
+                except Exception as ex:
+                    logging.error(f"Can\'t upload message {self.message['id']} media. Exception: {ex}.")
+                else:
+                    logging.info(f"Sucessfuly uploaded message {self.message['id']} media.")
+                
+                try:
+                    os.remove(path)
+                except:
+                    pass
         except Exception as ex:
             logging.error(f"Can't save message {self.message['id']} media. Exception: {ex}.")
         else:

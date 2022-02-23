@@ -64,7 +64,7 @@ class Chat(object):
                 a_ps[id].joining_queue.put(self)
         
         if len(new_phones) != len(self._phones) or \
-            any(x.id != y.id for x, y in zip(new_phones, self._phones)):
+            len(set([p.id for p in new_phones]) ^ set([p.id for p in self._phones])):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_phones)}.")
             
             ApiProcessor().set('telegram/chat', { 
@@ -96,7 +96,7 @@ class Chat(object):
         new_available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
         
         if len(new_available_phones) != len(self._available_phones) or \
-            any(x.id != y.id for x, y in zip(new_available_phones, self._available_phones)):
+            len(set([p.id for p in new_available_phones]) ^ set([p.id for p in self._available_phones])):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_available_phones)}.")
             
             ApiProcessor().set('telegram/chat', { 
@@ -237,6 +237,6 @@ class Chat(object):
         ) as ex:
             raise ChatNotAvailableError(ex)
         except errors.UserAlreadyParticipantError as ex:
-            return
+            return await self.get_internal_id(client)
         else:
             return updates.chats[0]

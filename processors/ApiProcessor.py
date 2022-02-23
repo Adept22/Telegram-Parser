@@ -48,8 +48,24 @@ class ApiProcessor():
 
         return self.send("DELETE", os.environ['API_URL'] + '/' + type + '/' + body['id'])
 
-    def send(self, method, url, body=None):
-        r = requests.request(method, url, json=body, verify=False)
+    def upload(self, type, body, file):
+        if not body or not 'id' in body:
+            raise Exception('Не указан идентификатор')
+
+        return self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/upload', files={'file': open(file, 'rb')})
+
+    def send(self, method, url, body=None, files=None):
+        r = requests.request(
+            method, 
+            url, 
+            headers={'Accept': 'application/json'}, 
+            json=body, 
+            files=files, 
+            verify=False
+        )
         r.raise_for_status()
+        
+        if r.status_code == 204:
+            return None
 
         return r.json()

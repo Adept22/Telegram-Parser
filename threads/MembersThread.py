@@ -16,6 +16,7 @@ class MembersThread(KillableThread):
         threading.Thread.__init__(self, name=f'MembersThread-{chat.id}')
         self.daemon = True
         
+        self.media_path = f"./downloads/members"
         self.chat = chat
         self.loop = asyncio.new_event_loop()
         
@@ -114,21 +115,21 @@ class MembersThread(KillableThread):
 
                                 if len(medias) > 0:
                                     new_media = medias[0]
+                                
+                                    if 'path' in new_media and new_media['path'] != None:
+                                        logging.debug(f"Member {member['id']} media {new_media['id']} exist on server. Continue.")
 
-                                    if os.path.exists(new_media['path']):
-                                        logging.debug(f"Member {member['id']} media {new_media['id']} exist. Continue.")
-                                    
                                         await asyncio.sleep(1)
 
                                         continue
 
-                                try:
-                                    def progress_callback(current, total):
-                                        logging.debug(f"Member {member['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
+                                def progress_callback(current, total):
+                                    logging.debug(f"Member {member['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
 
+                                try:
                                     path = await client.download_media(
                                         message=photo,
-                                        file=f"./uploads/member/{member['id']}/{photo.id}",
+                                        file=self.media_path + f"/{member['id']}/{photo.id}",
                                         thumb=photo.sizes[-2],
                                         progress_callback=progress_callback
                                     )
@@ -139,10 +140,21 @@ class MembersThread(KillableThread):
                                             'member': {"id": member['id']}, 
                                             'internalId': photo.id,
                                             'createdAt': photo.date.isoformat(),
-                                            'path': path[2:]
                                         }
                                             
-                                        ApiProcessor().set('telegram/member-media', new_media)
+                                        new_media = ApiProcessor().set('telegram/member-media', new_media)
+
+                                        try:
+                                            ApiProcessor().upload('telegram/member-media', new_media, path)
+                                        except Exception as ex:
+                                            logging.error(f"Can\'t upload member {member['id']} media. Exception: {ex}.")
+                                        else:
+                                            logging.info(f"Sucessfuly uploaded member {member['id']} media.")
+
+                                        try:
+                                            os.remove(path)
+                                        except:
+                                            pass
                                 except Exception as ex:
                                     logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
                                 else:
