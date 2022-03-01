@@ -81,6 +81,12 @@ class MessagesThread(KillableThread):
                 
         return fwd_from_id, fwd_from_name
 
+    async def get_entity(self, client):
+        try:
+            return await client.get_entity(entity=types.PeerChannel(channel_id=self.chat.internal_id))
+        except ValueError:
+            return await client.get_entity(entity=types.PeerChat(chat_id=self.chat.internal_id))
+
     async def async_run(self):
         for phone in self.chat.phones:
             logging.info(f"Recieving messages from chat {self.chat.id}.")
@@ -96,9 +102,9 @@ class MessagesThread(KillableThread):
                 #     logging.info(f"Last message in API exist. Continue."")
 
                 #     new_message = messages[0]
-                
-                entity = await client.get_entity(types.PeerChannel(channel_id=self.chat.internal_id))
 
+                entity = await self.get_entity(client)
+                
                 all_messages = await client.get_messages(entity=entity, limit=0, max_id=new_message['internalId'])
 
                 logging.info(f"Chat {self.chat.id} total messages {all_messages.total}.")

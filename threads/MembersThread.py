@@ -5,7 +5,7 @@ import logging
 from errors.ClientNotAvailableError import ClientNotAvailableError
 import globalvars
 import os
-from telethon import types, functions, errors
+from telethon import types, functions, errors, sync
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
@@ -76,13 +76,21 @@ class MembersThread(KillableThread):
                     new_chat_member_role['id'] = chat_member_roles[0]['id']
                     
         return new_chat_member_role
+
+    async def get_entity(self, client):
+        try:
+            return await client.get_entity(entity=types.PeerChannel(channel_id=self.chat.internal_id))
+        except ValueError:
+            return await client.get_entity(entity=types.PeerChat(chat_id=self.chat.internal_id))
     
     async def async_run(self):
         for phone in self.chat.phones:
             try:
-                client = await phone.new_client(loop=self.loop)
+                client:sync.TelegramClient = await phone.new_client(loop=self.loop)
 
-                async for user in client.iter_participants(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
+                entity = await self.get_entity(client)
+
+                async for user in client.iter_participants(entity=entity):
                     logging.debug(f"Chat {self.chat.title}. Received user '{user_title(user)}'")
                     
                     if user.id in globalvars.phones_tg_ids:

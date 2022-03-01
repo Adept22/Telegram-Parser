@@ -20,13 +20,21 @@ class ChatMediaThread(KillableThread):
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
+
+    async def get_entity(self, client):
+        try:
+            return await client.get_entity(entity=types.PeerChannel(channel_id=self.chat.internal_id))
+        except ValueError:
+            return await client.get_entity(entity=types.PeerChat(chat_id=self.chat.internal_id))
         
     async def async_run(self):
         for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
+
+                entity = await self.get_entity(client)
                 
-                async for photo in client.iter_profile_photos(entity=types.PeerChannel(channel_id=self.chat.internal_id)):
+                async for photo in client.iter_profile_photos(entity=entity):
                     new_media = { 'internalId': photo.id }
 
                     medias = ApiProcessor().get('telegram/chat-media', new_media)
