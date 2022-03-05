@@ -165,14 +165,10 @@ class MessagesThread(KillableThread):
                 logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
 
                 self.chat.is_available = False
-            except ClientNotAvailableError as ex:
-                logging.error(f"Phone {phone.id} not available for chat {self.chat.id}. Exception: {ex}.")
-
-                self.chat.remove_phone(phone)
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
-                
-                await asyncio.sleep(random.randint(2, 5))
+
+                self.chat.remove_phone(phone)
                 
                 continue
             else:

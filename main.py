@@ -74,9 +74,6 @@ def get_phones():
 class Component(ApplicationSession):
     async def onJoin(self, details):
         logging.info(f"session on_join: {details}")
-        
-        get_phones()
-        get_chats()
 
         async def on_event(event):
             logging.debug(f"Got event on entity: {event['_']} {event['entity']['id']}")
@@ -111,6 +108,9 @@ if __name__ == '__main__':
     logging.getLogger('telethon').setLevel(logging.CRITICAL)
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+        
+    get_phones()
+    get_chats()
     
     runner = ApplicationRunner(os.environ['WEBSOCKET_URL'], os.environ['WEBSOCKET_REALM'])
     runner.run(Component)

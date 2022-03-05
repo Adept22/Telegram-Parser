@@ -10,13 +10,18 @@ ENV PYTHONUNBUFFERED=1
 # Turns off warning unverified HTTPS request
 ENV PYTHONWARNINGS="ignore:Unverified HTTPS request"
 
+COPY docker/docker-healthcheck.sh /usr/local/bin/docker-healthcheck
+RUN chmod +x /usr/local/bin/docker-healthcheck
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["docker-healthcheck"]
+
 WORKDIR /srv/app
 
 # Install pip requirements
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt
 
-COPY . /srv/app
+COPY . .
 
 # Creates a non-root user with an explicit UID and adds permission to access the /app folder
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers

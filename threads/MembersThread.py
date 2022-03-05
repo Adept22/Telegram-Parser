@@ -86,7 +86,7 @@ class MembersThread(KillableThread):
     async def async_run(self):
         for phone in self.chat.phones:
             try:
-                client:sync.TelegramClient = await phone.new_client(loop=self.loop)
+                client = await phone.new_client(loop=self.loop)
 
                 entity = await self.get_entity(client)
 
@@ -177,14 +177,10 @@ class MembersThread(KillableThread):
                 logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
                 
                 self.chat.is_available = False
-            except ClientNotAvailableError as ex:
-                logging.error(f"Phone {phone.id} not available for chat {self.chat.id}. Exception: {ex}.")
+            except Exception as ex:
+                logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.id}. Exception: {ex}.")
 
                 self.chat.remove_phone(phone)
-            except Exception as ex:
-                logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.number}. Exception: {ex}.")
-                
-                await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             else:
