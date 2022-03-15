@@ -5,7 +5,6 @@ import logging
 import globalvars
 
 from telethon import sync, errors, sessions
-from processors.ApiProcessor import ApiProcessor
 from threads.KillableThread import KillableThread
 
 class AuthorizationThread(KillableThread):
@@ -18,14 +17,14 @@ class AuthorizationThread(KillableThread):
         
         self.loop = asyncio.new_event_loop()
         
+        asyncio.set_event_loop(self.loop)
+        
         self.client = sync.TelegramClient(
             session=sessions.StringSession(self.phone.session), 
             api_id=globalvars.parser['api_id'], 
             api_hash=globalvars.parser['api_hash'], 
             loop=self.loop
         )
-        
-        asyncio.set_event_loop(self.loop)
         
     async def get_internal_id(self):
         try:

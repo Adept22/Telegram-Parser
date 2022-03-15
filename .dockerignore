@@ -25,5 +25,5 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 **/log/*
-**/uploads/*
+**/downloads/*
 README.md

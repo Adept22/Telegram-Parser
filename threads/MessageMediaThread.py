@@ -61,10 +61,10 @@ class MessageMediaThread(KillableThread):
                 else:
                     logging.info(f"Sucessfuly uploaded message {self.message['id']} media.")
                 
-                try:
-                    os.remove(path)
-                except:
-                    pass
+                    try:
+                        os.remove(path)
+                    except:
+                        pass
         except Exception as ex:
             logging.error(f"Can't save message {self.message['id']} media. Exception: {ex}.")
         else:

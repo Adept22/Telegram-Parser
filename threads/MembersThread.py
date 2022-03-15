@@ -159,10 +159,10 @@ class MembersThread(KillableThread):
                                         else:
                                             logging.info(f"Sucessfuly uploaded member {member['id']} media.")
 
-                                        try:
-                                            os.remove(path)
-                                        except:
-                                            pass
+                                            try:
+                                                os.remove(path)
+                                            except:
+                                                pass
                                 except Exception as ex:
                                     logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
                                 else:

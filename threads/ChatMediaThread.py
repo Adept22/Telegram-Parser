@@ -77,10 +77,10 @@ class ChatMediaThread(KillableThread):
                             else:
                                 logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
 
-                            try:
-                                os.remove(path)
-                            except:
-                                pass
+                                try:
+                                    os.remove(path)
+                                except:
+                                    pass
                     except Exception as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
                     else:
