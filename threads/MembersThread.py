@@ -1,11 +1,8 @@
-import random
 import threading
 import asyncio
 import logging
-from errors.ClientNotAvailableError import ClientNotAvailableError
-import globalvars
 import os
-from telethon import types, functions, errors, sync
+from telethon import types, functions, errors
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
@@ -92,11 +89,6 @@ class MembersThread(KillableThread):
 
                 async for user in client.iter_participants(entity=entity):
                     logging.debug(f"Chat {self.chat.title}. Received user '{user_title(user)}'")
-                    
-                    if user.id in globalvars.phones_tg_ids:
-                        logging.debug(f"Chat {self.chat.id}. User '{user.first_name}' is our phone. Continue.")
-                        
-                        continue
 
                     full_user = await client(functions.users.GetFullUserRequest(id=user.id))
 
@@ -107,7 +99,8 @@ class MembersThread(KillableThread):
                     try:
                         chat_member_role = ApiProcessor().set('telegram/chat-member-role', chat_member_role) 
                     except Exception as ex:
-                        logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}. Exception: {ex}.")
+                        logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}.")
+                        logging.exception(ex)
 
                         continue
                     else:
@@ -145,9 +138,9 @@ class MembersThread(KillableThread):
                                     if path != None:
                                         new_media = { 
                                             **new_media,
-                                            'member': {"id": member['id']}, 
+                                            'member': { "id": member['id'] }, 
                                             'internalId': photo.id,
-                                            'createdAt': photo.date.isoformat(),
+                                            'date': photo.date.isoformat()
                                         }
                                             
                                         new_media = ApiProcessor().set('telegram/member-media', new_media)
@@ -155,7 +148,8 @@ class MembersThread(KillableThread):
                                         try:
                                             ApiProcessor().upload('telegram/member-media', new_media, path)
                                         except Exception as ex:
-                                            logging.error(f"Can\'t upload member {member['id']} media. Exception: {ex}.")
+                                            logging.error(f"Can\'t upload member {member['id']} media.")
+                                            logging.exception(ex)
                                         else:
                                             logging.info(f"Sucessfuly uploaded member {member['id']} media.")
 
@@ -165,20 +159,24 @@ class MembersThread(KillableThread):
                                                 pass
                                 except Exception as ex:
                                     logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
+                                    logging.exception(ex)
                                 else:
                                     logging.info(f"Sucessfuly saved member {member['id']} media.")
                         except Exception as ex:
-                            logging.error(f"Can't get member {member['id']} media using phone {phone.id}. Exception: {ex}.")
+                            logging.error(f"Can't get member {member['id']} media using phone {phone.id}.")
+                            logging.exception(ex)
             except (
                 errors.ChannelInvalidError,
                 errors.ChannelPrivateError,
                 errors.ChatAdminRequiredError
             ) as ex:
-                logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
+                logging.error(f"Chat {self.chat.id} not available.")
+                logging.exception(ex)
                 
                 self.chat.is_available = False
             except Exception as ex:
-                logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.id}. Exception: {ex}.")
+                logging.error(f"Can\'t get chat {self.chat.title} participants using phone {phone.id}.")
+                logging.exception(ex)
 
                 self.chat.remove_phone(phone)
                 

@@ -1,9 +1,6 @@
-import random
 import threading
 import asyncio
 import logging
-from errors.ClientNotAvailableError import ClientNotAvailableError
-import globalvars
 from telethon import types, errors
 
 from threads.MessageMediaThread import MessageMediaThread
@@ -115,12 +112,6 @@ class MessagesThread(KillableThread):
                     if not isinstance(tg_message, types.Message):
                         continue
                     
-                    if isinstance(tg_message.peer_id, types.PeerUser):
-                        if tg_message.peer_id.user_id in globalvars.phones_tg_ids:
-                            logging.debug(f"Chat {self.chat.id}. Message {tg_message.id} is our phone message. Continue.")
-                            
-                            continue
-                    
                     try:
                         logging.debug(f"Saving message '{tg_message.id}' at '{tg_message.date}'")
                         
@@ -136,7 +127,7 @@ class MessagesThread(KillableThread):
                             'forwardedFromId': fwd_from_id, 
                             'forwardedFromName': fwd_from_name, 
                             'groupedId': tg_message.grouped_id, 
-                            'createdAt': tg_message.date.isoformat() 
+                            'date': tg_message.date.isoformat() 
                         }
 
                         messages = ApiProcessor().get('telegram/message', { 'internalId': tg_message.id })
@@ -147,7 +138,8 @@ class MessagesThread(KillableThread):
                         
                         new_message = ApiProcessor().set('telegram/message', new_message)
                     except Exception as ex:
-                        logging.error(f"Can't save chat {self.chat.id} message. Exception: {ex}.")
+                        logging.error(f"Can't save chat {self.chat.id} message.")
+                        logging.exception(ex)
                     else:
                         logging.debug(f"Message '{new_message['id']}' at '{new_message['createdAt']}' saved.")
 
@@ -162,11 +154,13 @@ class MessagesThread(KillableThread):
                 errors.ChatIdInvalidError,
                 errors.PeerIdInvalidError
             ) as ex:
-                logging.error(f"Chat {self.chat.id} not available. Exception: {ex}.")
+                logging.error(f"Chat {self.chat.id} not available.")
+                logging.exception(ex)
 
                 self.chat.is_available = False
             except Exception as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}. Exception: {ex}.")
+                logging.error(f"Can\'t get chat {self.chat.id} messages using phone {phone.id}.")
+                logging.exception(ex)
 
                 self.chat.remove_phone(phone)
                 

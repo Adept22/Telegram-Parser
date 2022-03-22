@@ -49,7 +49,7 @@ class MessageMediaThread(KillableThread):
                 new_media = {
                     **new_media,
                     'message': {"id": self.message['id']}, 
-                    'createdAt': media.date.isoformat()
+                    'date': media.date.isoformat()
                 }
 
                 new_media = ApiProcessor().set('telegram/message-media', new_media)
@@ -57,7 +57,8 @@ class MessageMediaThread(KillableThread):
                 try:
                     ApiProcessor().upload('telegram/message-media', new_media, path)
                 except Exception as ex:
-                    logging.error(f"Can\'t upload message {self.message['id']} media. Exception: {ex}.")
+                    logging.error(f"Can\'t upload message {self.message['id']} media.")
+                    logging.exception(ex)
                 else:
                     logging.info(f"Sucessfuly uploaded message {self.message['id']} media.")
                 
@@ -66,7 +67,8 @@ class MessageMediaThread(KillableThread):
                     except:
                         pass
         except Exception as ex:
-            logging.error(f"Can't save message {self.message['id']} media. Exception: {ex}.")
+            logging.error(f"Can't save message {self.message['id']} media.")
+            logging.exception(ex)
         else:
             logging.info(f"Sucessfuly saved message {self.message['id']} media!")
 
@@ -87,7 +89,8 @@ class MessageMediaThread(KillableThread):
             elif isinstance(self.tg_message.media, types.MessageMediaDocument):
                 await self.file_download(client, self.tg_message.document)
         except Exception as ex:
-            logging.error(f"Message {self.message['id']} media download failed. Exception: {ex}.")
+            logging.error(f"Message {self.message['id']} media download failed.")
+            logging.exception(ex)
         else:
             logging.info(f"Message {self.message['id']} media download success.")
         

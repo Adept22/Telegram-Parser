@@ -65,7 +65,7 @@ class ChatMediaThread(KillableThread):
                                 **new_media, 
                                 'chat': {"id": self.chat.id}, 
                                 'internalId': photo.id, 
-                                'createdAt': photo.date.isoformat()
+                                'date': photo.date.isoformat()
                             }
                                 
                             new_media = ApiProcessor().set('telegram/chat-media', new_media)
@@ -73,7 +73,8 @@ class ChatMediaThread(KillableThread):
                             try:
                                 ApiProcessor().upload('telegram/chat-media', new_media, path)
                             except Exception as ex:
-                                logging.error(f"Can\'t upload chat {self.chat.id} media. Exception: {ex}.")
+                                logging.error(f"Can\'t upload chat {self.chat.id} media.")
+                                logging.exception(ex)
                             else:
                                 logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
 
@@ -82,11 +83,13 @@ class ChatMediaThread(KillableThread):
                                 except:
                                     pass
                     except Exception as ex:
-                        logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
+                        logging.error(f"Can\'t save chat {self.chat.id} media.")
+                        logging.exception(ex)
                     else:
                         logging.info(f"Sucessfuly saved chat {self.chat.id} media!")
             except Exception as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception: {ex}.")
+                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
+                logging.exception(ex)
             
                 await asyncio.sleep(random.randint(2, 5))
                 

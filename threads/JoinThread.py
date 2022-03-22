@@ -30,7 +30,7 @@ class JoinThread(KillableThread):
 
                 tg_chat = await chat.join_channel(client)
             except errors.FloodWaitError as ex:
-                logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait. Exception: {ex}.")
+                logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
 
                 await asyncio.sleep(ex.seconds)
 
@@ -42,7 +42,8 @@ class JoinThread(KillableThread):
                 errors.ChannelsTooMuchError,
                 errors.SessionPasswordNeededError
             ) as ex:
-                logging.error(f"Chat {chat.id} not available for phone {self.phone.id}. Exception: {ex}.")
+                logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
+                logging.exception(ex)
 
                 chat.remove_available_phone(self.phone)
                 chat.remove_phone(self.phone)

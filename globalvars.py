@@ -22,11 +22,3 @@ def init():
         ApiProcessor().set('telegram/parser', {'id': parser['id'], 'status': 'running'})
     else:
         raise Exception("Can't start parser. Environment variable 'PARSER_ID' not set.")
-    
-    all_phones = get_all_entities('telegram/phone')
-    global phones_tg_ids
-    phones_tg_ids = [phone['internalId'] for phone in all_phones if phone.get('internalId') != None]
-    
-    all_chats = get_all_entities('telegram/chat')
-    global chats_tg_ids
-    chats_tg_ids = [chat['internalId'] for chat in all_chats if chat.get('internalId') != None]

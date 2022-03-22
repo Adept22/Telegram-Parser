@@ -36,7 +36,7 @@ def get_all_chats(chats=[], start=0, limit=50):
     return chats
 
 def get_chats():
-    chats = get_all_chats()
+    chats = get_all_chats(limit=20)
 
     logging.debug(f"Received {len(chats)} chats.")
 
