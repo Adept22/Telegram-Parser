@@ -37,7 +37,7 @@ class MembersThread(KillableThread):
         
         return new_member
         
-    def get_chat_member(self, member):
+    def get_chat_member(self, participant, member):
         new_chat_member = {
             'chat': { 'id': self.chat.id }, 
             'member': member
@@ -49,6 +49,9 @@ class MembersThread(KillableThread):
             if len(chat_members) > 0:
                 if chat_members[0].get('id') != None:
                     new_chat_member['id'] = chat_members[0]['id']
+        
+        if isinstance(participant, types.ChannelParticipant):
+            new_chat_member['date'] = new_chat_member['date']
         
         return new_chat_member
     
@@ -90,10 +93,13 @@ class MembersThread(KillableThread):
                 async for user in client.iter_participants(entity=entity):
                     logging.debug(f"Chat {self.chat.title}. Received user '{user_title(user)}'")
 
+                    if user.is_self:
+                        continue
+
                     full_user = await client(functions.users.GetFullUserRequest(id=user.id))
 
                     member = self.get_member(user, full_user)
-                    chat_member = self.get_chat_member(member)
+                    chat_member = self.get_chat_member(user.participant, member)
                     chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     
                     try:

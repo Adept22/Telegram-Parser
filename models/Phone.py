@@ -1,12 +1,11 @@
 import logging
-import os
 import queue
 import re
 import asyncio
 import threading
 import globalvars
 
-from telethon import sync, sessions, errors
+from telethon import sync, sessions
 from processors.ApiProcessor import ApiProcessor
 
 from threads.JoinThread import JoinThread

@@ -1,3 +1,4 @@
+from re import T
 import threading
 import asyncio
 import logging
@@ -27,36 +28,52 @@ class JoinThread(KillableThread):
 
             try:
                 client = await self.phone.new_client(loop=self.loop)
-
-                tg_chat = await chat.join_channel(client)
-            except errors.FloodWaitError as ex:
-                logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
-
-                await asyncio.sleep(ex.seconds)
-
-                return await self.join_channel(chat)
-            except (
-                ClientNotAvailableError,
-                ChatNotAvailableError,
-                ### -----------------------------
-                errors.ChannelsTooMuchError,
-                errors.SessionPasswordNeededError
-            ) as ex:
+            except ClientNotAvailableError as ex:
                 logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
                 logging.exception(ex)
 
                 chat.remove_available_phone(self.phone)
                 chat.remove_phone(self.phone)
+
+                return
             else:
-                logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
+                while True:
+                    try:
+                        tg_chat = await chat.join_channel(client)
+                    except errors.FloodWaitError as ex:
+                        logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
 
-                if chat.internal_id == None:
-                    chat.internal_id = tg_chat.id
+                        await asyncio.sleep(ex.seconds)
 
-                if chat.title == None:
-                    chat.title = tg_chat.title
+                        continue
+                    except (
+                        ChatNotAvailableError,
+                        ### -----------------------------
+                        errors.ChannelsTooMuchError,
+                        errors.SessionPasswordNeededError
+                    ) as ex:
+                        logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
+                        logging.exception(ex)
 
-                chat.add_phone(self.phone)
+                        chat.remove_available_phone(self.phone)
+                        chat.remove_phone(self.phone)
+
+                        break
+                    else:
+                        logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
+
+                        if chat.internal_id == None:
+                            chat.internal_id = tg_chat.id
+
+                        if chat.title == None:
+                            chat.title = tg_chat.title
+
+                        if chat.date != tg_chat.date.isoformat():
+                            chat.date = tg_chat.date
+
+                        chat.add_phone(self.phone)
+
+                        break
 
     def run(self):
         self.phone.init_event.wait()

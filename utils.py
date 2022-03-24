@@ -1,9 +1,5 @@
 import re
-import logging
-import json
 from errors.InvalidLinkError import InvalidLinkError
-from datetime import datetime
-from processors.ApiProcessor import ApiProcessor
 
 class bcolors:
     HEADER = '\033[95m'

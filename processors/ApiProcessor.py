@@ -1,6 +1,5 @@
 import os
 import requests
-from requests import exceptions
 from urllib.parse import urlencode
 
 class ApiProcessor():

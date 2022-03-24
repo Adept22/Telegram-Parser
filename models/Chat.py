@@ -11,7 +11,6 @@ from threads.MembersThread import MembersThread
 from threads.MessagesThread import MessagesThread
 from threads.ChatMediaThread import ChatMediaThread
 from errors.ChatNotAvailableError import ChatNotAvailableError
-from errors.ClientNotAvailableError import ClientNotAvailableError
 
 class Chat(object):
     def __init__(self, _dict):
@@ -27,6 +26,7 @@ class Chat(object):
         self.link = None
         self._internal_id = None
         self._is_available = False
+        self._date = None
 
         self._available_phones = []
         self._phones = []
@@ -141,6 +141,19 @@ class Chat(object):
             ApiProcessor().set('telegram/chat', { 'id': self.id, 'title': new_value })
 
         self._title = new_value
+        
+    @property
+    def date(self):
+        return self._date
+    
+    @date.setter
+    def date(self, new_value):
+        if new_value != None and self._date != new_value:
+            logging.info(f"Chat {self.id} date changed.")
+            
+            ApiProcessor().set('telegram/chat', { 'id': self.id, 'date': new_value })
+
+        self._date = new_value
         
     @property
     def is_available(self):
