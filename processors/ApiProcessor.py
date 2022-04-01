@@ -1,4 +1,6 @@
+import math
 import os
+import tempfile
 import requests
 from urllib.parse import urlencode
 
@@ -53,12 +55,42 @@ class ApiProcessor():
 
         return self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/upload', files={'file': open(file, 'rb')})
 
-    def send(self, method, url, body=None, files=None):
+    def chunked(self, type, body, file, chunk_size=5242880):
+        if not body or not 'id' in body:
+            raise Exception('Не указан идентификатор')
+
+        total_size = os.path.getsize(file)
+        chunk_number = 0
+
+        with open(file, 'rb') as infile:
+            while (chunk := infile.read(chunk_size)):
+                with tempfile.TemporaryFile() as tmp:
+                    tmp.write(chunk)
+                    tmp.seek(0)
+
+                    self.send(
+                        "POST", 
+                        os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/chunk', 
+                        params={
+                            "filename": os.path.basename(file), 
+                            "chunkNumber": chunk_number, 
+                            "totalChunks": math.ceil(total_size / chunk_size), 
+                            "totalSize": total_size
+                        },
+                        files={'chunk': tmp}
+                    )
+
+                chunk_number += 1
+
+        return None
+
+    def send(self, method, url, body=None, params=None, files=None):
         r = requests.request(
             method, 
             url, 
             headers={'Accept': 'application/json'}, 
             json=body, 
+            params=params, 
             files=files, 
             verify=False
         )

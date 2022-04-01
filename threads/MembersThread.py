@@ -152,7 +152,7 @@ class MembersThread(KillableThread):
                                         new_media = ApiProcessor().set('telegram/member-media', new_media)
 
                                         try:
-                                            ApiProcessor().upload('telegram/member-media', new_media, path)
+                                            ApiProcessor().chunked('telegram/member-media', new_media, path)
                                         except Exception as ex:
                                             logging.error(f"Can\'t upload member {member['id']} media.")
                                             logging.exception(ex)

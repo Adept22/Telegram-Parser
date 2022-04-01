@@ -71,7 +71,7 @@ class ChatMediaThread(KillableThread):
                             new_media = ApiProcessor().set('telegram/chat-media', new_media)
 
                             try:
-                                ApiProcessor().upload('telegram/chat-media', new_media, path)
+                                ApiProcessor().chunked('telegram/chat-media', new_media, path)
                             except Exception as ex:
                                 logging.error(f"Can\'t upload chat {self.chat.id} media.")
                                 logging.exception(ex)

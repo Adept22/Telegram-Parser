@@ -55,7 +55,7 @@ class MessageMediaThread(KillableThread):
                 new_media = ApiProcessor().set('telegram/message-media', new_media)
 
                 try:
-                    ApiProcessor().upload('telegram/message-media', new_media, path)
+                    ApiProcessor().chunked('telegram/message-media', new_media, path)
                 except Exception as ex:
                     logging.error(f"Can\'t upload message {self.message['id']} media.")
                     logging.exception(ex)
