@@ -69,7 +69,7 @@ class JoinThread(KillableThread):
                             chat.title = tg_chat.title
 
                         if chat.date != tg_chat.date.isoformat():
-                            chat.date = tg_chat.date
+                            chat.date = tg_chat.date.isoformat()
 
                         chat.add_phone(self.phone)
 

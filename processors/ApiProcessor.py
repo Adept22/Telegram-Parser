@@ -2,6 +2,7 @@ import math
 import os
 import tempfile
 import requests
+import logging
 from urllib.parse import urlencode
 
 class ApiProcessor():
@@ -60,13 +61,21 @@ class ApiProcessor():
             raise Exception('Не указан идентификатор')
 
         total_size = os.path.getsize(file)
+        total_chunks = math.ceil(total_size / chunk_size)
         chunk_number = 0
 
         with open(file, 'rb') as infile:
+            logging.debug(f"Open file {file} for chunks send")
+
             while (chunk := infile.read(chunk_size)):
+                logging.debug(f"Open chunk {chunk_number}/{total_chunks} of {file}")
                 with tempfile.TemporaryFile() as tmp:
+                    logging.debug(f"Write chunk of {file} in temp file")
+
                     tmp.write(chunk)
                     tmp.seek(0)
+
+                    logging.debug(f"Sending chunk {chunk_number}/{total_chunks} of {file}")
 
                     self.send(
                         "POST", 
@@ -74,7 +83,7 @@ class ApiProcessor():
                         params={
                             "filename": os.path.basename(file), 
                             "chunkNumber": chunk_number, 
-                            "totalChunks": math.ceil(total_size / chunk_size), 
+                            "totalChunks": total_chunks, 
                             "totalSize": total_size
                         },
                         files={'chunk': tmp}

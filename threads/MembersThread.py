@@ -51,7 +51,7 @@ class MembersThread(KillableThread):
                     new_chat_member['id'] = chat_members[0]['id']
         
         if isinstance(participant, types.ChannelParticipant):
-            new_chat_member['date'] = new_chat_member['date']
+            new_chat_member['date'] = participant.date.isoformat()
         
         return new_chat_member
     
