@@ -3,8 +3,10 @@ import threading
 import asyncio
 import logging
 import random
+import requests
 
 from telethon import types
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 from processors.ApiProcessor import ApiProcessor
 from threads.KillableThread import KillableThread
@@ -35,19 +37,35 @@ class ChatMediaThread(KillableThread):
                 entity = await self.get_entity(client)
                 
                 async for photo in client.iter_profile_photos(entity=entity):
-                    new_media = { 'internalId': photo.id }
+                    new_media = {
+                        'chat': {"id": self.chat.id}, 
+                        'internalId': photo.id, 
+                        'date': photo.date.isoformat()
+                    }
 
-                    medias = ApiProcessor().get('telegram/chat-media', new_media)
+                    try:
+                        try:
+                            new_media = ApiProcessor().set('telegram/chat-media', new_media)
+                        except UniqueConstraintViolationError as ex:
+                            medias = ApiProcessor().get('telegram/chat-media', { 'internalId': photo.id })
 
-                    if len(medias) > 0:
-                        new_media = medias[0]
-                                
-                        if 'path' in new_media and new_media['path'] != None:
-                            logging.debug(f"Member {self.chat.id} media {new_media['id']} exist on server. Continue.")
+                            if len(medias) > 0:
+                                if 'path' in medias[0] and medias[0]['path'] != None:
+                                    logging.debug(f"Member {self.chat.id} media {medias[0]['id']} exist on server. Continue.")
 
-                            await asyncio.sleep(1)
+                                    await asyncio.sleep(1)
 
-                            continue
+                                    continue
+                                else:
+                                    new_media['id'] = medias[0]['id']
+
+                                    new_media = ApiProcessor().set('telegram/chat-media', new_media)
+                    except Exception as ex:
+                        logging.error(f"Can\'t save chat {self.chat.id} media.")
+                        logging.exception(ex)
+                    else:
+                        logging.info(f"Sucessfuly saved chat {self.chat.id} media.")
+
 
                     def progress_callback(current, total):
                         logging.debug(f"Chat '{self.chat.id}' media downloaded {current} out of {total} bytes: {current / total:.2%}")
@@ -61,15 +79,6 @@ class ChatMediaThread(KillableThread):
                         )
 
                         if path != None:
-                            new_media = { 
-                                **new_media, 
-                                'chat': {"id": self.chat.id}, 
-                                'internalId': photo.id, 
-                                'date': photo.date.isoformat()
-                            }
-                                
-                            new_media = ApiProcessor().set('telegram/chat-media', new_media)
-
                             try:
                                 ApiProcessor().chunked('telegram/chat-media', new_media, path)
                             except Exception as ex:
@@ -83,10 +92,10 @@ class ChatMediaThread(KillableThread):
                                 except:
                                     pass
                     except Exception as ex:
-                        logging.error(f"Can\'t save chat {self.chat.id} media.")
+                        logging.error(f"Can\'t download chat {self.chat.id} media.")
                         logging.exception(ex)
                     else:
-                        logging.info(f"Sucessfuly saved chat {self.chat.id} media!")
+                        logging.info(f"Sucessfuly downloaded chat {self.chat.id} media.")
             except Exception as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
                 logging.exception(ex)

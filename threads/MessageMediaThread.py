@@ -3,6 +3,7 @@ import threading
 import asyncio
 import logging
 from telethon import types
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 from processors.ApiProcessor import ApiProcessor
 from threads.KillableThread import KillableThread
@@ -23,17 +24,31 @@ class MessageMediaThread(KillableThread):
         asyncio.set_event_loop(self.loop)
     
     async def file_download(self, client, media):
-        new_media = { 'internalId': media.id }
+        new_media = {
+            'internalId': media.id,
+            'message': {"id": self.message['id']}, 
+            'date': media.date.isoformat()
+        }
 
-        medias = ApiProcessor().get('telegram/message-media', new_media)
+        try:
+            try:
+                medias = ApiProcessor().set('telegram/message-media', new_media)
+            except UniqueConstraintViolationError as ex:
+                medias = ApiProcessor().get('telegram/message-media', new_media)
 
-        if len(medias) > 0:
-            new_media = medias[0]
-                                
-            if 'path' in new_media and new_media['path'] != None:
-                logging.debug(f"Message {self.message['id']} media {new_media['id']} exist on server. Continue.")
+                if 'path' in medias[0] and medias[0]['path'] != None:
+                    logging.debug(f"Message {self.message['id']} media {medias[0]['id']} exist on server. Continue.")
 
-                return
+                    return
+                else:
+                    new_media['id'] = medias[0]['id']
+
+                    new_media = ApiProcessor().set('telegram/message-media', new_media)
+        except Exception as ex:
+            logging.error(f"Can't save message {self.message['id']} media.")
+            logging.exception(ex)
+        else:
+            logging.info(f"Sucessfuly saved message {self.message['id']} media!")
 
         def progress_callback(current, total):
             logging.debug(f"Message {self.message['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
@@ -46,14 +61,6 @@ class MessageMediaThread(KillableThread):
             )
 
             if path != None:
-                new_media = {
-                    **new_media,
-                    'message': {"id": self.message['id']}, 
-                    'date': media.date.isoformat()
-                }
-
-                new_media = ApiProcessor().set('telegram/message-media', new_media)
-
                 try:
                     ApiProcessor().chunked('telegram/message-media', new_media, path)
                 except Exception as ex:
@@ -67,10 +74,10 @@ class MessageMediaThread(KillableThread):
                     except:
                         pass
         except Exception as ex:
-            logging.error(f"Can't save message {self.message['id']} media.")
+            logging.error(f"Can't download message {self.message['id']} media.")
             logging.exception(ex)
         else:
-            logging.info(f"Sucessfuly saved message {self.message['id']} media!")
+            logging.info(f"Sucessfuly downloaded message {self.message['id']} media!")
 
     async def async_run(self):
         try:

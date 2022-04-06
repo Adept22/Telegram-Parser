@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 from telethon import types, functions, errors
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 from processors.ApiProcessor import ApiProcessor
 from utils import user_title
@@ -28,32 +29,37 @@ class MembersThread(KillableThread):
             'phone': user.phone,
             'about': full_user.about
         }
+
+        try:
+            member = ApiProcessor().set('telegram/member', new_member)
+        except UniqueConstraintViolationError as ex:
+            members = ApiProcessor().get('telegram/member', { 'internalId': new_member['internalId'] })
+            
+            new_member['id'] = members[0]['id']
+
+            member = ApiProcessor().set('telegram/member', new_member)
         
-        members = ApiProcessor().get('telegram/member', { 'internalId': new_member['internalId'] })
-        
-        if len(members) > 0:
-            if members[0].get('id') != None:
-                new_member['id'] = members[0]['id']
-        
-        return new_member
+        return member
         
     def get_chat_member(self, participant, member):
         new_chat_member = {
             'chat': { 'id': self.chat.id }, 
             'member': member
         }
-        
-        if new_chat_member['member'].get('id') != None:
-            chat_members = ApiProcessor().get('telegram/chat-member', new_chat_member)
-            
-            if len(chat_members) > 0:
-                if chat_members[0].get('id') != None:
-                    new_chat_member['id'] = chat_members[0]['id']
-        
+
         if isinstance(participant, types.ChannelParticipant):
             new_chat_member['date'] = participant.date.isoformat()
+
+        try:
+            chat_member = ApiProcessor().set('telegram/chat-member', new_chat_member)
+        except UniqueConstraintViolationError as ex:
+            chat_members = ApiProcessor().get('telegram/chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': member['id'] }})
+            
+            new_chat_member['id'] = chat_members[0]['id']
+
+            chat_member = ApiProcessor().set('telegram/chat-member', new_chat_member)
         
-        return new_chat_member
+        return chat_member
     
     def get_chat_member_role(self, participant, chat_member):
         new_chat_member_role = { 'member': chat_member }
@@ -68,14 +74,18 @@ class MembersThread(KillableThread):
             new_chat_member_role['title'] = "Участник"
             new_chat_member_role['code'] = "member"
         
-        if new_chat_member_role['member'].get('id') != None:
-            chat_member_roles = ApiProcessor().get('telegram/chat-member-role', new_chat_member_role)
+        try:
+            chat_member_role = ApiProcessor().set('telegram/chat-member-role', new_chat_member_role)
+        except UniqueConstraintViolationError as ex:
+            chat_member_roles = ApiProcessor().get('telegram/chat-member-role', { 
+                'member': {'id': chat_member['id'] }, 
+                'title': new_chat_member_role['title'],
+                'code': new_chat_member_role['code']
+            })
             
-            if len(chat_member_roles) > 0:
-                if chat_member_roles[0].get('id') != None:
-                    new_chat_member_role['id'] = chat_member_roles[0]['id']
+            chat_member_role = chat_member_roles[0]
                     
-        return new_chat_member_role
+        return chat_member_role
 
     async def get_entity(self, client):
         try:
@@ -98,12 +108,10 @@ class MembersThread(KillableThread):
 
                     full_user = await client(functions.users.GetFullUserRequest(id=user.id))
 
-                    member = self.get_member(user, full_user)
-                    chat_member = self.get_chat_member(user.participant, member)
-                    chat_member_role = self.get_chat_member_role(user.participant, chat_member)
-                    
                     try:
-                        chat_member_role = ApiProcessor().set('telegram/chat-member-role', chat_member_role) 
+                        member = self.get_member(user, full_user)
+                        chat_member = self.get_chat_member(user.participant, member)
+                        chat_member_role = self.get_chat_member_role(user.participant, chat_member)
                     except Exception as ex:
                         logging.error(f"Can't save member '{user.first_name}' with role: chat - {self.chat.title}.")
                         logging.exception(ex)
@@ -112,27 +120,39 @@ class MembersThread(KillableThread):
                     else:
                         logging.debug(f"Member '{user_title(user)}' with role saved.")
 
-                        member = chat_member_role['member']['member']
-
                         try:
                             async for photo in client.iter_profile_photos(user.id):
-                                new_media = { 'internalId': photo.id }
+                                new_media = {
+                                    'member': { "id": member['id'] }, 
+                                    'internalId': photo.id,
+                                    'date': photo.date.isoformat()
+                                }
 
-                                medias = ApiProcessor().get('telegram/member-media', new_media)
+                                try:
+                                    try:
+                                        new_media = ApiProcessor().set('telegram/member-media', new_media)
+                                    except UniqueConstraintViolationError as ex:
+                                        medias = ApiProcessor().get('telegram/member-media', { 'internalId': photo.id })
 
-                                if len(medias) > 0:
-                                    new_media = medias[0]
-                                
-                                    if 'path' in new_media and new_media['path'] != None:
-                                        logging.debug(f"Member {member['id']} media {new_media['id']} exist on server. Continue.")
+                                        if 'path' in medias[0] and medias[0]['path'] != None:
+                                            logging.debug(f"Member {member['id']} media {medias[0]['id']} exist on server. Continue.")
 
-                                        await asyncio.sleep(1)
+                                            await asyncio.sleep(1)
 
-                                        continue
+                                            continue
+                                        else:
+                                            new_media['id'] = medias[0]['id']
+
+                                            new_media = ApiProcessor().set('telegram/member-media', new_media)
+                                except Exception as ex:
+                                    logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
+                                    logging.exception(ex)
+                                else:
+                                    logging.info(f"Sucessfuly saved member {member['id']} media.")
 
                                 def progress_callback(current, total):
                                     logging.debug(f"Member {member['id']} media downloaded {current} out of {total} bytes: {current / total:.2%}")
-
+                                
                                 try:
                                     path = await client.download_media(
                                         message=photo,
@@ -142,15 +162,6 @@ class MembersThread(KillableThread):
                                     )
 
                                     if path != None:
-                                        new_media = { 
-                                            **new_media,
-                                            'member': { "id": member['id'] }, 
-                                            'internalId': photo.id,
-                                            'date': photo.date.isoformat()
-                                        }
-                                            
-                                        new_media = ApiProcessor().set('telegram/member-media', new_media)
-
                                         try:
                                             ApiProcessor().chunked('telegram/member-media', new_media, path)
                                         except Exception as ex:
@@ -164,10 +175,10 @@ class MembersThread(KillableThread):
                                             except:
                                                 pass
                                 except Exception as ex:
-                                    logging.error(f"Can\'t save member {member['id']} media. Exception: {ex}.")
+                                    logging.error(f"Can\'t download member {member['id']} media. Exception: {ex}.")
                                     logging.exception(ex)
                                 else:
-                                    logging.info(f"Sucessfuly saved member {member['id']} media.")
+                                    logging.info(f"Sucessfuly download member {member['id']} media.")
                         except Exception as ex:
                             logging.error(f"Can't get member {member['id']} media using phone {phone.id}.")
                             logging.exception(ex)

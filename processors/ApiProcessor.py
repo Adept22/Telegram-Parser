@@ -5,6 +5,8 @@ import requests
 import logging
 from urllib.parse import urlencode
 
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
+
 class ApiProcessor():
     def get_sort(self, body=None):
         if body != None:
@@ -41,8 +43,14 @@ class ApiProcessor():
         else:
             method = 'POST'
             url = os.environ['API_URL'] + '/' + type
-
-        return self.send(method, url, body)
+        
+        try:
+            return self.send(method, url, body)
+        except requests.exceptions.HTTPError as ex:
+            if ex.response.status_code == requests.codes.conflict:
+                raise UniqueConstraintViolationError(ex)
+            else:
+                raise ex
 
     def delete(self, type, body=None):
         if not body or not 'id' in body:

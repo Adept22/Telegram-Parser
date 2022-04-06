@@ -70,7 +70,10 @@ def get_phones():
 if __name__ == '__main__':
     globalvars.init()
 
-    fh = RotatingFileHandler(filename='log/dev.log', maxBytes=1048576, backupCount=10)
+    eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=10)
+    eh.setLevel(logging.WARNING)
+
+    fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=5)
     fh.setLevel(logging.INFO)
 
     sh = logging.StreamHandler(stdout)
@@ -79,7 +82,7 @@ if __name__ == '__main__':
     logging.basicConfig(
         format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
         datefmt='%d.%m.%Y %H:%M:%S',
-        handlers=[fh, sh],
+        handlers=[eh, fh, sh],
         level=logging.DEBUG
     )
 
@@ -92,4 +95,4 @@ if __name__ == '__main__':
         get_phones()
         get_chats()
 
-        asyncio.run(asyncio.sleep(30))
+        asyncio.run(asyncio.sleep(60))
