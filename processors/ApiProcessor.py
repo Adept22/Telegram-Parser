@@ -64,7 +64,7 @@ class ApiProcessor():
 
         return self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/upload', files={'file': open(file, 'rb')})
 
-    def chunked(self, type, body, file, chunk_size=4194304):
+    def chunked(self, type, body, file, chunk_size=1048576):
         if not body or not 'id' in body:
             raise Exception('Не указан идентификатор')
 
