@@ -46,20 +46,19 @@ class ChatMediaThread(KillableThread):
                     try:
                         try:
                             new_media = ApiProcessor().set('telegram/chat-media', new_media)
-                        except UniqueConstraintViolationError as ex:
+                        except UniqueConstraintViolationError:
                             medias = ApiProcessor().get('telegram/chat-media', { 'internalId': photo.id })
 
-                            if len(medias) > 0:
-                                if 'path' in medias[0] and medias[0]['path'] != None:
-                                    logging.debug(f"Member {self.chat.id} media {medias[0]['id']} exist on server. Continue.")
+                            if 'path' in medias[0] and medias[0]['path'] != None:
+                                logging.debug(f"Member {self.chat.id} media {medias[0]['id']} exist on server. Continue.")
 
-                                    await asyncio.sleep(1)
+                                await asyncio.sleep(1)
 
-                                    continue
-                                else:
-                                    new_media['id'] = medias[0]['id']
+                                continue
+                            else:
+                                new_media['id'] = medias[0]['id']
 
-                                    new_media = ApiProcessor().set('telegram/chat-media', new_media)
+                                new_media = ApiProcessor().set('telegram/chat-media', new_media)
                     except Exception as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media.")
                         logging.exception(ex)

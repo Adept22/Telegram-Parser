@@ -1,3 +1,4 @@
+from pyexpat.errors import messages
 import threading
 import asyncio
 import logging
@@ -19,50 +20,51 @@ class MessagesThread(KillableThread):
         asyncio.set_event_loop(self.loop)
 
     def get_member(self, user):
-        if isinstance(user, types.PeerUser):
-            new_member = { 'internalId': user.id }
+        if not isinstance(user, types.PeerUser):
+            return None
 
-            try:
-                member = ApiProcessor().set('telegram/member', new_member)
-            except UniqueConstraintViolationError:
-                members = ApiProcessor().get('telegram/member', new_member)
-                
-                member = members[0]
+        new_member = { 'internalId': user.user_id }
+
+        try:
+            member = ApiProcessor().set('telegram/member', new_member)
+        except UniqueConstraintViolationError:
+            members = ApiProcessor().get('telegram/member', new_member)
             
-            return member
+            member = members[0]
         
-        return None
+        return member
 
     def get_chat_member(self, member):
+        if member == None:
+            return None
+        
         new_chat_member = {
             'chat': { 'id': self.chat.id },
             'member': { 'id': member['id'] }
         }
 
         try:
-            chat_member = ApiProcessor().set('telegram/chat-member', new_chat_member)
+            return ApiProcessor().set('telegram/chat-member', new_chat_member)
         except UniqueConstraintViolationError:
             members = ApiProcessor().get('telegram/chat-member', new_chat_member)
             
-            chat_member = members[0]
-        
-        return chat_member
+            return members[0]
         
     def get_reply_to(self, reply_to):
-        if reply_to != None:
-            new_reply_to = {
-                'internalId': reply_to.reply_to_msg_id,
-                'chat': { 'id': self.chat.id }
-            }
+        if reply_to == None:
+            return None
 
+        new_reply_to = {
+            'internalId': reply_to.reply_to_msg_id,
+            'chat': { 'id': self.chat.id }
+        }
+
+        try:
+            return ApiProcessor().set('telegram/message', new_reply_to)
+        except UniqueConstraintViolationError:
             messages = ApiProcessor().get('telegram/message', new_reply_to)
-
-            if len(messages) > 0:
-                new_reply_to['id'] = messages[0]['id']
-                
-            return new_reply_to
-
-        return None
+            
+            return messages[0]
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -137,15 +139,15 @@ class MessagesThread(KillableThread):
                         }
 
                         try:
-                            ApiProcessor().set('telegram/message', new_message)
+                            new_message = ApiProcessor().set('telegram/message', new_message)
                         except UniqueConstraintViolationError:
-                            messages = ApiProcessor().get('telegram/message', { 'internalId': new_message['internalId'] })
-                            
+                            messages = ApiProcessor().get('telegram/message', { 'internalId': tg_message.id, 'chat': { 'id': self.chat.id } })
+
                             new_message['id'] = messages[0]['id']
 
-                            ApiProcessor().set('telegram/message', new_message)
+                            new_message = ApiProcessor().set('telegram/message', new_message)
                     except Exception as ex:
-                        logging.error(f"Can't save chat {self.chat.id} message.")
+                        logging.error(f"Can't save chat {self.chat.id} message {tg_message.id}.")
                         logging.exception(ex)
                     else:
                         logging.debug(f"Message '{new_message['id']}' at '{new_message['createdAt']}' saved.")

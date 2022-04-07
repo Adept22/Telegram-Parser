@@ -46,8 +46,14 @@ class JoinThread(KillableThread):
                         await asyncio.sleep(ex.seconds)
 
                         continue
+                    except ChatNotAvailableError as ex:
+                        logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
+                        logging.exception(ex)
+
+                        chat.is_available = False
+
+                        break
                     except (
-                        ChatNotAvailableError,
                         ### -----------------------------
                         errors.ChannelsTooMuchError,
                         errors.SessionPasswordNeededError

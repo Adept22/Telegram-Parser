@@ -18,7 +18,7 @@ def get_hash(link):
 
     link = re.sub(r'https?:\/\/t\.me\/', '', link)
 
-    matches = re.match(r'^(?:joinchat\/|\+)([-_a-zA-Z0-9.]+)$', link)
+    matches = re.match(r'^(?:joinchat\/|\+)([-_.a-zA-Z0-9]+)$', link)
 
     hash = matches.group(1) if not matches is None else None
 

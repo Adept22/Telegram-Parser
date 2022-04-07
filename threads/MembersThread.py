@@ -32,7 +32,7 @@ class MembersThread(KillableThread):
 
         try:
             member = ApiProcessor().set('telegram/member', new_member)
-        except UniqueConstraintViolationError as ex:
+        except UniqueConstraintViolationError:
             members = ApiProcessor().get('telegram/member', { 'internalId': new_member['internalId'] })
             
             new_member['id'] = members[0]['id']
@@ -52,7 +52,7 @@ class MembersThread(KillableThread):
 
         try:
             chat_member = ApiProcessor().set('telegram/chat-member', new_chat_member)
-        except UniqueConstraintViolationError as ex:
+        except UniqueConstraintViolationError:
             chat_members = ApiProcessor().get('telegram/chat-member', { 'chat': { 'id': self.chat.id }, 'member': { 'id': member['id'] }})
             
             new_chat_member['id'] = chat_members[0]['id']
@@ -76,7 +76,7 @@ class MembersThread(KillableThread):
         
         try:
             chat_member_role = ApiProcessor().set('telegram/chat-member-role', new_chat_member_role)
-        except UniqueConstraintViolationError as ex:
+        except UniqueConstraintViolationError:
             chat_member_roles = ApiProcessor().get('telegram/chat-member-role', { 
                 'member': {'id': chat_member['id'] }, 
                 'title': new_chat_member_role['title'],
@@ -131,7 +131,7 @@ class MembersThread(KillableThread):
                                 try:
                                     try:
                                         new_media = ApiProcessor().set('telegram/member-media', new_media)
-                                    except UniqueConstraintViolationError as ex:
+                                    except UniqueConstraintViolationError:
                                         medias = ApiProcessor().get('telegram/member-media', { 'internalId': photo.id })
 
                                         if 'path' in medias[0] and medias[0]['path'] != None:

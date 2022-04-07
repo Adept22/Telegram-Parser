@@ -26,15 +26,15 @@ class MessageMediaThread(KillableThread):
     async def file_download(self, client, media):
         new_media = {
             'internalId': media.id,
-            'message': {"id": self.message['id']}, 
+            'message': { "id": self.message['id'] }, 
             'date': media.date.isoformat()
         }
 
         try:
             try:
-                medias = ApiProcessor().set('telegram/message-media', new_media)
-            except UniqueConstraintViolationError as ex:
-                medias = ApiProcessor().get('telegram/message-media', new_media)
+                new_media = ApiProcessor().set('telegram/message-media', new_media)
+            except UniqueConstraintViolationError:
+                medias = ApiProcessor().get('telegram/message-media', { 'internalId': media.id })
 
                 if 'path' in medias[0] and medias[0]['path'] != None:
                     logging.debug(f"Message {self.message['id']} media {medias[0]['id']} exist on server. Continue.")

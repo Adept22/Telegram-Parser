@@ -47,7 +47,7 @@ class ApiProcessor():
         try:
             return self.send(method, url, body)
         except requests.exceptions.HTTPError as ex:
-            if ex.response.status_code == requests.codes.conflict:
+            if ex.response.status_code == 409:
                 raise UniqueConstraintViolationError(ex)
             else:
                 raise ex
@@ -64,7 +64,7 @@ class ApiProcessor():
 
         return self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/upload', files={'file': open(file, 'rb')})
 
-    def chunked(self, type, body, file, chunk_size=5242880):
+    def chunked(self, type, body, file, chunk_size=4194304):
         if not body or not 'id' in body:
             raise Exception('Не указан идентификатор')
 
