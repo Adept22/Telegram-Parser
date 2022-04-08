@@ -46,7 +46,7 @@ class ChatMediaThread(KillableThread):
                         logging.info(f"Sucessfuly saved chat {self.chat.id} media.")
 
                         try:
-                            await media.upload(client, photo)
+                            await media.upload(client, photo, photo.sizes[-2])
                         except Exception as ex:
                             logging.error(f"Can\'t upload chat {self.chat.id} media.")
                             logging.exception(ex)

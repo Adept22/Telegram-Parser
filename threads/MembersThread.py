@@ -94,7 +94,7 @@ class MembersThread(KillableThread):
                                     logging.info(f"Sucessfuly saved member {member.id} media.")
 
                                     try:
-                                        await media.upload(client, photo)
+                                        await media.upload(client, photo, photo.sizes[-2])
                                     except Exception as ex:
                                         logging.error(f"Can\'t upload member {member.id} media.")
                                         logging.exception(ex)
