@@ -27,7 +27,7 @@ class ApiProcessor():
         return ''
 
     def get(self, type, body=None):
-        if body and 'id' in body:
+        if body and body.get('id') != None:
             method = 'GET'
             url = os.environ['API_URL'] + '/' + type + '/' + body['id']
         else:
@@ -37,7 +37,7 @@ class ApiProcessor():
         return self.send(method, url, body)
 
     def set(self, type, body=None):
-        if body and 'id' in body:
+        if body and body.get('id') != None:
             method = 'PUT'
             url = os.environ['API_URL'] + '/' + type + '/' + body['id']
         else:
@@ -53,19 +53,19 @@ class ApiProcessor():
                 raise ex
 
     def delete(self, type, body=None):
-        if not body or not 'id' in body:
+        if not body or body.get('id') == None:
             raise Exception('Не указан идентификатор')
 
         return self.send("DELETE", os.environ['API_URL'] + '/' + type + '/' + body['id'])
 
     def upload(self, type, body, file):
-        if not body or not 'id' in body:
+        if not body or body.get('id') == None:
             raise Exception('Не указан идентификатор')
 
         return self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/upload', files={'file': open(file, 'rb')})
 
     def chunked(self, type, body, file, chunk_size=1048576):
-        if not body or not 'id' in body:
+        if not body or body.get('id') == None:
             raise Exception('Не указан идентификатор')
 
         total_size = os.path.getsize(file)

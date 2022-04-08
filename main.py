@@ -6,8 +6,8 @@ from sys import stdout
 from core.ChatsManager import ChatsManager
 
 import globalvars
-from models.Chat import Chat
-from models.Phone import Phone
+from models.ChatEntity import Chat
+from models.PhoneEntity import Phone
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 

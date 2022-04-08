@@ -46,6 +46,24 @@ class Phone(object):
         # TODO: Мы должны убивать треды при удалении чата.
         pass
 
+    def serialize(self):
+        _dict = {
+            "id": self.id,
+            "internalId": self._internal_id,
+            "session": self._session,
+            "number": self.number,
+            "username": self.username,
+            "firstName": self.first_name,
+            "isVerified": self._is_verified,
+            "isBanned": self._is_banned,
+            "code": self._code
+        }
+        
+        return dict((k, v) for k, v in _dict.items() if v is not None)
+
+    def deserialize(self, _dict = {}):
+        return self
+
     @property
     def internal_id(self):
         return self._internal_id

@@ -9,7 +9,7 @@
                 "containerName": "telegram-parser-debug",
                 "image": "telegram-parser:debug",
                 "env": {
-                    "PARSER_ID": "4133ce16-97ff-407a-a6d2-811317ba0a56",
+                    "PARSER_ID": "ba208a6c-1b24-4ea9-b423-335d8e2cba1d",
                     "API_URL": "http://host.docker.internal:47352/private/api/v1"
                 },
                 "extraHosts": [

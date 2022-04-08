@@ -2,8 +2,13 @@ from pyexpat.errors import messages
 import threading
 import asyncio
 import logging
-from telethon import types, errors
+from telethon import types, errors, functions
+
+from models.MemberEntity import Member
+from models.ChatMemberEntity import ChatMember
+from models.ChatMemberRoleEntity import ChatMemberRole
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
+from models.MessageEntity import Message
 
 from threads.MessageMediaThread import MessageMediaThread
 from processors.ApiProcessor import ApiProcessor
@@ -18,53 +23,27 @@ class MessagesThread(KillableThread):
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
-
-    def get_member(self, user):
-        if not isinstance(user, types.PeerUser):
-            return None
-
-        new_member = { 'internalId': user.user_id }
-
-        try:
-            member = ApiProcessor().set('telegram/member', new_member)
-        except UniqueConstraintViolationError:
-            members = ApiProcessor().get('telegram/member', new_member)
-            
-            member = members[0]
         
-        return member
+    async def get_member(self, client, user):
+        member = Member(internalId=user.id)
 
-    def get_chat_member(self, member):
-        if member == None:
-            return None
+        await member.expand(client)
+
+        return member.save()
         
-        new_chat_member = {
-            'chat': { 'id': self.chat.id },
-            'member': { 'id': member['id'] }
-        }
+    async def get_chat_member(self, client, member):
+        chat_member = ChatMember(chat=self.chat, member=member)
 
-        try:
-            return ApiProcessor().set('telegram/chat-member', new_chat_member)
-        except UniqueConstraintViolationError:
-            members = ApiProcessor().get('telegram/chat-member', new_chat_member)
-            
-            return members[0]
-        
-    def get_reply_to(self, reply_to):
-        if reply_to == None:
-            return None
+        await chat_member.expand(client)
 
-        new_reply_to = {
-            'internalId': reply_to.reply_to_msg_id,
-            'chat': { 'id': self.chat.id }
-        }
+        return chat_member.save()
+    
+    async def get_chat_member_role(self, client, chat_member):
+        chat_member_role = ChatMemberRole(member=chat_member)
 
-        try:
-            return ApiProcessor().set('telegram/message', new_reply_to)
-        except UniqueConstraintViolationError:
-            messages = ApiProcessor().get('telegram/message', new_reply_to)
-            
-            return messages[0]
+        await chat_member_role.expand(client)
+
+        return chat_member_role.save()
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -96,23 +75,14 @@ class MessagesThread(KillableThread):
             
             try:
                 client = await phone.new_client(loop=self.loop)
-                
-                new_message = { 'internalId': 0, 'groupedId': 0 }
-                
-                # messages = ApiProcessor().get('message', { 'chat': { 'id': self.chat.id }, '_limit': 1, '_sort': 'internalId', '_order': 'ASC' })
-                
-                # if len(messages) > 0:
-                #     logging.info(f"Last message in API exist. Continue."")
 
-                #     new_message = messages[0]
-
-                entity = await self.get_entity(client)
+                tg_chat = await self.get_entity(client)
                 
-                all_messages = await client.get_messages(entity=entity, limit=0, max_id=new_message['internalId'])
+                all_messages = await client.get_messages(entity=tg_chat, limit=0, max_id=0)
 
                 logging.info(f"Chat {self.chat.id} total messages {all_messages.total}.")
 
-                async for tg_message in client.iter_messages(entity=entity, max_id=new_message['internalId']):
+                async for tg_message in client.iter_messages(entity=tg_chat, max_id=0):
                     logging.debug(f"Chat {self.chat.id}. Receive message {tg_message.id}/{all_messages.total}")
                     
                     if not isinstance(tg_message, types.Message):
@@ -123,37 +93,39 @@ class MessagesThread(KillableThread):
                         
                         fwd_from_id, fwd_from_name = self.get_fwd(tg_message.fwd_from)
 
-                        member = self.get_member(tg_message.from_id)
+                        chat_member = None
+                        reply_to = None
 
-                        new_message = { 
-                            'internalId': tg_message.id, 
-                            'text': tg_message.message, 
-                            'chat': { 'id': self.chat.id }, 
-                            'member': self.get_chat_member(member),
-                            'replyTo': self.get_reply_to(tg_message.reply_to), 
-                            'isPinned': tg_message.pinned,     
-                            'forwardedFromId': fwd_from_id, 
-                            'forwardedFromName': fwd_from_name, 
-                            'groupedId': tg_message.grouped_id, 
-                            'date': tg_message.date.isoformat() 
-                        }
+                        if isinstance(tg_message.sender, types.PeerUser):
+                            member = await self.get_member(client, tg_message.sender)
+                            chat_member = await self.get_chat_member(client, member)
+                            chat_member_role = await self.get_chat_member_role(client, chat_member)
 
-                        try:
-                            new_message = ApiProcessor().set('telegram/message', new_message)
-                        except UniqueConstraintViolationError:
-                            messages = ApiProcessor().get('telegram/message', { 'internalId': tg_message.id, 'chat': { 'id': self.chat.id } })
+                        if tg_message.reply_to != None:
+                            reply_to = Message(internalId=tg_message.reply_to.reply_to_msg_id, chat=self.chat)
+                            reply_to.save()
 
-                            new_message['id'] = messages[0]['id']
-
-                            new_message = ApiProcessor().set('telegram/message', new_message)
+                        message = Message(
+                            internalId=tg_message.id, 
+                            text=tg_message.message, 
+                            chat=self.chat, 
+                            member=chat_member,
+                            replyTo=reply_to, 
+                            isPinned=tg_message.pinned,     
+                            forwardedFromId=fwd_from_id, 
+                            forwardedFromName=fwd_from_name, 
+                            groupedId=tg_message.grouped_id, 
+                            date=tg_message.date.isoformat() 
+                        )
+                        message.save()
                     except Exception as ex:
                         logging.error(f"Can't save chat {self.chat.id} message {tg_message.id}.")
                         logging.exception(ex)
                     else:
-                        logging.debug(f"Message '{new_message['id']}' at '{new_message['createdAt']}' saved.")
+                        logging.debug(f"Message {message.id} saved.")
 
                         if tg_message.media != None:
-                            meessage_media_thread = MessageMediaThread(phone, new_message, tg_message)
+                            meessage_media_thread = MessageMediaThread(phone, message, tg_message)
                             meessage_media_thread.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success.")

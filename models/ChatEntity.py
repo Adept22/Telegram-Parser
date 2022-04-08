@@ -45,6 +45,21 @@ class Chat(object):
             self.init_event.clear()
         # TODO: Мы должны убивать треды при удалении чата.
         pass
+
+    def serialize(self):
+        _dict =  {
+            "id": self.id,
+            "internalId": self._internal_id,
+            "link": self.link,
+            "title": self._title,
+            "isAvailable": self._is_available,
+            "date": self._date
+        }
+
+        return dict((k, v) for k, v in _dict.items() if v is not None)
+
+    def deserialize(self, _dict = {}):
+        return self
         
     @property
     def phones(self):
