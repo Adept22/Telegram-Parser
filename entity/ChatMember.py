@@ -1,23 +1,21 @@
 from telethon import types
+import entity
 
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.ChatEntity import Chat
-    from models.MemberEntity import Member
-    from models.ChatMemberRoleEntity import ChatMemberRole
-
 class ChatMember(object):
-    def __init__(self, chat: 'Chat', member: 'Member', id = None, date = None, isLeft = False, roles: 'list[ChatMemberRole]' = []):
+    def __init__(self, chat: 'entity.TypeChat', member: 'entity.TypeMember', id = None, date = None, isLeft = False, roles: 'list[entity.TypeChatMemberRole]' = []):
         self.id = id
         self.chat = chat
         self.member = member
         self.date = date
         self.isLeft = isLeft
         self.roles = roles
+
+    @property
+    def name(self):
+        return "chat-member"
 
     async def expand(self, participant: 'types.ChannelParticipant' = None):
         if isinstance(participant, types.ChannelParticipant):
@@ -49,13 +47,10 @@ class ChatMember(object):
         return self
 
     def save(self):
-        if self.member.id == None:
-            self.member.save()
-
         try:
-            self.deserialize(ApiProcessor().set('telegram/chat-member', self.serialize()))
+            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
         except UniqueConstraintViolationError:
-            members = ApiProcessor().get('telegram/chat-member', { 'chat': { "id": self.chat.id }, "member": { "id": self.member.id } })
+            members = ApiProcessor().get(f'telegram/{self.name}', { 'chat': { "id": self.chat.id }, "member": { "id": self.member.id } })
             
             if len(members) > 0:
                 self.id = members[0]['id']

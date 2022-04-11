@@ -1,23 +1,18 @@
-from pyexpat.errors import messages
-import threading
+import multiprocessing
 import asyncio
 import logging
-from telethon import sync, types, errors, functions
+from telethon import types, errors, functions
 
-from models.MemberEntity import Member
-from models.ChatMemberEntity import ChatMember
-from models.ChatMemberRoleEntity import ChatMemberRole
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-from models.MessageEntity import Message
+from entity.Member import Member
+from entity.ChatMember import ChatMember
+from entity.ChatMemberRole import ChatMemberRole
+from entity.Message import Message
 
-from threads.MessageMediaThread import MessageMediaThread
-from processors.ApiProcessor import ApiProcessor
-from threads.KillableThread import KillableThread
+from processes.MessageMediaProcess import MessageMediaProcess
 
-class MessagesThread(KillableThread):
+class MessagesProcess(multiprocessing.Process):
     def __init__(self, chat):
-        threading.Thread.__init__(self, name=f"MessagesThread-{chat.id}")
-        self.daemon = True
+        multiprocessing.Process.__init__(self, name=f"MessagesProcess-{chat.id}", daemon=True)
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -146,8 +141,8 @@ class MessagesThread(KillableThread):
                         logging.debug(f"Message {message.id} saved.")
 
                         if tg_message.media != None:
-                            meessage_media_thread = MessageMediaThread(phone, message, tg_message)
-                            meessage_media_thread.start()
+                            meessage_media_proces = MessageMediaProcess(phone, message, tg_message)
+                            meessage_media_proces.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success.")
             except (
@@ -173,6 +168,4 @@ class MessagesThread(KillableThread):
             logging.error(f"Chat {self.chat.id} messages download failed.")
         
     def run(self):
-        self.chat.init_event.wait()
-        
         asyncio.run(self.async_run())

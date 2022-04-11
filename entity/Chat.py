@@ -1,37 +1,17 @@
-import logging
-import re
-import threading
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-from models.Entity import Entity
-from utils import get_hash
 from telethon import types, functions, errors
+from utils import get_hash
+import entity
 
-from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
-from threads.ChatMediaThread import ChatMediaThread
-from threads.MembersThread import MembersThread
-from threads.MessagesThread import MessagesThread
-from threads.ChatMediaThread import ChatMediaThread
+from processors.ApiProcessor import ApiProcessor
+from processes.ChatMediaProcess import ChatMediaProcess
+from processes.MembersProcess import MembersProcess
+from processes.MessagesProcess import MessagesProcess
 from errors.ChatNotAvailableError import ChatNotAvailableError
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.PhoneEntity import Phone
-
-class Chat(Entity):
-    def __init__(
-        self, 
-        id: 'str',
-        link: 'str',
-        isAvailable: 'bool',
-        availablePhones: 'list[Phone]',
-        phones: 'list[Phone]',
-        internalId: 'int' = None,
-        title: 'str' = None,
-        description: 'str' = None,
-        date: 'str' = None,
-    ):
+class Chat(entity.Entity):
+    def __init__( self,  id: 'str', link: 'str', isAvailable: 'bool', availablePhones: 'list[entity.TypePhone]', phones: 'list[entity.TypePhone]', internalId: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, ):
         self.id = id
         self.link = link
         self.isAvailable = isAvailable
@@ -44,12 +24,13 @@ class Chat(Entity):
 
         self.username, self.hash = get_hash(link)
 
-        self.chat_media_thread = None
-        self.members_thread = None
-        self.messages_thread = None
-
-        self.phones_lock = threading.Lock()
-        self.init_event = threading.Event()
+        self.chat_media_process = None
+        self.members_process = None
+        self.messages_process = None
+        
+    @property
+    def name(self):
+        return "chat"
 
     def serialize(self):
         _dict =  {
@@ -69,7 +50,6 @@ class Chat(Entity):
     def deserialize(self, _dict: 'dict') -> 'Chat':
         self.id = _dict.get('id')
         self.link = _dict.get('link')
-        
         self.isAvailable = _dict.get('isAvailable')
         self.availablePhones = [PhonesManager()[p['id']] for p in _dict.get('availablePhones', []) if p['id'] in PhonesManager()]
         self.phones = [PhonesManager()[p['id']] for p in _dict.get('phones', []) if p['id'] in PhonesManager()]
@@ -82,9 +62,9 @@ class Chat(Entity):
 
     def save(self):
         try:
-            self.deserialize(ApiProcessor().set('telegram/chat', self.serialize()))
+            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
         except UniqueConstraintViolationError:
-            members = ApiProcessor().get('telegram/chat', { "link": self.chat.id })
+            members = ApiProcessor().get(f'telegram/{self.name}', { "internalId": self.internalId })
             
             if len(members) > 0:
                 self.id = members[0]['id']

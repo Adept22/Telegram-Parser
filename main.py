@@ -6,8 +6,7 @@ from sys import stdout
 from core.ChatsManager import ChatsManager
 
 import globalvars
-from models.ChatEntity import Chat
-from models.PhoneEntity import Phone
+from entity import Chat, Phone
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
 
@@ -80,7 +79,7 @@ if __name__ == '__main__':
     sh.setLevel(logging.DEBUG)
 
     logging.basicConfig(
-        format="%(threadName)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
+        format="%(process)s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
         datefmt='%d.%m.%Y %H:%M:%S',
         handlers=[eh, fh, sh],
         level=logging.DEBUG

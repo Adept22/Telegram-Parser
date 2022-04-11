@@ -1,23 +1,19 @@
 from abc import ABC, abstractmethod
 import math
-import os
 from telethon import sync, client as telegramclient
 from processors.ApiProcessor import ApiProcessor
 
 class Media(ABC):
-    @property
+    def __init__(self) -> None:
+        pass
+
     @abstractmethod
-    def download_path(self) -> 'str':
+    def serialize(self):
         pass
 
     @property
     @abstractmethod
-    def name(self) -> 'str':
-        pass
-
-    @property
-    @abstractmethod
-    def entity(self):
+    def name(self):
         pass
 
     async def upload(self, client: 'sync.TelegramClient', tg_media, file_size):
@@ -31,15 +27,6 @@ class Media(ABC):
             chunk_size=chunk_size, 
             file_size=file_size
         ):
-            ApiProcessor()._chunk(
-                f'telegram/{self.name}-media', 
-                body, 
-                str(tg_media.id), 
-                chunk, 
-                chunk_number, 
-                chunk_size, 
-                total_chunks, 
-                file_size
-            )
+            ApiProcessor()._chunk(f'telegram/{self.name}-media', body, str(tg_media.id), chunk, chunk_number, chunk_size, total_chunks, file_size)
 
             chunk_number += 1

@@ -1,14 +1,9 @@
-from models.MediaEntity import Media
+import entity
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.MemberEntity import Member
-
-class MemberMedia(Media):
-    def __init__(self, internalId: 'int', member: 'Member' = None, id = None, path = None, date = None):
+class MemberMedia(entity.Entity, entity.Media):
+    def __init__(self, internalId: 'int', member: 'entity.TypeMember' = None, id = None, path = None, date = None):
         self.id = id
         self.member = member
         self.internalId = internalId

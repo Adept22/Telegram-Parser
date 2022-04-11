@@ -1,19 +1,19 @@
 import logging
+import multiprocessing
 import queue
 import re
 import asyncio
-import threading
+import entity
 import globalvars
 
 from telethon import sync, sessions
-from models.Entity import Entity
 from processors.ApiProcessor import ApiProcessor
 
-from threads.JoinThread import JoinThread
-from threads.AuthorizationThread import AuthorizationThread
+from processes.JoinChatProcess import JoinChatProcess
+from processes.AuthorizationProcess import AuthorizationProcess
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
-class Phone(Entity):
+class Phone(entity.Entity):
     def __init__(self, _dict):
         if _dict is None:
             raise Exception('Unexpected phone dictionary')
@@ -32,12 +32,10 @@ class Phone(Entity):
         self._session = None
         self._is_banned = False
 
-        self.session_lock = threading.Lock()
+        self.init_event = multiprocessing.Event()
 
-        self.init_event = threading.Event()
-
-        self.authorization_thread = None
-        self.join_thread = None
+        self.authorization_process = None
+        self.join_process = None
         
         self.joining_queue = queue.Queue()
         
@@ -139,35 +137,34 @@ class Phone(Entity):
         return self
     
     async def new_client(self, loop = asyncio.get_event_loop()):
-        with self.session_lock:
-            client = sync.TelegramClient(
-                session=sessions.StringSession(self.session), 
-                api_id=globalvars.parser['api_id'],
-                api_hash=globalvars.parser['api_hash'],
-                loop=loop
-            )
+        client = sync.TelegramClient(
+            session=sessions.StringSession(self.session), 
+            api_id=globalvars.parser['api_id'],
+            api_hash=globalvars.parser['api_hash'],
+            loop=loop
+        )
+        
+        try:
+            if not client.is_connected():
+                await client.connect()
             
-            try:
-                if not client.is_connected():
-                    await client.connect()
+            if await client.is_user_authorized():
+                await client.get_me()
                 
-                if await client.is_user_authorized():
-                    await client.get_me()
-                    
-                    return client
-                else:
-                    if not self.authorization_thread.is_alive():
-                        self.authorization_thread.start()
+                return client
+            else:
+                if not self.authorization_process.is_alive():
+                    self.authorization_process.start()
 
-                    raise ClientNotAvailableError(f'Phone {self.id} not authorized')
-            except Exception as ex:
-                raise ClientNotAvailableError(ex)
+                raise ClientNotAvailableError(f'Phone {self.id} not authorized')
+        except Exception as ex:
+            raise ClientNotAvailableError(ex)
 
     def run(self):
-        self.authorization_thread = AuthorizationThread(self)
-        self.authorization_thread.start()
+        self.authorization_process = AuthorizationProcess(self)
+        self.authorization_process.start()
 
-        self.join_thread = JoinThread(self)
-        self.join_thread.start()
+        self.join_proces = JoinChatProcess(self)
+        self.join_proces.start()
 
         return self

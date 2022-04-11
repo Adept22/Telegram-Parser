@@ -1,17 +1,11 @@
-from models.MediaEntity import Media
+import entity
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.MemberEntity import Member
-    from models.MessageEntity import Message
-
-class MessageMedia(Media):
+class MessageMedia(entity.Entity, entity.Media):
     def __init__(self, 
         internalId: 'int', 
-        message: 'Member' = None, 
+        message: 'entity.TypeMember' = None, 
         id: 'str' = None, 
         path: 'str' = None, 
         date: 'str' = None
@@ -31,7 +25,7 @@ class MessageMedia(Media):
         return "message"
     
     @property
-    def entity(self) -> 'Message | None':
+    def entity(self) -> 'entity.TypeMessage | None':
         return self.message
 
     def serialize(self) -> 'dict':

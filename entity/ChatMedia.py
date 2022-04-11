@@ -1,31 +1,18 @@
-from models.MediaEntity import Media
+import entity
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.ChatEntity import Chat
-
-class ChatMedia(Media):
-    def __init__(self, internalId: 'int', chat: 'Chat' = None, id = None, path = None, date = None):
+class ChatMedia(entity.Entity, entity.Media):
+    def __init__(self, internalId: 'int', chat: 'entity.TypeChat' = None, id = None, path = None, date = None):
         self.id = id
         self.chat = chat
         self.internalId = internalId
         self.path = path
         self.date = date
-    
-    @property
-    def download_path(self):
-        return "./downloads/chats"
-    
+        
     @property
     def name(self):
         return "chat"
-    
-    @property
-    def entity(self):
-        return self.chat
 
     def serialize(self):
         _dict = {

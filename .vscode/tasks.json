@@ -10,14 +10,8 @@
                 "image": "telegram-parser:debug",
                 "env": {
                     "PARSER_ID": "ba208a6c-1b24-4ea9-b423-335d8e2cba1d",
-                    "API_URL": "http://host.docker.internal:47352/private/api/v1"
+                    "API_URL": "https://social.tegia.ru/private/api/v1"
                 },
-                "extraHosts": [
-                    {
-                        "hostname": "host.docker.internal",
-                        "ip": "host-gateway"
-                    }
-                ],
                 "volumes": [
                     {
                         "localPath": "${workspaceFolder}",

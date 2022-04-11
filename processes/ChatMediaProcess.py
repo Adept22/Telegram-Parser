@@ -1,21 +1,14 @@
-import os
-import threading
+import multiprocessing
 import asyncio
 import logging
 import random
-import requests
 
 from telethon import types
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-from models.ChatMediaEntity import ChatMedia
+from entity.ChatMedia import ChatMedia
 
-from processors.ApiProcessor import ApiProcessor
-from threads.KillableThread import KillableThread
-
-class ChatMediaThread(KillableThread):
+class ChatMediaProcess(multiprocessing.Process):
     def __init__(self, chat):
-        threading.Thread.__init__(self, name=f'ChatMediaThread-{chat.id}')
-        self.daemon = True
+        multiprocessing.Process.__init__(self, name=f'ChatMediaProcess-{chat.id}', daemon=True)
 
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -65,6 +58,4 @@ class ChatMediaThread(KillableThread):
             logging.error(f"Can't get chat {self.chat.id} messages.")
 
     def run(self):
-        self.chat.init_event.wait()
-
         asyncio.run(self.async_run())

@@ -1,28 +1,11 @@
 from telethon import functions
+import entity
 
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.ChatEntity import Chat
-    from models.ChatMemberEntity import ChatMember
-
-class Message(object):
-    def __init__(self, 
-        internalId: 'int' = None,
-        chat: 'Chat' = None,
-        id = None,
-        text = None,
-        member: 'ChatMember' = None,
-        replyTo: 'Message' = None,
-        isPinned = None,
-        forwardedFromId = None,
-        forwardedFromName = None,
-        groupedId = None,
-        date = None
-    ):
+class Message(entity.Entity):
+    def __init__(self, internalId: 'int' = None, chat: 'entity.TypeChat' = None, id = None, text = None, member: 'entity.TypeChatMember' = None, replyTo: 'Message' = None, isPinned = None, forwardedFromId = None, forwardedFromName = None, groupedId = None, date = None ):
         self.id = id
         self.internalId = internalId
         self.text = text
@@ -34,6 +17,10 @@ class Message(object):
         self.forwardedFromName = forwardedFromName
         self.groupedId = groupedId
         self.date = date
+
+    @property
+    def name(self):
+        return "message"
 
     async def expand(self, client):
         full_user = await client(functions.users.GetFullUserRequest(id=self.internalId))
@@ -80,9 +67,9 @@ class Message(object):
 
     def save(self):
         try:
-            self.deserialize(ApiProcessor().set('telegram/message', self.serialize()))
+            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
         except UniqueConstraintViolationError:
-            messages = ApiProcessor().get('telegram/message', { 'internalId': self.internalId, 'chat': { "id": self.chat.id } })
+            messages = ApiProcessor().get(f'telegram/{self.name}', { 'internalId': self.internalId, 'chat': { "id": self.chat.id } })
             
             if len(messages) > 0:
                 self.id = messages[0]['id']

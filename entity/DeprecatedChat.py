@@ -1,15 +1,15 @@
 import logging
+import multiprocessing
 import re
-import threading
 from utils import get_hash
 from telethon import types, functions, errors
 
 from processors.ApiProcessor import ApiProcessor
 from core.PhonesManager import PhonesManager
-from threads.ChatMediaThread import ChatMediaThread
-from threads.MembersThread import MembersThread
-from threads.MessagesThread import MessagesThread
-from threads.ChatMediaThread import ChatMediaThread
+from processes.ChatMediaProcess import ChatMediaProcess
+from processes.MembersProcess import MembersProcess
+from processes.MessagesProcess import MessagesProcess
+from processes.ChatMediaProcess import ChatMediaProcess
 from errors.ChatNotAvailableError import ChatNotAvailableError
 
 class Chat(object):
@@ -31,12 +31,11 @@ class Chat(object):
         self._available_phones = []
         self._phones = []
 
-        self.chat_media_thread = None
-        self.members_thread = None
-        self.messages_thread = None
+        self.chat_media_process = None
+        self.members_process = None
+        self.messages_process = None
 
-        self.phones_lock = threading.Lock()
-        self.init_event = threading.Event()
+        self.init_event = multiprocessing.Event()
         
         self.from_dict(_dict)
 
@@ -198,14 +197,14 @@ class Chat(object):
         logging.debug(f"Chat {self.id} has {len(self.available_phones)} available phones.")
         logging.debug(f"Chat {self.id} has {len(self.phones)} wired phones.")
 
-        self.chat_media_thread = ChatMediaThread(self)
-        self.chat_media_thread.start()
+        self.chat_media_process = ChatMediaProcess(self)
+        self.chat_media_process.start()
 
-        self.members_thread = MembersThread(self)
-        self.members_thread.start()
+        self.members_process = MembersProcess(self)
+        self.members_process.start()
 
-        self.messages_thread = MessagesThread(self)
-        self.messages_thread.start()
+        self.messages_process = MessagesProcess(self)
+        self.messages_process.start()
 
         return self
             

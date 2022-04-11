@@ -1,22 +1,17 @@
-import threading
+import multiprocessing
 import asyncio
 import logging
-import os
-from telethon import sync, types, functions, errors
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-from models.MemberEntity import Member
-from models.ChatMemberEntity import ChatMember
-from models.ChatMemberRoleEntity import ChatMemberRole
-from models.MemberMediaEntity import MemberMedia
+from telethon import sync, types, errors
+from entity.Member import Member
+from entity.ChatMember import ChatMember
+from entity.ChatMemberRole import ChatMemberRole
+from entity.MemberMedia import MemberMedia
 
-from processors.ApiProcessor import ApiProcessor
 from utils import user_title
-from threads.KillableThread import KillableThread
 
-class MembersThread(KillableThread):
+class MembersProcess(multiprocessing.Process):
     def __init__(self, chat):
-        threading.Thread.__init__(self, name=f'MembersThread-{chat.id}')
-        self.daemon = True
+        multiprocessing.Process.__init__(self, name=f'MembersProcess-{chat.id}', daemon=True)
         
         self.media_path = f"./downloads/members"
         self.chat = chat
@@ -127,6 +122,4 @@ class MembersThread(KillableThread):
             logging.error(f"Cannot get chat {self.chat.id} participants.")
         
     def run(self):
-        self.chat.init_event.wait()
-        
         asyncio.run(self.async_run())

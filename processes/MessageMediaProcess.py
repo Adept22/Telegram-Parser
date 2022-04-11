@@ -1,18 +1,12 @@
-import os
-import threading
+import multiprocessing
 import asyncio
 import logging
 from telethon import types
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-from models.MessageMediaEntity import MessageMedia
+from entity.MessageMedia import MessageMedia
 
-from processors.ApiProcessor import ApiProcessor
-from threads.KillableThread import KillableThread
-
-class MessageMediaThread(KillableThread):
+class MessageMediaProcess(multiprocessing.Process):
     def __init__(self, phone, message, tg_message):
-        threading.Thread.__init__(self, name=f"MessageMediaThread-{message.id}")
-        self.daemon = True
+        multiprocessing.Process.__init__(self, name=f"MessageMediaProcess-{message.id}", daemon=True)
         
         self.phone = phone
         self.message = message
