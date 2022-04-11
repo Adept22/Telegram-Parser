@@ -2,7 +2,7 @@ from pyexpat.errors import messages
 import threading
 import asyncio
 import logging
-from telethon import types, errors, functions
+from telethon import sync, types, errors, functions
 
 from models.MemberEntity import Member
 from models.ChatMemberEntity import ChatMember
@@ -24,26 +24,46 @@ class MessagesThread(KillableThread):
         
         asyncio.set_event_loop(self.loop)
         
-    async def get_member(self, client, user):
-        member = Member(internalId=user.id)
+    async def get_member(self, client, user_id):
+        member = Member(internalId=user_id)
 
         await member.expand(client)
 
         return member.save()
         
-    async def get_chat_member(self, client, member):
+    async def get_chat_member(self, participant, member):
         chat_member = ChatMember(chat=self.chat, member=member)
 
-        await chat_member.expand(client)
+        await chat_member.expand(participant)
 
         return chat_member.save()
     
-    async def get_chat_member_role(self, client, chat_member):
+    async def get_chat_member_role(self, participant, chat_member):
         chat_member_role = ChatMemberRole(member=chat_member)
 
-        await chat_member_role.expand(client)
+        await chat_member_role.expand(participant)
 
         return chat_member_role.save()
+
+    async def get_message_participant(self, client, tg_message):
+        try:
+            participant_request = await client(
+                functions.channels.GetParticipantRequest(
+                    channel=tg_message.input_chat,
+                    participant=tg_message.input_sender
+                )
+            )
+        except (
+            errors.ChannelPrivateError,
+            errors.ChatAdminRequiredError,
+            errors.UserIdInvalidError,
+            errors.UserNotParticipantError
+        ) as ex:
+            logging.error(f"Can't get participant data for {tg_message.from_id.user_id} with chat {self.chat.internal_id}. Exception: {ex}.")
+        else:
+            return participant_request.participant
+
+        return None
     
     def get_fwd(self, fwd_from):
         fwd_from_id = None
@@ -81,7 +101,7 @@ class MessagesThread(KillableThread):
                 all_messages = await client.get_messages(entity=tg_chat, limit=0, max_id=0)
 
                 logging.info(f"Chat {self.chat.id} total messages {all_messages.total}.")
-
+                
                 async for tg_message in client.iter_messages(entity=tg_chat, max_id=0):
                     logging.debug(f"Chat {self.chat.id}. Receive message {tg_message.id}/{all_messages.total}")
                     
@@ -96,10 +116,11 @@ class MessagesThread(KillableThread):
                         chat_member = None
                         reply_to = None
 
-                        if isinstance(tg_message.sender, types.PeerUser):
-                            member = await self.get_member(client, tg_message.sender)
-                            chat_member = await self.get_chat_member(client, member)
-                            chat_member_role = await self.get_chat_member_role(client, chat_member)
+                        if isinstance(tg_message.from_id, types.PeerUser):
+                            member = await self.get_member(client, tg_message.from_id.user_id)
+                            participant = await self.get_message_participant(client, tg_message)
+                            chat_member = await self.get_chat_member(participant, member)
+                            chat_member_role = await self.get_chat_member_role(participant, chat_member)
 
                         if tg_message.reply_to != None:
                             reply_to = Message(internalId=tg_message.reply_to.reply_to_msg_id, chat=self.chat)

@@ -24,31 +24,13 @@ class ChatMember(object):
         self.isLeft = isLeft
         self.roles = roles
 
-    async def expand(self, client, participant: 'types.ChannelParticipant' = None):
-        if participant != None:
+    async def expand(self, participant: 'types.ChannelParticipant' = None):
+        if isinstance(participant, types.ChannelParticipant):
             self.date = participant.date.isoformat()
-
-            return self
-            
-        try:
-            participant_request = await client(
-                functions.channels.GetParticipantRequest(
-                    channel=self.chat.internal_id,
-                    participant=self.member.internalId
-                )
-            )
-        except (
-            errors.ChannelPrivateError,
-            errors.ChatAdminRequiredError,
-            errors.UserIdInvalidError,
-            errors.UserNotParticipantError
-        ) as ex:
-            logging.error(f"Can't get participant data for '{self.member.internalId}' with chat {self.chat.internal_id}.")
-            logging.exception(ex)
-
-            return self
         else:
-            return await self.expand(client, participant_request.participant)
+            self.isLeft = True
+
+        return self
 
     def serialize(self):
         _dict = {

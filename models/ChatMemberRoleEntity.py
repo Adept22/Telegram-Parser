@@ -18,39 +18,15 @@ class ChatMemberRole(object):
         self.title = title
         self.code = code
 
-    async def expand(self, client, participant: 'types.ChannelParticipant' = None):
-        if participant != None:
-            if isinstance(participant, types.ChannelParticipantAdmin):
-                self.title = (participant.rank if participant.rank != None else "Администратор")
-                self.code = "admin"
-            elif isinstance(participant, types.ChannelParticipantCreator):
-                self.title = (participant.rank if participant.rank != None else "Создатель")
-                self.code = "creator"
-            else:
-                self.title = "Участник"
-                self.code = "member"
+    async def expand(self, participant: 'types.ChannelParticipant' = None):
+        if isinstance(participant, types.ChannelParticipantAdmin):
+            self.title = (participant.rank if participant.rank != None else "Администратор")
+            self.code = "admin"
+        elif isinstance(participant, types.ChannelParticipantCreator):
+            self.title = (participant.rank if participant.rank != None else "Создатель")
+            self.code = "creator"
 
-            return self
-
-        try:
-            participant_request = await client(
-                functions.channels.GetParticipantRequest(
-                    channel=self.member.chat.internal_id,
-                    participant=self.member.member.internalId
-                )
-            )
-        except (
-            errors.ChannelPrivateError,
-            errors.ChatAdminRequiredError,
-            errors.UserIdInvalidError,
-            errors.UserNotParticipantError
-        ) as ex:
-            logging.error(f"Can't get participant data for '{self.member.member.internalId}' with chat {self.member.chat.internal_id}.")
-            logging.exception(ex)
-
-            return self
-        else:
-            return await self.expand(client, participant_request.participant)
+        return self
 
     def serialize(self):
         _dict = {
