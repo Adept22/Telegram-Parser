@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from models.MediaEntity import Media
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
@@ -8,9 +6,16 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from models.MemberEntity import Member
+    from models.MessageEntity import Message
 
 class MessageMedia(Media):
-    def __init__(self, internalId: 'int', message: 'Member' = None, id = None, path = None, date = None):
+    def __init__(self, 
+        internalId: 'int', 
+        message: 'Member' = None, 
+        id: 'str' = None, 
+        path: 'str' = None, 
+        date: 'str' = None
+    ) -> None:
         self.id = id
         self.message = message
         self.internalId = internalId
@@ -18,18 +23,18 @@ class MessageMedia(Media):
         self.date = date
     
     @property
-    def download_path(self):
+    def download_path(self) -> 'str':
         return "./downloads/messages"
     
     @property
-    def name(self):
+    def name(self) -> 'str':
         return "message"
     
     @property
-    def entity(self):
+    def entity(self) -> 'Message | None':
         return self.message
 
-    def serialize(self):
+    def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
             "message": self.message.serialize(),
@@ -40,7 +45,7 @@ class MessageMedia(Media):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict'):
+    def deserialize(self, _dict: 'dict') -> 'MessageMedia':
         self.id = _dict.get("id")
         self.message = self.message.deserialize(_dict.get("message")) if "message" in _dict else None
         self.internalId = _dict.get("internalId")
@@ -49,7 +54,7 @@ class MessageMedia(Media):
 
         return self
 
-    def save(self):
+    def save(self) -> None:
         if self.message.id == None:
             self.message.save()
 
@@ -62,5 +67,3 @@ class MessageMedia(Media):
                 self.id = medias[0]['id']
                 
                 self.save()
-
-        return self

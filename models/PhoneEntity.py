@@ -6,13 +6,14 @@ import threading
 import globalvars
 
 from telethon import sync, sessions
+from models.Entity import Entity
 from processors.ApiProcessor import ApiProcessor
 
 from threads.JoinThread import JoinThread
 from threads.AuthorizationThread import AuthorizationThread
 from errors.ClientNotAvailableError import ClientNotAvailableError
 
-class Phone(object):
+class Phone(Entity):
     def __init__(self, _dict):
         if _dict is None:
             raise Exception('Unexpected phone dictionary')

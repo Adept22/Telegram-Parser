@@ -1,19 +1,18 @@
-
-import logging
 from abc import ABC, abstractmethod
+import math
 import os
-from telethon import sync
+from telethon import sync, client as telegramclient
 from processors.ApiProcessor import ApiProcessor
 
 class Media(ABC):
     @property
     @abstractmethod
-    def download_path(self):
+    def download_path(self) -> 'str':
         pass
 
     @property
     @abstractmethod
-    def name(self):
+    def name(self) -> 'str':
         pass
 
     @property
@@ -21,22 +20,26 @@ class Media(ABC):
     def entity(self):
         pass
 
-    async def upload(self, client: 'sync.TelegramClient', tg_media, thumb = None):
-        path = await client.download_media(
-            message=tg_media,
-            file= f"{self.download_path}/{self.entity.id}/{tg_media.id}",
-            thumb=thumb
-        )
+    async def upload(self, client: 'sync.TelegramClient', tg_media, file_size):
+        body = self.serialize()
+        chunk_number = 0
+        chunk_size=telegramclient.downloads.MAX_CHUNK_SIZE
+        total_chunks = math.ceil(file_size / chunk_size)
+        
+        async for chunk in client.iter_download(
+            file=tg_media, 
+            chunk_size=chunk_size, 
+            file_size=file_size
+        ):
+            ApiProcessor()._chunk(
+                f'telegram/{self.name}-media', 
+                body, 
+                str(tg_media.id), 
+                chunk, 
+                chunk_number, 
+                chunk_size, 
+                total_chunks, 
+                file_size
+            )
 
-        if path != None:
-            try:
-                ApiProcessor().chunked(f'telegram/{self.name}-media', self.serialize(), path)
-            except Exception as ex:
-                raise ex
-            else:
-                try:
-                    os.remove(path)
-                except:
-                    pass
-        else:
-            raise Exception(f"Can\'t download {self.name} {self.entity.id} media.")
+            chunk_number += 1

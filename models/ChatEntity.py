@@ -1,6 +1,8 @@
 import logging
 import re
 import threading
+from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
+from models.Entity import Entity
 from utils import get_hash
 from telethon import types, functions, errors
 
@@ -12,24 +14,35 @@ from threads.MessagesThread import MessagesThread
 from threads.ChatMediaThread import ChatMediaThread
 from errors.ChatNotAvailableError import ChatNotAvailableError
 
-class Chat(object):
-    def __init__(self, _dict):
-        if not 'id' in _dict or _dict['id'] is None:
-            raise Exception('Unexpected chat id')
+from typing import TYPE_CHECKING
 
-        if not 'link' in _dict or _dict['link'] is None:
-            raise Exception('Unexpected chat link')
+if TYPE_CHECKING:
+    from models.PhoneEntity import Phone
 
-        self.username, self.hash = get_hash(_dict['link'])
-        
-        self._title = None
-        self.link = None
-        self._internal_id = None
-        self._is_available = False
-        self._date = None
+class Chat(Entity):
+    def __init__(
+        self, 
+        id: 'str',
+        link: 'str',
+        isAvailable: 'bool',
+        availablePhones: 'list[Phone]',
+        phones: 'list[Phone]',
+        internalId: 'int' = None,
+        title: 'str' = None,
+        description: 'str' = None,
+        date: 'str' = None,
+    ):
+        self.id = id
+        self.link = link
+        self.isAvailable = isAvailable
+        self.availablePhones = availablePhones
+        self.phones = phones
+        self.internalId = internalId
+        self.title = title
+        self.description = description
+        self.date = date
 
-        self._available_phones = []
-        self._phones = []
+        self.username, self.hash = get_hash(link)
 
         self.chat_media_thread = None
         self.members_thread = None
@@ -37,175 +50,46 @@ class Chat(object):
 
         self.phones_lock = threading.Lock()
         self.init_event = threading.Event()
-        
-        self.from_dict(_dict)
-
-    def __del__(self):
-        if self.init_event.is_set():
-            self.init_event.clear()
-        # TODO: Мы должны убивать треды при удалении чата.
-        pass
 
     def serialize(self):
         _dict =  {
             "id": self.id,
-            "internalId": self._internal_id,
             "link": self.link,
-            "title": self._title,
-            "isAvailable": self._is_available,
-            "date": self._date
+            "isAvailable": self.isAvailable,
+            "internalId": self.internalId,
+            "title": self.title,
+            "description": self.description,
+            "date": self.date,
+            "availablePhones": [p.serialize() for p in self.availablePhones],
+            "phones": [p.serialize() for p in self.phones],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict'):
-        return self
+    def deserialize(self, _dict: 'dict') -> 'Chat':
+        self.id = _dict.get('id')
+        self.link = _dict.get('link')
         
-    @property
-    def phones(self):
-        return self._phones
-    
-    @phones.setter
-    def phones(self, new_value):
-        new_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
+        self.isAvailable = _dict.get('isAvailable')
+        self.availablePhones = [PhonesManager()[p['id']] for p in _dict.get('availablePhones', []) if p['id'] in PhonesManager()]
+        self.phones = [PhonesManager()[p['id']] for p in _dict.get('phones', []) if p['id'] in PhonesManager()]
+        self.internalId = _dict.get('internalId')
+        self.title = _dict.get('title')
+        self.description = _dict.get('description')
+        self.date = _dict.get('date')
 
-        if len(new_phones) < 3 and len(self.available_phones) > len(new_phones):
-            a_ps = dict([(p.id, p) for p in self.available_phones])
-            phones = dict([(p.id, p) for p in self.phones])
-
-            logging.debug(f"{len(a_ps) - len(phones)} phones ready for joining in chat {self.id}.")
-
-            for id in list(set(a_ps) - set(phones)):
-                a_ps[id].joining_queue.put(self)
-        
-        if len(new_phones) != len(self._phones) or \
-            len(set([p.id for p in new_phones]) ^ set([p.id for p in self._phones])):
-            logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_phones)}.")
-            
-            ApiProcessor().set('telegram/chat', { 
-                'id': self.id, 
-                'phones': [{ 'id': phone.id } for phone in new_phones] 
-            })
-        
-        self._phones = new_phones
-
-        if len(self._phones) > 0:
-            self.init_event.set()
-
-    def add_phone(self, new_phone):
-        if not new_phone.id in [_p.id for _p in self._phones]:
-            new_phones = [{"id": _p.id} for _p in self._phones]
-            new_phones.append({"id": new_phone.id})
-            self.phones = new_phones
-
-    def remove_phone(self, phone):
-        if phone.id in [_p.id for _p in self._phones]:
-            self.phones = [{ "id": _p.id } for _p in self._phones if _p.id != phone.id]
-        
-    @property
-    def available_phones(self):
-        return self._available_phones
-    
-    @available_phones.setter
-    def available_phones(self, new_value):
-        new_available_phones = [PhonesManager()[p['id']] for p in new_value if p['id'] in PhonesManager()]
-        
-        if len(new_available_phones) != len(self._available_phones) or \
-            len(set([p.id for p in new_available_phones]) ^ set([p.id for p in self._available_phones])):
-            logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_available_phones)}.")
-            
-            ApiProcessor().set('telegram/chat', { 
-                'id': self.id, 
-                'availablePhones': [{ 'id': phone.id } for phone in new_available_phones] 
-            })
-            
-        self._available_phones = new_available_phones
-
-    def add_available_phone(self, new_available_phone):
-        if not new_available_phone.id in [_a_p.id for _a_p in self._available_phones]:
-            new_available_phones = [{"id": _a_p.id} for _a_p in self._available_phones]
-            new_available_phones.append({"id": new_available_phone.id})
-            self.available_phones = new_available_phones
-
-    def remove_available_phone(self, available_phone):
-        if available_phone.id in [_a_p.id for _a_p in self._available_phones]:
-            self._available_phones = [_a_p for _a_p in self._available_phones if _a_p.id != available_phone.id]
-        
-    @property
-    def internal_id(self):
-        return self._internal_id
-    
-    @internal_id.setter
-    def internal_id(self, new_value):
-        if new_value != None and self._internal_id != new_value:
-            logging.info(f"Chat {self.id} internal id changed.")
-            
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'internalId': new_value })
-
-        self._internal_id = new_value
-        
-    @property
-    def title(self):
-        return self._title
-    
-    @title.setter
-    def title(self, new_value):
-        if new_value != None and self._title != new_value:
-            logging.info(f"Chat {self.id} title changed.")
-            
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'title': new_value })
-
-        self._title = new_value
-        
-    @property
-    def date(self):
-        return self._date
-    
-    @date.setter
-    def date(self, new_value):
-        if new_value != None and self._date != new_value:
-            logging.info(f"Chat {self.id} date changed.")
-            
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'date': new_value })
-
-        self._date = new_value
-        
-    @property
-    def is_available(self):
-        return self._is_available
-    
-    @is_available.setter
-    def is_available(self, new_value):
-        if self._is_available != new_value:
-            logging.info(f"Chat {self.id} is_available changed.")
-            
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'isAvailable': new_value })
-
-        if not new_value:
-            self.init_event.clear()
-
-        self._is_available = new_value
-        
-    def from_dict(self, _dict):
-        pattern = re.compile(r'(?<!^)(?=[A-Z])')
-        
-        for key in _dict:
-            setattr(self, pattern.sub('_', key).lower(), _dict[key])
-            
         return self
 
-    def run(self):
-        logging.debug(f"Chat {self.id} has {len(self.available_phones)} available phones.")
-        logging.debug(f"Chat {self.id} has {len(self.phones)} wired phones.")
-
-        self.chat_media_thread = ChatMediaThread(self)
-        self.chat_media_thread.start()
-
-        self.members_thread = MembersThread(self)
-        self.members_thread.start()
-
-        self.messages_thread = MessagesThread(self)
-        self.messages_thread.start()
+    def save(self):
+        try:
+            self.deserialize(ApiProcessor().set('telegram/chat', self.serialize()))
+        except UniqueConstraintViolationError:
+            members = ApiProcessor().get('telegram/chat', { "link": self.chat.id })
+            
+            if len(members) > 0:
+                self.id = members[0]['id']
+                
+                self.save()
 
         return self
             

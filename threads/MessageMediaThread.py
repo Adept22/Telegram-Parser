@@ -22,7 +22,7 @@ class MessageMediaThread(KillableThread):
         
         asyncio.set_event_loop(self.loop)
     
-    async def file_download(self, client, tg_media):
+    async def file_download(self, client, tg_media, size):
         try:
             media = MessageMedia(internalId=tg_media.id, message=self.message, date=tg_media.date.isoformat())
             media.save()
@@ -33,7 +33,7 @@ class MessageMediaThread(KillableThread):
             logging.info(f"Sucessfuly saved message {self.message.id} media.")
 
             try:
-                await media.upload(client, tg_media)
+                await media.upload(client, tg_media, size)
             except Exception as ex:
                 logging.error(f"Can\'t upload message {self.message.id} media.")
                 logging.exception(ex)
@@ -53,9 +53,9 @@ class MessageMediaThread(KillableThread):
             elif isinstance(self.tg_message.media, types.MessageMediaContact):
                 pass
             elif isinstance(self.tg_message.media, types.MessageMediaPhoto):
-                await self.file_download(client, self.tg_message.photo)
+                await self.file_download(client, self.tg_message.photo, self.tg_message.photo.sizes[-2])
             elif isinstance(self.tg_message.media, types.MessageMediaDocument):
-                await self.file_download(client, self.tg_message.document)
+                await self.file_download(client, self.tg_message.document, self.tg_message.document.size)
         except Exception as ex:
             logging.error(f"Message {self.message.id} media download failed.")
             logging.exception(ex)

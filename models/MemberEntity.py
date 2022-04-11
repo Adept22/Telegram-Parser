@@ -1,12 +1,24 @@
-from __future__ import annotations
-import json
 from telethon import functions
+from models.Entity import Entity
 
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
-class Member(object):
-    def __init__(self, internalId: 'int', id=None, username=None, firstName=None, lastName=None, phone=None, about=None):
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from telethon import sync
+
+class Member(Entity):
+    def __init__(
+        self, 
+        internalId: 'int', 
+        id: 'str' = None, 
+        username: 'str' = None, 
+        firstName: 'str' = None, 
+        lastName: 'str' = None, 
+        phone: 'str' = None, 
+        about: 'str' = None
+    ) -> None:
         self.id = id
         self.internalId = internalId
         self.username = username
@@ -15,7 +27,7 @@ class Member(object):
         self.phone = phone
         self.about = about
 
-    async def expand(self, client):
+    async def expand(self, client: 'sync.TelegramClient') -> 'Member':
         full_user = await client(functions.users.GetFullUserRequest(id=self.internalId))
 
         self.username = full_user.user.username
@@ -26,7 +38,7 @@ class Member(object):
 
         return self
 
-    def serialize(self):
+    def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
             "internalId": self.internalId,
@@ -39,7 +51,7 @@ class Member(object):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict'):
+    def deserialize(self, _dict: 'dict') -> 'Member':
         self.id = _dict.get("id")
         self.internalId = _dict.get("internalId")
         self.username = _dict.get("username")
@@ -50,7 +62,7 @@ class Member(object):
 
         return self
 
-    def save(self):
+    def save(self) -> None:
         try:
             self.deserialize(ApiProcessor().set('telegram/member', self.serialize()))
         except UniqueConstraintViolationError:
@@ -60,5 +72,3 @@ class Member(object):
                 self.id = members[0]['id']
                 
                 self.save()
-
-        return self

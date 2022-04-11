@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from models.MediaEntity import Media
 from processors.ApiProcessor import ApiProcessor
 from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
