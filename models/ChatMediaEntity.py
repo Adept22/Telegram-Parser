@@ -40,7 +40,7 @@ class ChatMedia(Media):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict = {}):
+    def deserialize(self, _dict: 'dict'):
         self.id = _dict.get("id")
         self.chat = self.chat.deserialize(_dict.get("chat"))
         self.internalId = _dict.get("internalId")

@@ -40,9 +40,9 @@ class MessageMedia(Media):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict = {}):
+    def deserialize(self, _dict: 'dict'):
         self.id = _dict.get("id")
-        self.message = self.message.deserialize(_dict.get("message"))
+        self.message = self.message.deserialize(_dict.get("message")) if "message" in _dict else None
         self.internalId = _dict.get("internalId")
         self.path = _dict.get("path")
         self.date = _dict.get("date")

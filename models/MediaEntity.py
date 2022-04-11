@@ -22,14 +22,10 @@ class Media(ABC):
         pass
 
     async def upload(self, client: 'sync.TelegramClient', tg_media, thumb = None):
-        def progress_callback(current, total):
-            logging.debug(f"Member {self.entity.id} media downloaded {current} out of {total} bytes: {current / total:.2%}")
-
         path = await client.download_media(
             message=tg_media,
             file= f"{self.download_path}/{self.entity.id}/{tg_media.id}",
-            thumb=thumb,
-            progress_callback=progress_callback
+            thumb=thumb
         )
 
         if path != None:

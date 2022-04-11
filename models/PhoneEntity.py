@@ -61,7 +61,7 @@ class Phone(object):
         
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict = {}):
+    def deserialize(self, _dict: 'dict'):
         return self
 
     @property

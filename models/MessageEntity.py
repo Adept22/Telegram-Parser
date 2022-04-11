@@ -64,13 +64,13 @@ class Message(object):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict = {}):
+    def deserialize(self, _dict: 'dict'):
         self.id = _dict.get("id")
         self.internalId = _dict.get("internalId")
         self.text = _dict.get("text")
         self.chat = self.chat.deserialize(_dict.get("chat"))
-        self.member = self.member.deserialize(_dict.get("member")) if self.member != None else None
-        self.replyTo = self.replyTo.deserialize(_dict.get("replyTo")) if self.replyTo != None else None
+        self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
+        self.replyTo = self.replyTo.deserialize(_dict.get("replyTo")) if self.replyTo != None and "replyTo" in _dict else None
         self.isPinned = _dict.get("isPinned")
         self.forwardedFromId = _dict.get("forwardedFromId")
         self.forwardedFromName = _dict.get("forwardedFromName")
