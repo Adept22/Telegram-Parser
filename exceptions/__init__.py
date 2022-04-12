@@ -1,0 +1,9 @@
+from .ChatNotAvailableError import ChatNotAvailableError
+from .ClientNotAvailableError import ClientNotAvailableError
+from .InvalidLinkError import InvalidLinkError
+from .UniqueConstraintViolationError import UniqueConstraintViolationError
+
+TypeChatNotAvailableError = ChatNotAvailableError
+TypeClientNotAvailableError = ClientNotAvailableError
+TypeInvalidLinkError = InvalidLinkError
+TypeUniqueConstraintViolationError = UniqueConstraintViolationError

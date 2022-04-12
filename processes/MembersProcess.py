@@ -1,12 +1,6 @@
-import multiprocessing
-import asyncio
-import logging
-from telethon import sync, types, errors
-from entity.Member import Member
-from entity.ChatMember import ChatMember
-from entity.ChatMemberRole import ChatMemberRole
-from entity.MemberMedia import MemberMedia
+import multiprocessing, asyncio, logging, telethon
 
+from entity import Member, ChatMember, ChatMemberRole, MemberMedia
 from utils import user_title
 
 class MembersProcess(multiprocessing.Process):
@@ -48,14 +42,14 @@ class MembersProcess(multiprocessing.Process):
 
     async def get_entity(self, client):
         try:
-            return await client.get_entity(entity=types.PeerChannel(channel_id=self.chat.internal_id))
+            return await client.get_entity(entity=telethon.types.PeerChannel(channel_id=self.chat.internal_id))
         except ValueError:
-            return await client.get_entity(entity=types.PeerChat(chat_id=self.chat.internal_id))
+            return await client.get_entity(entity=telethon.types.PeerChat(chat_id=self.chat.internal_id))
     
     async def async_run(self):
         for phone in self.chat.phones:
             try:
-                client: 'sync.TelegramClient' = await phone.new_client(loop=self.loop)
+                client: 'telethon.TelegramClient' = await phone.new_client(loop=self.loop)
 
                 entity = await self.get_entity(client)
 
@@ -99,9 +93,9 @@ class MembersProcess(multiprocessing.Process):
                             logging.error(f"Can't get member {member.id} media using phone {phone.id}.")
                             logging.exception(ex)
             except (
-                errors.ChannelInvalidError,
-                errors.ChannelPrivateError,
-                errors.ChatAdminRequiredError
+                telethon.errors.ChannelInvalidError,
+                telethon.errors.ChannelPrivateError,
+                telethon.errors.ChatAdminRequiredError
             ) as ex:
                 logging.error(f"Chat {self.chat.id} not available.")
                 logging.exception(ex)

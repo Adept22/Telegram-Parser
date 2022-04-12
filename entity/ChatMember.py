@@ -1,10 +1,7 @@
-from telethon import types
+import telethon
 import entity
 
-from processors.ApiProcessor import ApiProcessor
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-
-class ChatMember(object):
+class ChatMember(entity.Entity):
     def __init__(self, chat: 'entity.TypeChat', member: 'entity.TypeMember', id = None, date = None, isLeft = False, roles: 'list[entity.TypeChatMemberRole]' = []):
         self.id = id
         self.chat = chat
@@ -16,9 +13,13 @@ class ChatMember(object):
     @property
     def name(self):
         return "chat-member"
+        
+    @property
+    def unique_constraint(self) -> 'dict':
+        return { 'chat': { "id": self.chat.id }, "member": { "id": self.member.id } }
 
-    async def expand(self, participant: 'types.ChannelParticipant' = None):
-        if isinstance(participant, types.ChannelParticipant):
+    async def expand(self, participant: 'telethon.types.ChannelParticipant' = None):
+        if isinstance(participant, telethon.types.ChannelParticipant):
             self.date = participant.date.isoformat()
         else:
             self.isLeft = True
@@ -43,18 +44,5 @@ class ChatMember(object):
         self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
         self.date = _dict.get("date")
         self.isLeft = _dict.get("isLeft")
-
-        return self
-
-    def save(self):
-        try:
-            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
-        except UniqueConstraintViolationError:
-            members = ApiProcessor().get(f'telegram/{self.name}', { 'chat': { "id": self.chat.id }, "member": { "id": self.member.id } })
-            
-            if len(members) > 0:
-                self.id = members[0]['id']
-                
-                self.save()
 
         return self

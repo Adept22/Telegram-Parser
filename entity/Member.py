@@ -1,12 +1,9 @@
-from telethon import functions
+import telethon
 import entity
-
-from processors.ApiProcessor import ApiProcessor
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from telethon import sync
+    from telethon import TelegramClient
 
 class Member(entity.Entity):
     def __init__(self, internalId: 'int', id: 'str' = None, username: 'str' = None, firstName: 'str' = None, lastName: 'str' = None, phone: 'str' = None, about: 'str' = None) -> None:
@@ -21,9 +18,13 @@ class Member(entity.Entity):
     @property
     def name(self):
         return "member"
+        
+    @property
+    def unique_constraint(self) -> 'dict':
+        return { 'internalId': self.internalId }
 
-    async def expand(self, client: 'sync.TelegramClient') -> 'Member':
-        full_user = await client(functions.users.GetFullUserRequest(id=self.internalId))
+    async def expand(self, client: 'TelegramClient') -> 'Member':
+        full_user = await client(telethon.functions.users.GetFullUserRequest(id=self.internalId))
 
         self.username = full_user.user.username
         self.firstName = full_user.user.first_name
@@ -56,14 +57,3 @@ class Member(entity.Entity):
         self.about = _dict.get("about")
 
         return self
-
-    def save(self) -> None:
-        try:
-            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
-        except UniqueConstraintViolationError:
-            members = ApiProcessor().get(f'telegram/{self.name}', { 'internalId': self.internalId })
-            
-            if len(members) > 0:
-                self.id = members[0]['id']
-                
-                self.save()

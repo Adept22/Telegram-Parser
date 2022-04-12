@@ -1,9 +1,5 @@
-import multiprocessing
-import asyncio
-import logging
+import multiprocessing, asyncio, logging, telethon, telethon.sessions
 import globalvars
-
-from telethon import sync, errors, sessions
 
 class AuthorizationProcess(multiprocessing.Process):
     def __init__(self, phone):
@@ -16,8 +12,8 @@ class AuthorizationProcess(multiprocessing.Process):
         
         asyncio.set_event_loop(self.loop)
         
-        self.client = sync.TelegramClient(
-            session=sessions.StringSession(self.phone.session), 
+        self.client = telethon.TelegramClient(
+            session=telethon.sessions.StringSession(self.phone.session), 
             api_id=globalvars.parser['api_id'], 
             api_hash=globalvars.parser['api_hash'], 
             loop=self.loop
@@ -43,7 +39,7 @@ class AuthorizationProcess(multiprocessing.Process):
             logging.debug(f"Code sended for {self.phone.id}.")
             
             self.phone.code_hash = sent.phone_code_hash
-        except errors.rpcerrorlist.FloodWaitError as ex:
+        except telethon.errors.rpcerrorlist.FloodWaitError as ex:
             logging.error(f"Flood exception for phone {self.phone.id}. Sleep {ex.seconds}.")
             
             await asyncio.sleep(ex.seconds)

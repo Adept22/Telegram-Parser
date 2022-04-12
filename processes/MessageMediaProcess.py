@@ -1,8 +1,5 @@
-import multiprocessing
-import asyncio
-import logging
-from telethon import types
-from entity.MessageMedia import MessageMedia
+import multiprocessing, asyncio, logging, telethon
+import entity
 
 class MessageMediaProcess(multiprocessing.Process):
     def __init__(self, phone, message, tg_message):
@@ -18,7 +15,7 @@ class MessageMediaProcess(multiprocessing.Process):
     
     async def file_download(self, client, tg_media, size):
         try:
-            media = MessageMedia(internalId=tg_media.id, message=self.message, date=tg_media.date.isoformat())
+            media = entity.MessageMedia(internalId=tg_media.id, message=self.message, date=tg_media.date.isoformat())
             media.save()
         except Exception as ex:
             logging.error(f"Can\'t save message {self.message.id} media. Exception: {ex}.")
@@ -40,15 +37,15 @@ class MessageMediaProcess(multiprocessing.Process):
 
             client = await self.phone.new_client(loop=self.loop)
             
-            if isinstance(self.tg_message.media, types.MessageMediaPoll):
+            if isinstance(self.tg_message.media, telethon.types.MessageMediaPoll):
                 pass
-            elif isinstance(self.tg_message.media, types.MessageMediaVenue):
+            elif isinstance(self.tg_message.media, telethon.types.MessageMediaVenue):
                 pass
-            elif isinstance(self.tg_message.media, types.MessageMediaContact):
+            elif isinstance(self.tg_message.media, telethon.types.MessageMediaContact):
                 pass
-            elif isinstance(self.tg_message.media, types.MessageMediaPhoto):
+            elif isinstance(self.tg_message.media, telethon.types.MessageMediaPhoto):
                 await self.file_download(client, self.tg_message.photo, self.tg_message.photo.sizes[-2])
-            elif isinstance(self.tg_message.media, types.MessageMediaDocument):
+            elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
                 await self.file_download(client, self.tg_message.document, self.tg_message.document.size)
         except Exception as ex:
             logging.error(f"Message {self.message.id} media download failed.")

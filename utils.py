@@ -1,5 +1,6 @@
 import re
-from errors.InvalidLinkError import InvalidLinkError
+
+import exceptions
 
 class bcolors:
     HEADER = '\033[95m'
@@ -14,7 +15,7 @@ class bcolors:
 
 def get_hash(link):
     if link is None:
-        raise InvalidLinkError('Unexpected link')
+        raise exceptions.InvalidLinkError('Unexpected link')
 
     link = re.sub(r'https?:\/\/t\.me\/', '', link)
 
@@ -25,7 +26,7 @@ def get_hash(link):
     channel = link if hash is None else None
     
     if (channel == None and hash == None) or (channel != None and hash != None):
-        raise InvalidLinkError('Unexpected link')
+        raise exceptions.InvalidLinkError('Unexpected link')
 
     return channel, hash
 

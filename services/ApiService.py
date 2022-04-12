@@ -1,13 +1,9 @@
-import math
-import os
-import tempfile
-import requests
-import logging
+import math, os, requests, logging
 from urllib.parse import urlencode
 
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
+import exceptions
 
-class ApiProcessor():
+class ApiService():
     def get_sort(self, body=None):
         if body != None:
             sort_props = ['_start', '_limit', '_order', '_sort']
@@ -48,7 +44,7 @@ class ApiProcessor():
             return self.send(method, url, body)
         except requests.exceptions.HTTPError as ex:
             if ex.response.status_code == 409:
-                raise UniqueConstraintViolationError(ex)
+                raise exceptions.UniqueConstraintViolationError(ex)
             else:
                 raise ex
 

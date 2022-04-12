@@ -3,12 +3,10 @@ import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 from sys import stdout
-from core.ChatsManager import ChatsManager
 
 import globalvars
-from entity import Chat, Phone
-from processors.ApiProcessor import ApiProcessor
-from core.PhonesManager import PhonesManager
+from entity Chat, Phone
+from services import ApiService, PhonesManager, ChatsManager
 
 def set_chat(chat):
     if chat['isAvailable'] == False:
@@ -27,7 +25,7 @@ def set_chat(chat):
         ChatsManager()[chat['id']] = Chat(chat).run()
 
 def get_all_chats(chats=[], start=0, limit=50):
-    new_chats = ApiProcessor().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
+    new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
 
     if len(new_chats) > 0:
         chats += get_all_chats(new_chats, start+limit, limit)
@@ -59,7 +57,7 @@ def set_phone(phone):
         PhonesManager()[phone['id']] = Phone(phone).run()
 
 def get_phones():
-    phones = ApiProcessor().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })
+    phones = ApiService().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })
 
     logging.debug(f"Received {len(phones)} phones.")
 

@@ -1,5 +1,5 @@
 
-class CacheProcessor():
+class CacheService():
     cache = {}
 
     def __init__():

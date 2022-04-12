@@ -1,17 +1,6 @@
-import logging
-import multiprocessing
-import queue
-import re
-import asyncio
-import entity
-import globalvars
-
-from telethon import sync, sessions
-from processors.ApiProcessor import ApiProcessor
-
-from processes.JoinChatProcess import JoinChatProcess
-from processes.AuthorizationProcess import AuthorizationProcess
-from errors.ClientNotAvailableError import ClientNotAvailableError
+import re, multiprocessing, asyncio, queue, logging, telethon
+import globalvars, entity, processes, exceptions
+from services import ApiService
 
 class Phone(entity.Entity):
     def __init__(self, _dict):
@@ -72,7 +61,7 @@ class Phone(entity.Entity):
         if new_value != None and self._internal_id != new_value:
             logging.info(f"Phone {self.id} internal_id changed.")
 
-            ApiProcessor().set('telegram/phone', {'id': self.id, 'internalId': new_value})
+            ApiService().set('telegram/phone', {'id': self.id, 'internalId': new_value})
 
         self._internal_id = new_value
 
@@ -85,7 +74,7 @@ class Phone(entity.Entity):
         if self._is_verified != new_value:
             logging.info(f"Phone {self.id} is_verified changed.")
 
-            ApiProcessor().set('telegram/phone', {'id': self.id, 'isVerified': new_value})
+            ApiService().set('telegram/phone', {'id': self.id, 'isVerified': new_value})
 
         self._is_verified = new_value
 
@@ -98,7 +87,7 @@ class Phone(entity.Entity):
         if self._code != new_value:
             logging.info(f"Phone {self.id} code changed.")
 
-            ApiProcessor().set('telegram/phone', {'id': self.id, 'code': new_value})
+            ApiService().set('telegram/phone', {'id': self.id, 'code': new_value})
 
         self._code = new_value
 
@@ -111,7 +100,7 @@ class Phone(entity.Entity):
         if self._session != new_value:
             logging.info(f"Phone {self.id} session changed.")
 
-            ApiProcessor().set('telegram/phone', {'id': self.id, 'session': new_value})
+            ApiService().set('telegram/phone', {'id': self.id, 'session': new_value})
 
         self._session = new_value
 
@@ -124,7 +113,7 @@ class Phone(entity.Entity):
         if self._is_banned != new_value:
             logging.info(f"Phone {self.id} is_banned changed.")
 
-            ApiProcessor().set('telegram/phone', {'id': self.id, 'isBanned': new_value})
+            ApiService().set('telegram/phone', {'id': self.id, 'isBanned': new_value})
 
         self._is_banned = new_value
         
@@ -137,8 +126,8 @@ class Phone(entity.Entity):
         return self
     
     async def new_client(self, loop = asyncio.get_event_loop()):
-        client = sync.TelegramClient(
-            session=sessions.StringSession(self.session), 
+        client = telethon.TelegramClient(
+            session=telethon.sessions.StringSession(self.session), 
             api_id=globalvars.parser['api_id'],
             api_hash=globalvars.parser['api_hash'],
             loop=loop
@@ -156,15 +145,15 @@ class Phone(entity.Entity):
                 if not self.authorization_process.is_alive():
                     self.authorization_process.start()
 
-                raise ClientNotAvailableError(f'Phone {self.id} not authorized')
+                raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
         except Exception as ex:
-            raise ClientNotAvailableError(ex)
+            raise exceptions.ClientNotAvailableError(ex)
 
     def run(self):
-        self.authorization_process = AuthorizationProcess(self)
+        self.authorization_process = processes.AuthorizationProcess(self)
         self.authorization_process.start()
 
-        self.join_proces = JoinChatProcess(self)
+        self.join_proces = processes.JoinChatProcess(self)
         self.join_proces.start()
 
         return self

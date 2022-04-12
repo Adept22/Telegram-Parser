@@ -1,7 +1,12 @@
-from abc import ABC, abstractmethod
 import math
-from telethon import sync, client as telegramclient
-from processors.ApiProcessor import ApiProcessor
+from abc import ABC, abstractmethod
+from telethon.client import downloads
+
+from services import ApiService
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from telethon import TelegramClient
 
 class Media(ABC):
     def __init__(self) -> None:
@@ -16,10 +21,10 @@ class Media(ABC):
     def name(self):
         pass
 
-    async def upload(self, client: 'sync.TelegramClient', tg_media, file_size):
+    async def upload(self, client: 'TelegramClient', tg_media, file_size):
         body = self.serialize()
         chunk_number = 0
-        chunk_size=telegramclient.downloads.MAX_CHUNK_SIZE
+        chunk_size=downloads.MAX_CHUNK_SIZE
         total_chunks = math.ceil(file_size / chunk_size)
         
         async for chunk in client.iter_download(
@@ -27,6 +32,6 @@ class Media(ABC):
             chunk_size=chunk_size, 
             file_size=file_size
         ):
-            ApiProcessor()._chunk(f'telegram/{self.name}-media', body, str(tg_media.id), chunk, chunk_number, chunk_size, total_chunks, file_size)
+            ApiService()._chunk(f'telegram/{self.name}-media', body, str(tg_media.id), chunk, chunk_number, chunk_size, total_chunks, file_size)
 
             chunk_number += 1

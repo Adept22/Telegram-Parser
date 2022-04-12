@@ -1,8 +1,5 @@
-from telethon import functions
+import telethon
 import entity
-
-from processors.ApiProcessor import ApiProcessor
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 class Message(entity.Entity):
     def __init__(self, internalId: 'int' = None, chat: 'entity.TypeChat' = None, id = None, text = None, member: 'entity.TypeChatMember' = None, replyTo: 'Message' = None, isPinned = None, forwardedFromId = None, forwardedFromName = None, groupedId = None, date = None ):
@@ -21,9 +18,13 @@ class Message(entity.Entity):
     @property
     def name(self):
         return "message"
+        
+    @property
+    def unique_constraint(self) -> 'dict':
+        return { 'internalId': self.internalId, 'chat': { "id": self.chat.id } }
 
     async def expand(self, client):
-        full_user = await client(functions.users.GetFullUserRequest(id=self.internalId))
+        full_user = await client(telethon.functions.users.GetFullUserRequest(id=self.internalId))
 
         self.username = full_user.user.username
         self.firstName = full_user.user.first_name
@@ -62,18 +63,5 @@ class Message(entity.Entity):
         self.forwardedFromName = _dict.get("forwardedFromName")
         self.groupedId = _dict.get("groupedId")
         self.date = _dict.get("date")
-
-        return self
-
-    def save(self):
-        try:
-            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
-        except UniqueConstraintViolationError:
-            messages = ApiProcessor().get(f'telegram/{self.name}', { 'internalId': self.internalId, 'chat': { "id": self.chat.id } })
-            
-            if len(messages) > 0:
-                self.id = messages[0]['id']
-                
-                self.save()
 
         return self

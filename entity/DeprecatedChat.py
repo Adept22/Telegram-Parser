@@ -1,16 +1,12 @@
 import logging
 import multiprocessing
 import re
-from utils import get_hash
-from telethon import types, functions, errors
+import telethon
 
-from processors.ApiProcessor import ApiProcessor
-from core.PhonesManager import PhonesManager
-from processes.ChatMediaProcess import ChatMediaProcess
-from processes.MembersProcess import MembersProcess
-from processes.MessagesProcess import MessagesProcess
-from processes.ChatMediaProcess import ChatMediaProcess
-from errors.ChatNotAvailableError import ChatNotAvailableError
+from utils import get_hash
+from services import ApiService, PhonesManager
+from processes import ChatMediaProcess, MembersProcess, MessagesProcess
+from exceptions import ChatNotAvailableError
 
 class Chat(object):
     def __init__(self, _dict):
@@ -81,7 +77,7 @@ class Chat(object):
             len(set([p.id for p in new_phones]) ^ set([p.id for p in self._phones])):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_phones)}.")
             
-            ApiProcessor().set('telegram/chat', { 
+            ApiService().set('telegram/chat', { 
                 'id': self.id, 
                 'phones': [{ 'id': phone.id } for phone in new_phones] 
             })
@@ -113,7 +109,7 @@ class Chat(object):
             len(set([p.id for p in new_available_phones]) ^ set([p.id for p in self._available_phones])):
             logging.info(f"Chat {self.id} list of available phones changed. Now it\'s {len(new_available_phones)}.")
             
-            ApiProcessor().set('telegram/chat', { 
+            ApiService().set('telegram/chat', { 
                 'id': self.id, 
                 'availablePhones': [{ 'id': phone.id } for phone in new_available_phones] 
             })
@@ -139,7 +135,7 @@ class Chat(object):
         if new_value != None and self._internal_id != new_value:
             logging.info(f"Chat {self.id} internal id changed.")
             
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'internalId': new_value })
+            ApiService().set('telegram/chat', { 'id': self.id, 'internalId': new_value })
 
         self._internal_id = new_value
         
@@ -152,7 +148,7 @@ class Chat(object):
         if new_value != None and self._title != new_value:
             logging.info(f"Chat {self.id} title changed.")
             
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'title': new_value })
+            ApiService().set('telegram/chat', { 'id': self.id, 'title': new_value })
 
         self._title = new_value
         
@@ -165,7 +161,7 @@ class Chat(object):
         if new_value != None and self._date != new_value:
             logging.info(f"Chat {self.id} date changed.")
             
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'date': new_value })
+            ApiService().set('telegram/chat', { 'id': self.id, 'date': new_value })
 
         self._date = new_value
         
@@ -178,7 +174,7 @@ class Chat(object):
         if self._is_available != new_value:
             logging.info(f"Chat {self.id} is_available changed.")
             
-            ApiProcessor().set('telegram/chat', { 'id': self.id, 'isAvailable': new_value })
+            ApiService().set('telegram/chat', { 'id': self.id, 'isAvailable': new_value })
 
         if not new_value:
             self.init_event.clear()
@@ -212,14 +208,14 @@ class Chat(object):
         try:
             if self.internal_id != None:
                 try:
-                    return await client.get_entity(types.PeerChannel(channel_id=self.internal_id))
+                    return await client.get_entity(telethon.types.PeerChannel(channel_id=self.internal_id))
                 except:
                     pass
 
             if self.hash != None:
-                chat_invite = await client(functions.messages.CheckChatInviteRequest(hash=self.hash))
+                chat_invite = await client(telethon.functions.messages.CheckChatInviteRequest(hash=self.hash))
                 
-                if isinstance(chat_invite, (types.ChatInviteAlready, types.ChatInvitePeek)):
+                if isinstance(chat_invite, (telethon.types.ChatInviteAlready, telethon.types.ChatInvitePeek)):
                     return chat_invite.chat
             elif self.username != None:
                 return await client.get_entity(self.username)
@@ -228,42 +224,42 @@ class Chat(object):
         except (
             ValueError,
             ### ------------------------
-            errors.ChannelInvalidError, 
-            errors.ChannelPrivateError, 
-            errors.ChannelPublicGroupNaError, 
+            telethon.errors.ChannelInvalidError, 
+            telethon.errors.ChannelPrivateError, 
+            telethon.errors.ChannelPublicGroupNaError, 
             ### ------------------------
-            errors.NeedChatInvalidError, 
-            errors.ChatIdInvalidError, 
-            errors.PeerIdInvalidError, 
+            telethon.errors.NeedChatInvalidError, 
+            telethon.errors.ChatIdInvalidError, 
+            telethon.errors.PeerIdInvalidError, 
             ### ------------------------
-            errors.InviteHashEmptyError, 
-            errors.InviteHashExpiredError, 
-            errors.InviteHashInvalidError
+            telethon.errors.InviteHashEmptyError, 
+            telethon.errors.InviteHashExpiredError, 
+            telethon.errors.InviteHashInvalidError
         ) as ex:
             raise ChatNotAvailableError(ex)
 
     async def join_channel(self, client):
         try:
             updates = await client(
-                functions.channels.JoinChannelRequest(channel=self.username) 
+                telethon.functions.channels.JoinChannelRequest(channel=self.username) 
                     if self.hash is None else 
-                        functions.messages.ImportChatInviteRequest(hash=self.hash)
+                        telethon.functions.messages.ImportChatInviteRequest(hash=self.hash)
             )
         except (
             ValueError,
             ### -----------------------------
-            errors.UsernameNotOccupiedError,
+            telethon.errors.UsernameNotOccupiedError,
             ### -----------------------------
-            errors.ChannelPrivateError, 
-            errors.InviteHashExpiredError, 
-            errors.UsersTooMuchError,
+            telethon.errors.ChannelPrivateError, 
+            telethon.errors.InviteHashExpiredError, 
+            telethon.errors.UsersTooMuchError,
             ### -----------------------------
-            errors.ChannelInvalidError, 
-            errors.InviteHashEmptyError, 
-            errors.InviteHashInvalidError
+            telethon.errors.ChannelInvalidError, 
+            telethon.errors.InviteHashEmptyError, 
+            telethon.errors.InviteHashInvalidError
         ) as ex:
             raise ChatNotAvailableError(ex)
-        except errors.UserAlreadyParticipantError as ex:
+        except telethon.errors.UserAlreadyParticipantError as ex:
             return await self.get_internal_id(client)
         else:
             return updates.chats[0]

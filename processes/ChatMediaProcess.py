@@ -1,10 +1,5 @@
-import multiprocessing
-import asyncio
-import logging
-import random
-
-from telethon import types
-from entity.ChatMedia import ChatMedia
+import multiprocessing, asyncio, logging, random, telethon
+import entity
 
 class ChatMediaProcess(multiprocessing.Process):
     def __init__(self, chat):
@@ -15,22 +10,22 @@ class ChatMediaProcess(multiprocessing.Process):
         
         asyncio.set_event_loop(self.loop)
 
-    async def get_entity(self, client):
+    async def get_profile(self, client):
         try:
-            return await client.get_entity(entity=types.PeerChannel(channel_id=self.chat.internal_id))
+            return await client.get_entity(entity=telethon.types.PeerChannel(channel_id=self.chat.internal_id))
         except ValueError:
-            return await client.get_entity(entity=types.PeerChat(chat_id=self.chat.internal_id))
+            return await client.get_entity(entity=telethon.types.PeerChat(chat_id=self.chat.internal_id))
         
     async def async_run(self):
         for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
 
-                entity = await self.get_entity(client)
+                profile = await self.get_profile(client)
                 
-                async for photo in client.iter_profile_photos(entity=entity):
+                async for photo in client.iter_profile_photos(entity=profile):
                     try:
-                        media = ChatMedia(internalId=photo.id, chat=self.chat, date=photo.date.isoformat())
+                        media = entity.ChatMedia(internalId=photo.id, chat=self.chat, date=photo.date.isoformat())
                         media.save()
                     except Exception as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")

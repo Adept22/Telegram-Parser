@@ -1,11 +1,5 @@
-import multiprocessing
-import asyncio
-import logging
-
-from telethon import errors
-
-from errors.ClientNotAvailableError import ClientNotAvailableError
-from errors.ChatNotAvailableError import ChatNotAvailableError
+import multiprocessing, asyncio, logging, telethon
+import exceptions
 
 class JoinChatProcess(multiprocessing.Process):
     def __init__(self, phone):
@@ -25,7 +19,7 @@ class JoinChatProcess(multiprocessing.Process):
 
         try:
             client = await self.phone.new_client(loop=self.loop)
-        except ClientNotAvailableError as ex:
+        except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
             logging.exception(ex)
 
@@ -37,13 +31,13 @@ class JoinChatProcess(multiprocessing.Process):
             while True:
                 try:
                     tg_chat = await chat.join_channel(client)
-                except errors.FloodWaitError as ex:
+                except telethon.errors.FloodWaitError as ex:
                     logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
 
                     await asyncio.sleep(ex.seconds)
 
                     continue
-                except ChatNotAvailableError as ex:
+                except exceptions.ChatNotAvailableError as ex:
                     logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
                     logging.exception(ex)
 
@@ -52,8 +46,8 @@ class JoinChatProcess(multiprocessing.Process):
                     break
                 except (
                     ### -----------------------------
-                    errors.ChannelsTooMuchError,
-                    errors.SessionPasswordNeededError
+                    telethon.errors.ChannelsTooMuchError,
+                    telethon.errors.SessionPasswordNeededError
                 ) as ex:
                     logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
                     logging.exception(ex)

@@ -1,10 +1,7 @@
-from telethon import types
+import telethon
 import entity
 
-from processors.ApiProcessor import ApiProcessor
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
-
-class ChatMemberRole(object):
+class ChatMemberRole(entity.Entity):
     def __init__(self, member: 'entity.TypeChatMember', id: 'str' = None, title: 'str' = "Участник", code: 'str' = "member"):
         self.id = id
         self.member = member
@@ -14,12 +11,16 @@ class ChatMemberRole(object):
     @property
     def name(self):
         return "chat-member-role"
+        
+    @property
+    def unique_constraint(self) -> 'dict':
+        return { 'member': { "id": self.member.id }, 'title': self.title, 'code': self.code }
 
-    async def expand(self, participant: 'types.ChannelParticipant' = None):
-        if isinstance(participant, types.ChannelParticipantAdmin):
+    async def expand(self, participant: 'telethon.types.ChannelParticipant' = None):
+        if isinstance(participant, telethon.types.ChannelParticipantAdmin):
             self.title = (participant.rank if participant.rank != None else "Администратор")
             self.code = "admin"
-        elif isinstance(participant, types.ChannelParticipantCreator):
+        elif isinstance(participant, telethon.types.ChannelParticipantCreator):
             self.title = (participant.rank if participant.rank != None else "Создатель")
             self.code = "creator"
 
@@ -40,18 +41,5 @@ class ChatMemberRole(object):
         self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
         self.title = _dict.get("title")
         self.code = _dict.get("code")
-
-        return self
-
-    def save(self):
-        try:
-            self.deserialize(ApiProcessor().set(f'telegram/{self.name}', self.serialize()))
-        except UniqueConstraintViolationError:
-            members = ApiProcessor().get(f'telegram/{self.name}', { 'member': { "id": self.member.id }, 'title': self.title, 'code': self.code })
-            
-            if len(members) > 0:
-                self.id = members[0]['id']
-                
-                self.save()
 
         return self

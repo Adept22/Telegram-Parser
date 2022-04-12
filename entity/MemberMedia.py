@@ -1,6 +1,4 @@
 import entity
-from processors.ApiProcessor import ApiProcessor
-from errors.UniqueConstraintViolationError import UniqueConstraintViolationError
 
 class MemberMedia(entity.Entity, entity.Media):
     def __init__(self, internalId: 'int', member: 'entity.TypeMember' = None, id = None, path = None, date = None):
@@ -21,6 +19,10 @@ class MemberMedia(entity.Entity, entity.Media):
     @property
     def entity(self):
         return self.member
+        
+    @property
+    def unique_constraint(self) -> 'dict':
+        return { 'internalId': self.internalId }
 
     def serialize(self):
         _dict = {
@@ -39,21 +41,5 @@ class MemberMedia(entity.Entity, entity.Media):
         self.internalId = _dict.get("internalId")
         self.path = _dict.get("path")
         self.date = _dict.get("date")
-
-        return self
-
-    def save(self):
-        if self.member.id == None:
-            self.member.save()
-
-        try:
-            self.deserialize(ApiProcessor().set('telegram/member-media', self.serialize()))
-        except UniqueConstraintViolationError:
-            medias = ApiProcessor().get('telegram/member-media', { 'internalId': self.internalId })
-            
-            if len(medias) > 0:
-                self.id = medias[0]['id']
-                
-                self.save()
 
         return self
