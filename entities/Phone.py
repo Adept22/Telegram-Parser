@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
 class Phone(entities.Entity):
-    def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None):
+    def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
         self.id: 'str' = id
         self.number: 'str' = number
         self.internalId: 'int | None' = internalId

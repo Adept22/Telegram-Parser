@@ -1,5 +1,7 @@
+ARG PYPY_VERSION=3
+
 # For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:slim
+FROM pypy:${PYPY_VERSION}-slim
 
 # Keeps Python from generating .pyc files in the container
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -19,7 +21,7 @@ WORKDIR /srv/app
 
 # Install pip requirements
 COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
@@ -29,4 +31,4 @@ COPY . .
 # USER appuser
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["python3", "main.py"]
+CMD ["pypy", "main.py"]

@@ -1,7 +1,7 @@
 import entities
 
 class MemberMedia(entities.Entity, entities.Media):
-    def __init__(self, internalId: 'int', member: 'entities.TypeMember' = None, id = None, path = None, date = None):
+    def __init__(self, internalId: 'int', member: 'entities.TypeMember' = None, id = None, path = None, date = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'entities.TypeMember | None' = member
         self.internalId: 'int' = internalId

@@ -1,7 +1,7 @@
 import entities
 
 class ChatMedia(entities.Entity, entities.Media):
-    def __init__(self, internalId: 'int', chat: 'entities.TypeChat' = None, id = None, path = None, date = None):
+    def __init__(self, internalId: 'int', chat: 'entities.TypeChat' = None, id = None, path = None, date = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'entities.TypeChat' = chat
         self.internalId: 'int' = internalId

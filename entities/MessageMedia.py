@@ -1,7 +1,7 @@
 import entities
 
 class MessageMedia(entities.Entity, entities.Media):
-    def __init__(self, internalId: 'int', message: 'entities.TypeMessage' = None, id: 'str' = None, path: 'str' = None, date: 'str' = None) -> None:
+    def __init__(self, internalId: 'int', message: 'entities.TypeMessage' = None, id: 'str' = None, path: 'str' = None, date: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.message: 'entities.TypeMessage' = message
         self.internalId: 'int' = internalId

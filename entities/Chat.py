@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from telethon import TelegramClient, types
 
 class Chat(entities.Entity):
-    def __init__(self,  id: 'str', link: 'str', isAvailable: 'bool', availablePhones: 'list[entities.TypePhone]' = [], phones: 'list[entities.TypePhone]' = [], internalId: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None):
+    def __init__(self,  id: 'str', link: 'str', isAvailable: 'bool', availablePhones: 'list[entities.TypePhone]' = [], phones: 'list[entities.TypePhone]' = [], internalId: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, *args, **kwargs):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable

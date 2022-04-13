@@ -2,7 +2,7 @@ import telethon
 import entities
 
 class Message(entities.Entity):
-    def __init__(self, internalId: 'int', chat: 'entities.TypeChat', id: 'str' = None, text: 'str' = None, member: 'entities.TypeChatMember' = None, replyTo: 'entities.TypeMessage' = None, isPinned: 'bool' = False, forwardedFromId: 'int' = None, forwardedFromName: 'str' = None, groupedId: 'int' = None, date: 'str' = None ):
+    def __init__(self, internalId: 'int', chat: 'entities.TypeChat', id: 'str' = None, text: 'str' = None, member: 'entities.TypeChatMember' = None, replyTo: 'entities.TypeMessage' = None, isPinned: 'bool' = False, forwardedFromId: 'int' = None, forwardedFromName: 'str' = None, groupedId: 'int' = None, date: 'str' = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.internalId: 'int' = internalId
         self.text: 'str | None' = text

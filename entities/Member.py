@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
 class Member(entities.Entity):
-    def __init__(self, internalId: 'int', id: 'str' = None, username: 'str' = None, firstName: 'str' = None, lastName: 'str' = None, phone: 'str' = None, about: 'str' = None) -> None:
+    def __init__(self, internalId: 'int', id: 'str' = None, username: 'str' = None, firstName: 'str' = None, lastName: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.internalId: 'int' = internalId
         self.username: 'str | None' = username

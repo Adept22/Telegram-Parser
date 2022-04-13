@@ -2,7 +2,7 @@ import telethon
 import entities
 
 class ChatMember(entities.Entity):
-    def __init__(self, chat: 'entities.TypeChat', member: 'entities.TypeMember', id: 'str' = None, date: 'str' = None, isLeft: 'bool' = False, roles: 'list[entities.TypeChatMemberRole]' = []):
+    def __init__(self, chat: 'entities.TypeChat', member: 'entities.TypeMember', id: 'str' = None, date: 'str' = None, isLeft: 'bool' = False, roles: 'list[entities.TypeChatMemberRole]' = [], *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'entities.TypeChat' = chat
         self.member: 'entities.TypeMember' = member

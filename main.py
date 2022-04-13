@@ -21,8 +21,7 @@ def set_chat(chat: 'dict') -> None:
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
-        ChatsManager()[chat['id']] = entities.Chat(**chat).run()
-
+        ChatsManager()[chat['id']] = entities.Chat(**chat)
 def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
 

@@ -2,11 +2,11 @@ import os
 import socket
 from services import ApiService
 
-def get_all_entities(entities: 'str', params: 'dict' = {}, entities: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
-    new_entities = ApiService().get(entities, {**params, "_start": start, "_limit": limit})
+def get_all_entities(entity: 'str', params: 'dict' = {}, entities: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
+    new_entities = ApiService().get(entity, {**params, "_start": start, "_limit": limit})
 
     if len(new_entities) > 0:
-        entities += get_all_entities(entities, params, new_entities, start+limit, limit)
+        entities += get_all_entities(entity, params, new_entities, start+limit, limit)
     
     return entities
 
