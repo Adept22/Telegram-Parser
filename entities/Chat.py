@@ -9,12 +9,12 @@ if TYPE_CHECKING:
     from telethon import TelegramClient, types
 
 class Chat(entities.Entity):
-    def __init__(self,  id: 'str', link: 'str', isAvailable: 'bool', availablePhones: 'list[entities.TypePhone]' = [], phones: 'list[entities.TypePhone]' = [], internalId: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, *args, **kwargs):
+    def __init__(self,  id: 'str', link: 'str', isAvailable: 'bool', availablePhones: 'list[dict]' = [], phones: 'list[dict]' = [], internalId: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, *args, **kwargs):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable
-        self.availablePhones: 'list[entities.TypePhone]' = availablePhones
-        self.phones: 'list[entities.TypePhone]' = phones
+        self.availablePhones: 'list[entities.TypePhone]' = [PhonesManager()[p['id']] for p in availablePhones if p['id'] in PhonesManager()]
+        self.phones: 'list[entities.TypePhone]' = [PhonesManager()[p['id']] for p in phones if p['id'] in PhonesManager()]
         self.internalId: 'int | None' = internalId
         self.title: 'str | None' = title
         self.description: 'str | None' = description
@@ -75,6 +75,13 @@ class Chat(entities.Entity):
 
     def remove_available_phone(self, phone):
         self.availablePhones = [_p for _p in self.availablePhones if _p.id != phone.id]
+        
+    def run(self) -> 'entities.TypePhone':
+        self.chat_media_process.start()
+        self.members_process.start()
+        self.messages_process.start()
+
+        return self
             
     async def get_tg_entity(self, client: 'TelegramClient') -> 'telethon.types.TypeChat':
         try:

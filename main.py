@@ -21,7 +21,7 @@ def set_chat(chat: 'dict') -> None:
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
-        ChatsManager()[chat['id']] = entities.Chat(**chat)
+        ChatsManager()[chat['id']] = entities.Chat(**chat).run()
 def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     sh.setLevel(logging.DEBUG)
 
     logging.basicConfig(
-        format="%(process)s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
+        format="%(process)d %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
         datefmt='%d.%m.%Y %H:%M:%S',
         handlers=[eh, fh, sh],
         level=logging.DEBUG
