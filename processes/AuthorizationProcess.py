@@ -1,11 +1,10 @@
 import multiprocessing, asyncio, logging, telethon, telethon.sessions
-import globalvars
+import globalvars, entities
 
 class AuthorizationProcess(multiprocessing.Process):
-    def __init__(self, phone):
+    def __init__(self, phone: 'entities.TypePhone'):
         multiprocessing.Process.__init__(self, name=f'AuthorizationProcess-{phone.id}', daemon=True)
         
-        self.retry = 0
         self.phone = phone
         
         self.loop = asyncio.new_event_loop()
@@ -19,12 +18,9 @@ class AuthorizationProcess(multiprocessing.Process):
             loop=self.loop
         )
         
-    async def get_internal_id(self):
+    async def get_internal_id(self) -> 'int | None':
         try:
-            me = await self.client.get_me()
-            
-            if me != None:
-                return me.id
+            return getattr(await self.client.get_me(), "id")
         except:
             pass
         
@@ -52,9 +48,6 @@ class AuthorizationProcess(multiprocessing.Process):
 
         while True:
             if not await self.client.is_user_authorized():
-                if self.phone.init_event.is_set():
-                    self.phone.init_event.clear()
-
                 if self.phone.code != None and self.phone.code_hash != None:
                     logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
         
@@ -68,18 +61,18 @@ class AuthorizationProcess(multiprocessing.Process):
                         logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}.")
                         logging.exception(ex)
                         
-                        self.phone.is_verified = False
+                        self.phone.isVerified = False
                         self.phone.code = None
                         self.phone.code_hash = None
-                        
-                        break
                     else:
                         self.phone.session = self.client.session.save()
-                        self.phone.is_verified = True
+                        self.phone.isVerified = True
                         self.phone.code = None
                         self.phone.code_hash = None
+
+                    self.phone.save()
                         
-                        break
+                    break
                 elif self.phone.code_hash == None:
                     try:
                         await self.send_code()
@@ -88,10 +81,12 @@ class AuthorizationProcess(multiprocessing.Process):
                         logging.exception(ex)
                         
                         self.phone.session = None
-                        self.phone.is_banned = True
-                        self.phone.is_verified = False
+                        self.phone.isBanned = True
+                        self.phone.isVerified = False
                         self.phone.code = None
                         self.phone.code_hash = None
+
+                        self.phone.save()
                         
                         break
                 else:
@@ -99,15 +94,12 @@ class AuthorizationProcess(multiprocessing.Process):
             else:
                 logging.debug(f"Phone {self.phone.id} actually authorized.")
 
-                if not self.phone.init_event.is_set():
-                    self.phone.init_event.set()
-                
                 break
                 
         internal_id = await self.get_internal_id()
         
         if internal_id != None:
-            self.phone.internal_id = internal_id
+            self.phone.internalId = internal_id
                 
     def run(self):
         asyncio.run(self.async_run())

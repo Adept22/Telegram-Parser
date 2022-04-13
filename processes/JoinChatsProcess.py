@@ -1,19 +1,17 @@
 import multiprocessing, asyncio, logging, telethon
-import exceptions
+import entities, exceptions
 
-class JoinChatProcess(multiprocessing.Process):
-    def __init__(self, phone):
-        multiprocessing.Process.__init__(self, name=f'JoinChatProcess-{phone.id}', daemon=True)
-        
-        self.lock = multiprocessing.Lock()
+class JoinChatsProcess(multiprocessing.Process):
+    def __init__(self, phone: 'entities.TypePhone'):
+        multiprocessing.Process.__init__(self, name=f'JoinChatsProcess-{phone.id}', daemon=True)
         
         self.phone = phone
-        
         self.loop = asyncio.new_event_loop()
+        self.lock = multiprocessing.Lock()
         
         asyncio.set_event_loop(self.loop)
         
-    async def async_run(self, chat):
+    async def async_run(self, chat: 'entities.TypeChat'):
         if len(chat.phones) >= 3:
             return
 
@@ -25,8 +23,6 @@ class JoinChatProcess(multiprocessing.Process):
 
             chat.remove_available_phone(self.phone)
             chat.remove_phone(self.phone)
-
-            return
         else:
             while True:
                 try:
@@ -41,11 +37,10 @@ class JoinChatProcess(multiprocessing.Process):
                     logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
                     logging.exception(ex)
 
-                    chat.is_available = False
+                    chat.isAvailable = False
 
                     break
                 except (
-                    ### -----------------------------
                     telethon.errors.ChannelsTooMuchError,
                     telethon.errors.SessionPasswordNeededError
                 ) as ex:
@@ -59,10 +54,10 @@ class JoinChatProcess(multiprocessing.Process):
                 else:
                     logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
 
-                    if chat.internal_id == None:
-                        chat.internal_id = tg_chat.id
+                    if chat.internalId == None:
+                        chat.internalId = tg_chat.id
 
-                    if chat.title == None:
+                    if chat.title != tg_chat.title:
                         chat.title = tg_chat.title
 
                     if chat.date != tg_chat.date.isoformat():
@@ -72,11 +67,11 @@ class JoinChatProcess(multiprocessing.Process):
 
                     break
 
+        chat.save()
+
     def run(self):
-        self.phone.init_event.wait()
-        
         while True:
-            chat = self.phone.joining_queue.get()
+            chat: 'entities.TypeChat' = self.phone.joining_queue.get()
 
             with self.lock:
                 asyncio.run(self.async_run(chat))

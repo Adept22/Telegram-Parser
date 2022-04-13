@@ -2,8 +2,10 @@ from .ChatNotAvailableError import ChatNotAvailableError
 from .ClientNotAvailableError import ClientNotAvailableError
 from .InvalidLinkError import InvalidLinkError
 from .UniqueConstraintViolationError import UniqueConstraintViolationError
+from .RequestException import RequestException
 
 TypeChatNotAvailableError = ChatNotAvailableError
 TypeClientNotAvailableError = ClientNotAvailableError
 TypeInvalidLinkError = InvalidLinkError
 TypeUniqueConstraintViolationError = UniqueConstraintViolationError
+TypeRequestException = RequestException

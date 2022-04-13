@@ -1,8 +1,8 @@
 import multiprocessing, asyncio, logging, random, telethon
-import entity
+import entities, exceptions
 
 class ChatMediaProcess(multiprocessing.Process):
-    def __init__(self, chat):
+    def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f'ChatMediaProcess-{chat.id}', daemon=True)
 
         self.chat = chat
@@ -10,24 +10,39 @@ class ChatMediaProcess(multiprocessing.Process):
         
         asyncio.set_event_loop(self.loop)
 
-    async def get_profile(self, client):
-        try:
-            return await client.get_entity(entity=telethon.types.PeerChannel(channel_id=self.chat.internal_id))
-        except ValueError:
-            return await client.get_entity(entity=telethon.types.PeerChat(chat_id=self.chat.internal_id))
-        
     async def async_run(self):
         for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
+            except exceptions.ClientNotAvailableError as ex:
+                logging.error(f"Phone {phone.id} client not available.")
+                logging.exception(ex)
 
-                profile = await self.get_profile(client)
+                self.chat.remove_phone(phone)
+                self.chat.save()
                 
-                async for photo in client.iter_profile_photos(entity=profile):
+                continue
+
+            try:
+                tg_chat = await self.chat.get_tg_entity(client)
+            except exceptions.ChatNotAvailableError as ex:
+                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
+                logging.exception(ex)
+
+                self.chat.isAvailable = False
+                self.chat.save()
+
+                break
+                
+            try:
+                async for photo in client.iter_profile_photos(entity=tg_chat):
+                    photo: 'telethon.types.TypePhoto'
+
+                    media = entities.ChatMedia(internalId=photo.id, chat=self.chat, date=photo.date.isoformat())
+
                     try:
-                        media = entity.ChatMedia(internalId=photo.id, chat=self.chat, date=photo.date.isoformat())
                         media.save()
-                    except Exception as ex:
+                    except exceptions.RequestException as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
                         logging.exception(ex)
                     else:
@@ -35,16 +50,25 @@ class ChatMediaProcess(multiprocessing.Process):
 
                         try:
                             await media.upload(client, photo, photo.sizes[-2])
-                        except Exception as ex:
+                        except exceptions.RequestException as ex:
                             logging.error(f"Can\'t upload chat {self.chat.id} media.")
                             logging.exception(ex)
                         else:
                             logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
-            except Exception as ex:
+            except (
+                telethon.errors.UserIdInvalidError, 
+                telethon.errors.ChatAdminRequiredError, 
+                telethon.errors.InputUserDeactivatedError, 
+                telethon.errors.PeerIdInvalidError, 
+                telethon.errors.PeerIdNotSupportedError, 
+                telethon.errors.UserIdInvalidError, 
+                telethon.errors.ChannelInvalidError, 
+                telethon.errors.ChannelPrivateError, 
+                telethon.errors.ChannelPublicGroupNaError, 
+                telethon.errors.TimeoutError
+            ) as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
                 logging.exception(ex)
-            
-                await asyncio.sleep(random.randint(2, 5))
                 
                 continue
             else:

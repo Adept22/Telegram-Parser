@@ -2,6 +2,7 @@ import math
 from abc import ABC, abstractmethod
 from telethon.client import downloads
 
+import entities
 from services import ApiService
 
 from typing import TYPE_CHECKING
@@ -9,19 +10,16 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
 class Media(ABC):
-    def __init__(self) -> None:
-        pass
-
     @abstractmethod
-    def serialize(self):
+    def serialize(self) -> 'entities.TypeMedia':
         pass
 
     @property
     @abstractmethod
-    def name(self):
+    def name(self) -> 'str':
         pass
 
-    async def upload(self, client: 'TelegramClient', tg_media, file_size):
+    async def upload(self, client: 'TelegramClient', tg_media, file_size: 'int') -> 'None':
         body = self.serialize()
         chunk_number = 0
         chunk_size=downloads.MAX_CHUNK_SIZE

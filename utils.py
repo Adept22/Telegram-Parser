@@ -13,7 +13,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def get_hash(link):
+def get_hash(link) -> 'tuple[str | None, str | None]':
     if link is None:
         raise exceptions.InvalidLinkError('Unexpected link')
 

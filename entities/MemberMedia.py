@@ -1,30 +1,26 @@
-import entity
+import entities
 
-class MemberMedia(entity.Entity, entity.Media):
-    def __init__(self, internalId: 'int', member: 'entity.TypeMember' = None, id = None, path = None, date = None):
-        self.id = id
-        self.member = member
-        self.internalId = internalId
-        self.path = path
-        self.date = date
+class MemberMedia(entities.Entity, entities.Media):
+    def __init__(self, internalId: 'int', member: 'entities.TypeMember' = None, id = None, path = None, date = None):
+        self.id: 'str | None' = id
+        self.member: 'entities.TypeMember | None' = member
+        self.internalId: 'int' = internalId
+        self.path: 'str | None' = path
+        self.date: 'str | None' = date
     
     @property
-    def download_path(self):
+    def download_path(self) -> 'str':
         return "./downloads/members"
     
     @property
-    def name(self):
+    def name(self) -> 'str':
         return "member"
-    
-    @property
-    def entity(self):
-        return self.member
         
     @property
-    def unique_constraint(self) -> 'dict':
+    def unique_constraint(self) -> 'dict | None':
         return { 'internalId': self.internalId }
 
-    def serialize(self):
+    def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
             "member": self.member.serialize(),
@@ -35,7 +31,7 @@ class MemberMedia(entity.Entity, entity.Media):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict'):
+    def deserialize(self, _dict: 'dict') -> 'entities.TypeMemberMedia':
         self.id = _dict.get("id")
         self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
         self.internalId = _dict.get("internalId")

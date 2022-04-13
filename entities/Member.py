@@ -1,26 +1,26 @@
 import telethon
-import entity
+import entities
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-class Member(entity.Entity):
+class Member(entities.Entity):
     def __init__(self, internalId: 'int', id: 'str' = None, username: 'str' = None, firstName: 'str' = None, lastName: 'str' = None, phone: 'str' = None, about: 'str' = None) -> None:
-        self.id = id
-        self.internalId = internalId
-        self.username = username
-        self.firstName = firstName
-        self.lastName = lastName
-        self.phone = phone
-        self.about = about
+        self.id: 'str | None' = id
+        self.internalId: 'int' = internalId
+        self.username: 'str | None' = username
+        self.firstName: 'str | None' = firstName
+        self.lastName: 'str | None' = lastName
+        self.phone: 'str | None' = phone
+        self.about: 'str | None' = about
 
     @property
-    def name(self):
+    def name(self) -> 'str':
         return "member"
         
     @property
-    def unique_constraint(self) -> 'dict':
+    def unique_constraint(self) -> 'dict | None':
         return { 'internalId': self.internalId }
 
     async def expand(self, client: 'TelegramClient') -> 'Member':
@@ -47,7 +47,7 @@ class Member(entity.Entity):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'Member':
+    def deserialize(self, _dict: 'dict') -> 'entities.TypeMember':
         self.id = _dict.get("id")
         self.internalId = _dict.get("internalId")
         self.username = _dict.get("username")

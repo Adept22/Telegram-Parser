@@ -1,8 +1,12 @@
 import multiprocessing, asyncio, logging, telethon
-import entity
+import entities, exceptions
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from telethon import TelegramClient
 
 class MessageMediaProcess(multiprocessing.Process):
-    def __init__(self, phone, message, tg_message):
+    def __init__(self, phone: 'entities.TypePhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
         multiprocessing.Process.__init__(self, name=f"MessageMediaProcess-{message.id}", daemon=True)
         
         self.phone = phone
@@ -13,11 +17,12 @@ class MessageMediaProcess(multiprocessing.Process):
         
         asyncio.set_event_loop(self.loop)
     
-    async def file_download(self, client, tg_media, size):
+    async def file_download(self, client: 'TelegramClient', tg_media, size):
+        media = entities.MessageMedia(internalId=tg_media.id, message=self.message, date=tg_media.date.isoformat())
+        
         try:
-            media = entity.MessageMedia(internalId=tg_media.id, message=self.message, date=tg_media.date.isoformat())
             media.save()
-        except Exception as ex:
+        except exceptions.RequestException as ex:
             logging.error(f"Can\'t save message {self.message.id} media. Exception: {ex}.")
             logging.exception(ex)
         else:
@@ -25,33 +30,33 @@ class MessageMediaProcess(multiprocessing.Process):
 
             try:
                 await media.upload(client, tg_media, size)
-            except Exception as ex:
+            except exceptions.RequestException as ex:
                 logging.error(f"Can\'t upload message {self.message.id} media.")
                 logging.exception(ex)
             else:
                 logging.info(f"Sucessfuly uploaded message {self.message.id} media.")
 
     async def async_run(self):
-        try:
-            logging.debug(f"Try to save message '{self.message.id}' media.")
+        logging.debug(f"Try to save message '{self.message.id}' media.")
 
+        try:
             client = await self.phone.new_client(loop=self.loop)
-            
-            if isinstance(self.tg_message.media, telethon.types.MessageMediaPoll):
-                pass
-            elif isinstance(self.tg_message.media, telethon.types.MessageMediaVenue):
-                pass
-            elif isinstance(self.tg_message.media, telethon.types.MessageMediaContact):
-                pass
-            elif isinstance(self.tg_message.media, telethon.types.MessageMediaPhoto):
-                await self.file_download(client, self.tg_message.photo, self.tg_message.photo.sizes[-2])
-            elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
-                await self.file_download(client, self.tg_message.document, self.tg_message.document.size)
-        except Exception as ex:
-            logging.error(f"Message {self.message.id} media download failed.")
+        except exceptions.ClientNotAvailableError as ex:
+            logging.error(f"Phone {self.phone.id} client not available.")
             logging.exception(ex)
-        else:
-            logging.info(f"Message {self.message.id} media download success.")
+            
+            return
+
+        if isinstance(self.tg_message.media, telethon.types.MessageMediaPoll):
+            pass
+        elif isinstance(self.tg_message.media, telethon.types.MessageMediaVenue):
+            pass
+        elif isinstance(self.tg_message.media, telethon.types.MessageMediaContact):
+            pass
+        elif isinstance(self.tg_message.media, telethon.types.MessageMediaPhoto):
+            await self.file_download(client, self.tg_message.photo, self.tg_message.photo.sizes[-2])
+        elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
+            await self.file_download(client, self.tg_message.document, self.tg_message.document.size)
         
     def run(self):
         asyncio.run(self.async_run())

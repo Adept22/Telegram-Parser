@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
+import entities
 
 import exceptions
 from services import ApiService
 
 class Entity(ABC):
-    def __init__(self) -> None:
-        pass
-
     @property
     @abstractmethod
     def name(self) -> 'str':
@@ -14,7 +12,7 @@ class Entity(ABC):
 
     @property
     @abstractmethod
-    def unique_constraint(self) -> 'dict':
+    def unique_constraint(self) -> 'dict | None':
         pass
 
     @abstractmethod
@@ -22,13 +20,16 @@ class Entity(ABC):
         pass
 
     @abstractmethod
-    def deserialize(self, _dict: 'dict') -> 'Entity':
+    def deserialize(self, _dict: 'dict') -> 'entities.TypeEntity':
         pass
 
-    def save(self) -> 'Entity':
+    def save(self) -> 'entities.TypeEntity':
         try:
             self.deserialize(ApiService().set(f'telegram/{self.name}', self.serialize()))
-        except exceptions.UniqueConstraintViolationError:
+        except exceptions.UniqueConstraintViolationError as ex:
+            if self.unique_constraint is None:
+                raise ex
+                
             entities = ApiService().get(f'telegram/{self.name}', self.unique_constraint)
             
             if len(entities) > 0:

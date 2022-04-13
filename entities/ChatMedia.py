@@ -1,22 +1,22 @@
-import entity
+import entities
 
-class ChatMedia(entity.Entity, entity.Media):
-    def __init__(self, internalId: 'int', chat: 'entity.TypeChat' = None, id = None, path = None, date = None):
-        self.id = id
-        self.chat = chat
-        self.internalId = internalId
-        self.path = path
-        self.date = date
+class ChatMedia(entities.Entity, entities.Media):
+    def __init__(self, internalId: 'int', chat: 'entities.TypeChat' = None, id = None, path = None, date = None):
+        self.id: 'str | None' = id
+        self.chat: 'entities.TypeChat' = chat
+        self.internalId: 'int' = internalId
+        self.path: 'str | None' = path
+        self.date: 'str | None' = date
         
     @property
-    def name(self):
+    def name(self) -> 'str':
         return "chat"
         
     @property
-    def unique_constraint(self) -> 'dict':
+    def unique_constraint(self) -> 'dict | None':
         return { "internalId": self.internalId }
 
-    def serialize(self):
+    def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
             "chat": self.chat.serialize(),
@@ -27,7 +27,7 @@ class ChatMedia(entity.Entity, entity.Media):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict'):
+    def deserialize(self, _dict: 'dict') -> 'entities.TypeChatMedia':
         self.id = _dict.get("id")
         self.chat = self.chat.deserialize(_dict.get("chat"))
         self.internalId = _dict.get("internalId")

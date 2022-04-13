@@ -4,11 +4,10 @@ import logging
 from logging.handlers import RotatingFileHandler
 from sys import stdout
 
-import globalvars
-from entity Chat, Phone
+import globalvars, entities
 from services import ApiService, PhonesManager, ChatsManager
 
-def set_chat(chat):
+def set_chat(chat: 'dict') -> None:
     if chat['isAvailable'] == False:
         if chat['id'] in ChatsManager():
             del ChatsManager()[chat['id']]
@@ -18,21 +17,21 @@ def set_chat(chat):
     if chat['id'] in ChatsManager():
         logging.debug(f"Updating chat {chat['id']}.")
 
-        ChatsManager()[chat['id']].from_dict(chat)
+        ChatsManager()[chat['id']].deserialize(chat)
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
-        ChatsManager()[chat['id']] = Chat(chat).run()
+        ChatsManager()[chat['id']] = entities.Chat(**chat).run()
 
-def get_all_chats(chats=[], start=0, limit=50):
+def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
 
     if len(new_chats) > 0:
-        chats += get_all_chats(new_chats, start+limit, limit)
+        chats += get_all_chats(new_chats, start + limit, limit)
 
     return chats
 
-def get_chats():
+def get_chats() -> None:
     chats = get_all_chats(limit=20)
 
     logging.debug(f"Received {len(chats)} chats.")
@@ -40,7 +39,7 @@ def get_chats():
     for chat in chats:
         set_chat(chat)
 
-def set_phone(phone):
+def set_phone(phone: 'dict') -> None:
     if phone['isBanned'] == True:
         if phone['id'] in PhonesManager():
             del PhonesManager()[phone['id']]
@@ -50,13 +49,13 @@ def set_phone(phone):
     if phone['id'] in PhonesManager():
         logging.debug(f"Updating phone {phone['id']}.")
 
-        PhonesManager()[phone['id']].from_dict(phone)
+        PhonesManager()[phone['id']].deserialize(phone)
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
 
-        PhonesManager()[phone['id']] = Phone(phone).run()
+        PhonesManager()[phone['id']] = entities.Phone(**phone).run()
 
-def get_phones():
+def get_phones() -> None:
     phones = ApiService().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })
 
     logging.debug(f"Received {len(phones)} phones.")
