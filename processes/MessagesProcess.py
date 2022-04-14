@@ -1,5 +1,5 @@
 import multiprocessing, asyncio, logging, telethon
-import entities, processes, exceptions
+import entities, processes, exceptions, helpers
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 class MessagesProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
-        multiprocessing.Process.__init__(self, name=f"MessagesProcess-{chat.id}", daemon=True)
+        multiprocessing.Process.__init__(self, name=f"MessagesProcess-{chat.id}")
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -35,23 +35,17 @@ class MessagesProcess(multiprocessing.Process):
 
         return chat_member_role.save()
 
-    async def get_message_participant(self, client: 'TelegramClient', tg_message):
+    async def get_message_participant(self, client: 'TelegramClient', input_chat, sender):
         try:
-            participant_request = await client(
-                telethon.functions.channels.GetParticipantRequest(
-                    channel=tg_message.input_chat,
-                    participant=tg_message.input_sender
-                )
+            participants = await client.get_participants(
+                entity=input_chat, 
+                search=sender.username if sender.username != None else f"{sender.first_name} {sender.last_name}"
             )
-        except (
-            telethon.errors.ChannelPrivateError,
-            telethon.errors.ChatAdminRequiredError,
-            telethon.errors.UserIdInvalidError,
-            telethon.errors.UserNotParticipantError
-        ) as ex:
-            logging.error(f"Can't get participant data for {tg_message.from_id.user_id} with chat {self.chat.internalId}. Exception: {ex}.")
+        except telethon.errors.RPCError as ex:
+            logging.error(f"Can't get participant data for {sender.id} with chat {self.chat.internalId}. Exception: {ex}.")
         else:
-            return participant_request.participant
+            if len(participants) > 0:
+                return participants[0].participant
 
         return None
     
@@ -74,6 +68,11 @@ class MessagesProcess(multiprocessing.Process):
         return fwd_from_id, fwd_from_name
 
     async def async_run(self):
+        if len(self.chat.phones) == 0:
+            logging.warning(f"No phones for chat {self.chat.id}.")
+
+            return
+
         for phone in self.chat.phones:
             logging.info(f"Recieving messages from chat {self.chat.id}.")
 
@@ -81,7 +80,6 @@ class MessagesProcess(multiprocessing.Process):
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
                 logging.error(f"Phone {phone.id} client not available.")
-                logging.exception(ex)
 
                 self.chat.remove_phone(phone)
                 self.chat.save()
@@ -89,15 +87,23 @@ class MessagesProcess(multiprocessing.Process):
                 continue
 
             try:
-                tg_chat = await self.chat.get_tg_entity(client)
-            except exceptions.ChatNotAvailableError as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
-                logging.exception(ex)
+                tg_chat = await helpers.get_entity(client, self.chat)
+            except ValueError as ex:
+                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
 
                 self.chat.isAvailable = False
                 self.chat.save()
 
                 break
+            else:
+                new_internal_id = telethon.utils.get_peer_id(tg_chat)
+                
+                if self.chat.internalId != new_internal_id:
+                    logging.info(f"Chat {self.chat.id} internal ID changed. Old ID {self.chat.internalId}. New ID {new_internal_id}.")
+                    
+                    self.chat.internalId = new_internal_id
+
+                    self.chat.save()
 
             try:
                 async for tg_message in client.iter_messages(entity=tg_chat, max_id=0):
@@ -116,7 +122,7 @@ class MessagesProcess(multiprocessing.Process):
 
                         if isinstance(tg_message.from_id, telethon.types.PeerUser):
                             member = await self.get_member(client, tg_message.from_id.user_id)
-                            participant = await self.get_message_participant(client, tg_message)
+                            participant = await self.get_message_participant(client, tg_message.input_chat, tg_message.sender)
                             chat_member = await self.get_chat_member(participant, member)
                             chat_member_role = await self.get_chat_member_role(participant, chat_member)
 
@@ -138,8 +144,7 @@ class MessagesProcess(multiprocessing.Process):
                         )
                         message.save()
                     except exceptions.RequestException as ex:
-                        logging.error(f"Can't save chat {self.chat.id} message {tg_message.id}.")
-                        logging.exception(ex)
+                        logging.error(f"Can't save chat {self.chat.id} message {tg_message.id}. Exception {ex}")
                     else:
                         logging.debug(f"Message {message.id} saved.")
 
@@ -148,14 +153,8 @@ class MessagesProcess(multiprocessing.Process):
                             meessage_media_proces.start()
                 else:
                     logging.info(f"Chat {self.chat.id} messages download success.")
-            except (
-                telethon.errors.ChannelInvalidError,
-                telethon.errors.ChannelPrivateError,
-                telethon.errors.ChatIdInvalidError,
-                telethon.errors.PeerIdInvalidError
-            ) as ex:
-                logging.error(f"Chat {self.chat.id} not available.")
-                logging.exception(ex)
+            except telethon.errors.RPCError as ex:
+                logging.error(f"Chat {self.chat.id} not available. Exception {ex}")
 
                 self.chat.isAvailable = False
                 self.chat.save()

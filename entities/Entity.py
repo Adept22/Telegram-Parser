@@ -8,20 +8,20 @@ class Entity(ABC):
     @property
     @abstractmethod
     def name(self) -> 'str':
-        pass
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def unique_constraint(self) -> 'dict | None':
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def serialize(self) -> 'dict':
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def deserialize(self, _dict: 'dict') -> 'entities.TypeEntity':
-        pass
+        raise NotImplementedError
 
     def save(self) -> 'entities.TypeEntity':
         try:

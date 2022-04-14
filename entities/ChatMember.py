@@ -29,18 +29,18 @@ class ChatMember(entities.Entity):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.serialize(),
-            "member": self.member.serialize(),
+            "chat": { "id": self.chat.id },
+            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
             "date": self.date,
             "isLeft": self.isLeft,
-            "roles": [role.serialize() for role in self.roles],
+            "roles": [{ "id": role.id } for role in self.roles if role != None and role.id != None],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, _dict: 'dict') -> 'entities.TypeChatMember':
         self.id = _dict.get("id")
-        self.chat = self.chat.deserialize(_dict.get("chat"))
+        # self.chat = self.chat.deserialize(_dict.get("chat"))
         self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
         self.date = _dict.get("date")
         self.isLeft = _dict.get("isLeft")

@@ -12,12 +12,12 @@ if TYPE_CHECKING:
 class Media(ABC):
     @abstractmethod
     def serialize(self) -> 'entities.TypeMedia':
-        pass
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def name(self) -> 'str':
-        pass
+        raise NotImplementedError
 
     async def upload(self, client: 'TelegramClient', tg_media, file_size: 'int') -> 'None':
         body = self.serialize()

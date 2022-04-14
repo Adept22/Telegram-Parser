@@ -19,7 +19,7 @@ class ChatMedia(entities.Entity, entities.Media):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.serialize(),
+            "chat": { "id": self.chat.id },
             "internalId": self.internalId,
             "path": self.path,
             "date": self.date,
@@ -29,7 +29,7 @@ class ChatMedia(entities.Entity, entities.Media):
 
     def deserialize(self, _dict: 'dict') -> 'entities.TypeChatMedia':
         self.id = _dict.get("id")
-        self.chat = self.chat.deserialize(_dict.get("chat"))
+        # self.chat = self.chat.deserialize(_dict.get("chat"))
         self.internalId = _dict.get("internalId")
         self.path = _dict.get("path")
         self.date = _dict.get("date")

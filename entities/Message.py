@@ -39,9 +39,9 @@ class Message(entities.Entity):
             "id": self.id, 
             "internalId": self.internalId, 
             "text": self.text, 
-            "chat": self.chat.serialize(), 
-            "member": self.member.serialize() if self.member != None else None, 
-            "replyTo": self.replyTo.serialize() if self.replyTo != None else None, 
+            "chat": { "id": self.chat.id },
+            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None, 
+            "replyTo": { "id": self.replyTo.id } if self.replyTo != None and self.replyTo.id != None else None, 
             "isPinned": self.isPinned, 
             "forwardedFromId": self.forwardedFromId, 
             "forwardedFromName": self.forwardedFromName, 
@@ -55,7 +55,7 @@ class Message(entities.Entity):
         self.id = _dict.get("id")
         self.internalId = _dict.get("internalId")
         self.text = _dict.get("text")
-        self.chat = self.chat.deserialize(_dict.get("chat"))
+        # self.chat = self.chat.deserialize(_dict.get("chat"))
         self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
         self.replyTo = self.replyTo.deserialize(_dict.get("replyTo")) if self.replyTo != None and "replyTo" in _dict else None
         self.isPinned = _dict.get("isPinned")

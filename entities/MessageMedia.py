@@ -23,7 +23,7 @@ class MessageMedia(entities.Entity, entities.Media):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "message": self.message.serialize(),
+            "message": { "id": self.message.id } if self.message != None and self.message.id != None else None,
             "internalId": self.internalId,
             "path": self.path,
             "date": self.date,

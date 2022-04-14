@@ -24,15 +24,13 @@ class MessageMediaProcess(multiprocessing.Process):
             media.save()
         except exceptions.RequestException as ex:
             logging.error(f"Can\'t save message {self.message.id} media. Exception: {ex}.")
-            logging.exception(ex)
         else:
             logging.info(f"Sucessfuly saved message {self.message.id} media.")
 
             try:
                 await media.upload(client, tg_media, size)
             except exceptions.RequestException as ex:
-                logging.error(f"Can\'t upload message {self.message.id} media.")
-                logging.exception(ex)
+                logging.error(f"Can\'t upload message {self.message.id} media. Exception: {ex}.")
             else:
                 logging.info(f"Sucessfuly uploaded message {self.message.id} media.")
 
@@ -43,7 +41,6 @@ class MessageMediaProcess(multiprocessing.Process):
             client = await self.phone.new_client(loop=self.loop)
         except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Phone {self.phone.id} client not available.")
-            logging.exception(ex)
             
             return
 

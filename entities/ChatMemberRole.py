@@ -29,7 +29,7 @@ class ChatMemberRole(entities.Entity):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": self.member.serialize(),
+            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
             "title": self.title,
             "code": self.code
         }

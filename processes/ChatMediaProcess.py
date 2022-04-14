@@ -1,5 +1,5 @@
 import multiprocessing, asyncio, logging, random, telethon
-import entities, exceptions
+import entities, exceptions, helpers
 
 class ChatMediaProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
@@ -11,28 +11,40 @@ class ChatMediaProcess(multiprocessing.Process):
         asyncio.set_event_loop(self.loop)
 
     async def async_run(self):
+        if len(self.chat.phones) == 0:
+            logging.warning(f"No phones for chat {self.chat.id}.")
+
+            return
+            
         for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
                 logging.error(f"Phone {phone.id} client not available.")
-                logging.exception(ex)
 
                 self.chat.remove_phone(phone)
                 self.chat.save()
                 
                 continue
-
+            
             try:
-                tg_chat = await self.chat.get_tg_entity(client)
+                tg_chat = await helpers.get_entity(client, self.chat)
             except exceptions.ChatNotAvailableError as ex:
                 logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
-                logging.exception(ex)
 
                 self.chat.isAvailable = False
                 self.chat.save()
 
                 break
+            else:
+                new_internal_id = telethon.utils.get_peer_id(tg_chat)
+                
+                if self.chat.internalId != new_internal_id:
+                    logging.info(f"Chat {self.chat.id} internal ID changed. Old ID {self.chat.internalId}. New ID {new_internal_id}.")
+                    
+                    self.chat.internalId = new_internal_id
+
+                    self.chat.save()
                 
             try:
                 async for photo in client.iter_profile_photos(entity=tg_chat):
@@ -44,37 +56,23 @@ class ChatMediaProcess(multiprocessing.Process):
                         media.save()
                     except exceptions.RequestException as ex:
                         logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
-                        logging.exception(ex)
                     else:
                         logging.info(f"Sucessfuly saved chat {self.chat.id} media.")
 
                         try:
                             await media.upload(client, photo, photo.sizes[-2])
                         except exceptions.RequestException as ex:
-                            logging.error(f"Can\'t upload chat {self.chat.id} media.")
-                            logging.exception(ex)
+                            logging.error(f"Can\'t upload chat {self.chat.id} media. Exception: {ex}.")
                         else:
                             logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
-            except (
-                telethon.errors.UserIdInvalidError, 
-                telethon.errors.ChatAdminRequiredError, 
-                telethon.errors.InputUserDeactivatedError, 
-                telethon.errors.PeerIdInvalidError, 
-                telethon.errors.PeerIdNotSupportedError, 
-                telethon.errors.UserIdInvalidError, 
-                telethon.errors.ChannelInvalidError, 
-                telethon.errors.ChannelPrivateError, 
-                telethon.errors.ChannelPublicGroupNaError, 
-                telethon.errors.TimeoutError
-            ) as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
-                logging.exception(ex)
+            except telethon.errors.RPCError as ex:
+                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
                 
                 continue
             else:
                 break
         else:
-            logging.error(f"Can't get chat {self.chat.id} messages.")
+            logging.error(f"Can't get chat {self.chat.id} medias.")
 
     def run(self):
         asyncio.run(self.async_run())

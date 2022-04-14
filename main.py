@@ -22,6 +22,7 @@ def set_chat(chat: 'dict') -> None:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
         ChatsManager()[chat['id']] = entities.Chat(**chat).run()
+
 def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
 
@@ -37,6 +38,8 @@ def get_chats() -> None:
 
     for chat in chats:
         set_chat(chat)
+
+    logging.debug(f'Chats in manager {len(ChatsManager().items())}')
 
 def set_phone(phone: 'dict') -> None:
     if phone['isBanned'] == True:
@@ -61,6 +64,8 @@ def get_phones() -> None:
 
     for phone in phones:
         set_phone(phone)
+
+    logging.debug(f'Phones in manager {len(PhonesManager().items())}')
 
 if __name__ == '__main__':
     globalvars.init()

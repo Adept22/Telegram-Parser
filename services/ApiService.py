@@ -40,13 +40,7 @@ class ApiService():
             method = 'POST'
             url = os.environ['API_URL'] + '/' + type
         
-        try:
-            return self.send(method, url, body)
-        except requests.exceptions.HTTPError as ex:
-            if ex.response.status_code == 409:
-                raise exceptions.UniqueConstraintViolationError(ex)
-            else:
-                raise ex
+        return self.send(method, url, body)
 
     def delete(self, type: 'str', body: 'dict') -> 'None':
         if body.get('id') == None:
@@ -118,9 +112,17 @@ class ApiService():
         try:
             r.raise_for_status()
         except requests.exceptions.HTTPError as ex:
-            raise exceptions.RequestException(ex)
+            r = ex.response
+
+            json = r.json()
+
+            if r.status_code == 409:
+                raise exceptions.UniqueConstraintViolationError(json["message"])
+
+            raise exceptions.RequestException(json["message"])
         
         if r.status_code == 204:
             return None
 
         return r.json()
+        

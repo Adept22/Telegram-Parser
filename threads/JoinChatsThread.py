@@ -1,13 +1,14 @@
-import multiprocessing, asyncio, logging, telethon
-import entities, exceptions
+import queue, threading, asyncio, logging, telethon
+import entities, exceptions, helpers
 
-class JoinChatsProcess(multiprocessing.Process):
+class JoinChatsThread(threading.Thread):
     def __init__(self, phone: 'entities.TypePhone'):
-        multiprocessing.Process.__init__(self, name=f'JoinChatsProcess-{phone.id}', daemon=True)
+        threading.Thread.__init__(self, name=f'JoinChatsThread-{phone.id}', daemon=True)
         
         self.phone = phone
         self.loop = asyncio.new_event_loop()
-        self.lock = multiprocessing.Lock()
+        self.queue = queue.Queue()
+        self.lock = threading.Lock()
         
         asyncio.set_event_loop(self.loop)
         
@@ -19,14 +20,24 @@ class JoinChatsProcess(multiprocessing.Process):
             client = await self.phone.new_client(loop=self.loop)
         except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
-            logging.exception(ex)
 
             chat.remove_available_phone(self.phone)
             chat.remove_phone(self.phone)
         else:
             while True:
                 try:
-                    tg_chat = await chat.join_channel(client)
+                    try:
+                        updates = await client(
+                            telethon.functions.channels.JoinChannelRequest(channel=chat.username) 
+                                if chat.hash is None else 
+                                    telethon.functions.messages.ImportChatInviteRequest(hash=chat.hash)
+                        )
+                    except telethon.errors.UserAlreadyParticipantError as ex:
+                        tg_chat = await helpers.get_entity(client, chat)
+                    except (ValueError, telethon.errors.RPCError) as ex:
+                        raise exceptions.ChatNotAvailableError(ex)
+                    else:
+                        tg_chat = updates.chats[0]
                 except telethon.errors.FloodWaitError as ex:
                     logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
 
@@ -35,17 +46,12 @@ class JoinChatsProcess(multiprocessing.Process):
                     continue
                 except exceptions.ChatNotAvailableError as ex:
                     logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
-                    logging.exception(ex)
 
                     chat.isAvailable = False
 
                     break
-                except (
-                    telethon.errors.ChannelsTooMuchError,
-                    telethon.errors.SessionPasswordNeededError
-                ) as ex:
-                    logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
-                    logging.exception(ex)
+                except telethon.errors.RPCError as ex:
+                    logging.error(f"Chat {chat.id} not available for phone {self.phone.id}. Exception {ex}")
 
                     chat.remove_available_phone(self.phone)
                     chat.remove_phone(self.phone)
@@ -54,8 +60,15 @@ class JoinChatsProcess(multiprocessing.Process):
                 else:
                     logging.info(f"Phone {self.phone.id} succesfully wired with chat {chat.id}.")
 
-                    if chat.internalId == None:
-                        chat.internalId = tg_chat.id
+                    internal_id = telethon.utils.get_peer_id(tg_chat)
+
+                    if chat.internalId != internal_id:
+                        chat.internalId = internal_id
+                        
+                    type = helpers.get_type(tg_chat)
+
+                    if chat.type != type:
+                        chat.type = type
 
                     if chat.title != tg_chat.title:
                         chat.title = tg_chat.title
@@ -71,9 +84,9 @@ class JoinChatsProcess(multiprocessing.Process):
 
     def run(self):
         while True:
-            chat: 'entities.TypeChat' = self.phone.joining_queue.get()
+            chat: 'entities.TypeChat' = self.queue.get()
 
             with self.lock:
                 asyncio.run(self.async_run(chat))
 
-            self.phone.joining_queue.task_done()
+            self.queue.task_done()

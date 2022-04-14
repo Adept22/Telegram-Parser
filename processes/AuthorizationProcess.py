@@ -57,9 +57,8 @@ class AuthorizationProcess(multiprocessing.Process):
                             code=self.phone.code, 
                             phone_code_hash=self.phone.code_hash
                         )
-                    except Exception as ex:
-                        logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}.")
-                        logging.exception(ex)
+                    except telethon.errors.RPCError as ex:
+                        logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}")
                         
                         self.phone.isVerified = False
                         self.phone.code = None
@@ -76,9 +75,8 @@ class AuthorizationProcess(multiprocessing.Process):
                 elif self.phone.code_hash == None:
                     try:
                         await self.send_code()
-                    except Exception as ex:
-                        logging.error(f"Unable to sent code for {self.phone.id}.")
-                        logging.exception(ex)
+                    except telethon.errors.RPCError as ex:
+                        logging.error(f"Unable to sent code for {self.phone.id}. Exception: {ex}")
                         
                         self.phone.session = None
                         self.phone.isBanned = True
