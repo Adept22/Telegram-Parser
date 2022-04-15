@@ -1,4 +1,5 @@
-import math, os, requests
+import math, os, requests, json
+from urllib import response
 from urllib.parse import urlencode
 
 import exceptions
@@ -83,8 +84,8 @@ class ApiService():
         
         try:
             self.send("GET", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/chunk', params=params)
-        except requests.exceptions.HTTPError as ex:
-            if ex.response.status_code == 404:
+        except exceptions.RequestException as ex:
+            if ex.code == 404:
                 return False
             else:
                 raise ex
@@ -112,17 +113,27 @@ class ApiService():
         try:
             r.raise_for_status()
         except requests.exceptions.HTTPError as ex:
-            r = ex.response
-
-            json = r.json()
-
-            if r.status_code == 409:
-                raise exceptions.UniqueConstraintViolationError(json["message"])
-
-            raise exceptions.RequestException(json["message"])
+            r: 'requests.Response' = ex.response
+            
+            try:
+                content = r.json()["message"]
+            except json.decoder.JSONDecodeError as ex:
+                content = None
+                
+            if r.status_code == 502:
+                return self.send(method, url, body, params, files)
+            elif r.status_code == 409:
+                raise exceptions.UniqueConstraintViolationError(content)
+            else:
+                raise exceptions.RequestException(r.status_code, content)
         
         if r.status_code == 204:
             return None
 
-        return r.json()
+        try:
+            content = r.json()
+        except json.decoder.JSONDecodeError as ex:
+            return self.send(method, url, body, params, files)
+
+        return content
         

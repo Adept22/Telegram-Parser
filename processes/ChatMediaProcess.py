@@ -1,9 +1,12 @@
-import multiprocessing, asyncio, logging, random, telethon
+import os, multiprocessing, asyncio, logging, telethon
 import entities, exceptions, helpers
+from services.PhonesManager import PhonesManager
 
 class ChatMediaProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f'ChatMediaProcess-{chat.id}', daemon=True)
+
+        os.nice(10)
 
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -11,43 +14,18 @@ class ChatMediaProcess(multiprocessing.Process):
         asyncio.set_event_loop(self.loop)
 
     async def async_run(self):
-        if len(self.chat.phones) == 0:
-            logging.warning(f"No phones for chat {self.chat.id}.")
-
-            return
-            
         for phone in self.chat.phones:
             try:
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.error(f"Phone {phone.id} client not available.")
+                logging.error(f"Phone {phone.id} client not available. Exception: {ex}")
 
-                self.chat.remove_phone(phone)
-                self.chat.save()
+                self.chat.phones.remove(phone)
                 
                 continue
             
             try:
-                tg_chat = await helpers.get_entity(client, self.chat)
-            except exceptions.ChatNotAvailableError as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}.")
-
-                self.chat.isAvailable = False
-                self.chat.save()
-
-                break
-            else:
-                new_internal_id = telethon.utils.get_peer_id(tg_chat)
-                
-                if self.chat.internalId != new_internal_id:
-                    logging.info(f"Chat {self.chat.id} internal ID changed. Old ID {self.chat.internalId}. New ID {new_internal_id}.")
-                    
-                    self.chat.internalId = new_internal_id
-
-                    self.chat.save()
-                
-            try:
-                async for photo in client.iter_profile_photos(entity=tg_chat):
+                async for photo in client.iter_profile_photos(entity=self.chat.internalId):
                     photo: 'telethon.types.TypePhoto'
 
                     media = entities.ChatMedia(internalId=photo.id, chat=self.chat, date=photo.date.isoformat())
@@ -55,14 +33,25 @@ class ChatMediaProcess(multiprocessing.Process):
                     try:
                         media.save()
                     except exceptions.RequestException as ex:
-                        logging.error(f"Can\'t save chat {self.chat.id} media. Exception: {ex}.")
+                        logging.error(f"Can't save chat {self.chat.id} media. Exception: {ex}.")
                     else:
                         logging.info(f"Sucessfuly saved chat {self.chat.id} media.")
 
+                        size = photo.sizes[-2]
+
                         try:
-                            await media.upload(client, photo, photo.sizes[-2])
+                            await media.upload(
+                                client, 
+                                telethon.types.InputPhotoFileLocation(
+                                    id=photo.id,
+                                    access_hash=photo.access_hash,
+                                    file_reference=photo.file_reference,
+                                    thumb_size=size.type
+                                ), 
+                                size.size
+                            )
                         except exceptions.RequestException as ex:
-                            logging.error(f"Can\'t upload chat {self.chat.id} media. Exception: {ex}.")
+                            logging.error(f"Can't upload chat {self.chat.id} media. Exception: {ex}.")
                         else:
                             logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
             except telethon.errors.RPCError as ex:

@@ -14,7 +14,7 @@ class MessageMedia(entities.Entity, entities.Media):
     
     @property
     def name(self) -> 'str':
-        return "message"
+        return "message-media"
         
     @property
     def unique_constraint(self) -> 'dict | None':

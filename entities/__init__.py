@@ -9,6 +9,7 @@ from .Member import Member
 from .ChatMemberRole import ChatMemberRole
 from .ChatMember import ChatMember
 from .ChatMedia import ChatMedia
+from .PhonesList import PhonesList
 
 TypeEntity = Entity
 TypeMedia = Media
@@ -21,3 +22,4 @@ TypeMember = Member
 TypeChatMemberRole = ChatMemberRole
 TypeChatMember = ChatMember
 TypeChatMedia = ChatMedia
+TypePhonesList = PhonesList

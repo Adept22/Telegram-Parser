@@ -21,13 +21,13 @@ class JoinChatsThread(threading.Thread):
         except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Chat {chat.id} not available for phone {self.phone.id}.")
 
-            chat.remove_available_phone(self.phone)
-            chat.remove_phone(self.phone)
+            chat.availablePhones.remove(self.phone)
+            chat.phones.remove(self.phone)
         else:
             while True:
                 try:
                     try:
-                        updates = await client(
+                        updates: 'telethon.types.TypeUpdates' = await client(
                             telethon.functions.channels.JoinChannelRequest(channel=chat.username) 
                                 if chat.hash is None else 
                                     telethon.functions.messages.ImportChatInviteRequest(hash=chat.hash)
@@ -39,7 +39,7 @@ class JoinChatsThread(threading.Thread):
                     else:
                         tg_chat = updates.chats[0]
                 except telethon.errors.FloodWaitError as ex:
-                    logging.error(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
+                    logging.warning(f"Chat {chat.id} wiring for phone {self.phone.id} must wait {ex.seconds}.")
 
                     await asyncio.sleep(ex.seconds)
 
@@ -53,8 +53,8 @@ class JoinChatsThread(threading.Thread):
                 except telethon.errors.RPCError as ex:
                     logging.error(f"Chat {chat.id} not available for phone {self.phone.id}. Exception {ex}")
 
-                    chat.remove_available_phone(self.phone)
-                    chat.remove_phone(self.phone)
+                    chat.availablePhones.remove(self.phone)
+                    chat.phones.remove(self.phone)
 
                     break
                 else:
@@ -64,11 +64,6 @@ class JoinChatsThread(threading.Thread):
 
                     if chat.internalId != internal_id:
                         chat.internalId = internal_id
-                        
-                    type = helpers.get_type(tg_chat)
-
-                    if chat.type != type:
-                        chat.type = type
 
                     if chat.title != tg_chat.title:
                         chat.title = tg_chat.title
@@ -76,7 +71,7 @@ class JoinChatsThread(threading.Thread):
                     if chat.date != tg_chat.date.isoformat():
                         chat.date = tg_chat.date.isoformat()
 
-                    chat.add_phone(self.phone)
+                    chat.phones.append(self.phone)
 
                     break
 

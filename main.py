@@ -1,6 +1,4 @@
-import os
-import asyncio
-import logging
+import os, asyncio, logging, coloredlogs
 from logging.handlers import RotatingFileHandler
 from sys import stdout
 
@@ -17,11 +15,27 @@ def set_chat(chat: 'dict') -> None:
     if chat['id'] in ChatsManager():
         logging.debug(f"Updating chat {chat['id']}.")
 
-        ChatsManager()[chat['id']].deserialize(chat)
+        chat: 'entities.TypeChat' = ChatsManager()[chat['id']].deserialize(chat)
+
+        # if not chat.chat_init_process.is_alive():
+        #     chat.chat_init_process.terminate()
+        #     chat.chat_init_process.start()
+            
+        # if not chat.chat_media_process.is_alive():
+        #     chat.chat_media_process.terminate()
+        #     chat.chat_media_process.start()
+
+        # if not chat.members_process.is_alive():
+        #     chat.members_process.terminate()
+        #     chat.members_process.start()
+
+        # if not chat.messages_process.is_alive():
+        #     chat.messages_process.terminate()
+        #     chat.messages_process.start()
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
-        ChatsManager()[chat['id']] = entities.Chat(**chat).run()
+        ChatsManager()[chat.id] = entities.Chat(**chat)
 
 def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
@@ -51,11 +65,19 @@ def set_phone(phone: 'dict') -> None:
     if phone['id'] in PhonesManager():
         logging.debug(f"Updating phone {phone['id']}.")
 
-        PhonesManager()[phone['id']].deserialize(phone)
+        phone: 'entities.TypePhone' = PhonesManager()[phone['id']].deserialize(phone)
+
+        # if not phone.authorization_process.is_alive():
+        #     phone.authorization_process.terminate()
+        #     phone.authorization_process.start()
+
+        # if not phone.join_chats_thread.is_alive():
+        #     phone.join_chats_thread.terminate()
+        #     phone.join_chats_thread.start()
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
 
-        PhonesManager()[phone['id']] = entities.Phone(**phone).run()
+        PhonesManager()[phone.id] = entities.Phone(**phone)
 
 def get_phones() -> None:
     phones = ApiService().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })
@@ -70,17 +92,23 @@ def get_phones() -> None:
 if __name__ == '__main__':
     globalvars.init()
 
+    formatter = coloredlogs.ColoredFormatter("%(process)d %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s")
+
     eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=10)
     eh.setLevel(logging.WARNING)
+    eh.setFormatter(formatter)
 
     fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=5)
     fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
 
     sh = logging.StreamHandler(stdout)
     sh.setLevel(logging.DEBUG)
+    sh.setFormatter(formatter)
+
+    coloredlogs.install(level='DEBUG')
 
     logging.basicConfig(
-        format="%(process)d %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s:%(lineno)d %(message)s",
         datefmt='%d.%m.%Y %H:%M:%S',
         handlers=[eh, fh, sh],
         level=logging.DEBUG

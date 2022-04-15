@@ -1,8 +1,7 @@
-import telethon
+import typing, telethon
 import entities
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
 class Member(entities.Entity):

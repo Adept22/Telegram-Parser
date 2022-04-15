@@ -1,10 +1,9 @@
-import asyncio, multiprocessing, telethon, telethon.sessions
+import asyncio, typing, telethon, telethon.sessions
 import globalvars, entities, exceptions
 from processes import AuthorizationProcess
 from threads import JoinChatsThread
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
 class Phone(entities.Entity):
@@ -22,7 +21,9 @@ class Phone(entities.Entity):
         self.code_hash: 'str | None' = None
 
         self.authorization_process = AuthorizationProcess(self)
+        self.authorization_process.start()
         self.join_chats_thread = JoinChatsThread(self)
+        self.join_chats_thread.start()
 
     def __del__(self):
         # TODO: Мы должны убивать треды при удалении чата.
@@ -90,9 +91,3 @@ class Phone(entities.Entity):
 
     def join_chat(self, chat: 'entities.TypeChat') -> 'None':
         self.join_chats_thread.queue.put(chat)
-
-    def run(self) -> 'entities.TypePhone':
-        self.authorization_process.start()
-        self.join_chats_thread.start()
-
-        return self

@@ -1,13 +1,12 @@
-import multiprocessing, asyncio, logging, telethon
+import multiprocessing, asyncio, typing, logging, telethon
 import entities, exceptions, helpers
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
 class MembersProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
-        multiprocessing.Process.__init__(self, name=f'MembersProcess-{chat.id}')
+        multiprocessing.Process.__init__(self, name=f'MembersProcess-{chat.id}', daemon=True)
         
         self.media_path = f"./downloads/members"
         self.chat = chat
@@ -37,43 +36,20 @@ class MembersProcess(multiprocessing.Process):
         return chat_member_role.save()
 
     async def async_run(self):
-        if len(self.chat.phones) == 0:
-            logging.warning(f"No phones for chat {self.chat.id}.")
-
-            return
-            
         for phone in self.chat.phones:
+            phone: 'entities.TypePhone'
+
             try:
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
                 logging.error(f"Phone {phone.id} client not available.")
 
-                self.chat.remove_phone(phone)
-                self.chat.save()
+                self.chat.phones.remove(phone)
                 
                 continue
 
             try:
-                tg_chat = await helpers.get_entity(client, self.chat)
-            except exceptions.ChatNotAvailableError as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
-
-                self.chat.isAvailable = False
-                self.chat.save()
-
-                break
-            else:
-                new_internal_id = telethon.utils.get_peer_id(tg_chat)
-                
-                if self.chat.internalId != new_internal_id:
-                    logging.info(f"Chat {self.chat.id} internal ID changed. Old ID {self.chat.internalId}. New ID {new_internal_id}.")
-                    
-                    self.chat.internalId = new_internal_id
-
-                    self.chat.save()
-
-            try:
-                async for user in client.iter_participants(entity=tg_chat, aggressive=True):
+                async for user in client.iter_participants(entity=self.chat.internalId, aggressive=True):
                     user: 'telethon.types.TypeUser'
 
                     logging.debug(f"Chat {self.chat.title}. Received user '{helpers.user_title(user)}'")
@@ -105,8 +81,19 @@ class MembersProcess(multiprocessing.Process):
                                 else:
                                     logging.info(f"Sucessfuly saved member {member.id} media.")
 
+                                    size = photo.sizes[-2]
+
                                     try:
-                                        await media.upload(client, photo, photo.sizes[-2])
+                                        await media.upload(
+                                            client, 
+                                            telethon.types.InputPhotoFileLocation(
+                                                id=photo.id,
+                                                access_hash=photo.access_hash,
+                                                file_reference=photo.file_reference,
+                                                thumb_size=size.type
+                                            ), 
+                                            size.size
+                                        )
                                     except exceptions.RequestException as ex:
                                         logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
                                     else:

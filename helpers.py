@@ -1,20 +1,11 @@
+import asyncio
+import logging
 import re, typing, telethon
 
 import entities, exceptions
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
-
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
 
 def get_hash(link: 'str') -> 'tuple[str | None, str | None]':
     if link is None:
@@ -42,31 +33,45 @@ def user_title(user: 'telethon.types.TypeUser'):
         return user.id
 
 def get_type(chat: 'telethon.types.TypeChat'):
-    if isinstance(chat, telethon.types.Channel):
-        return 'channel'
-    elif isinstance(chat, telethon.types.Chat):
-        return 'chat'
+    internal_id, chat_type = telethon.utils.resolve_id(chat.internalId or 0)
+    
+    return chat_type
 
-    return None
+async def _get_entity(client: 'TelegramClient', entity) -> 'telethon.types.TypeChat':
+    try:
+        return await client.get_entity(entity)
+    except telethon.errors.FloodWaitError as ex:
+        logging.warning(f"FloodWaitError excepted. Sleep {ex.seconds}")
+
+        await asyncio.sleep(ex.seconds)
+
+        return await _get_entity(client, entity)
+    except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+        raise exceptions.ChatNotAvailableError(str(ex))
 
 async def get_entity(client: 'TelegramClient', chat: 'entities.TypeChat') -> 'telethon.types.TypeChat':
-    try:
-        if chat.type != None:
-            return await client.get_entity(chat.internalId)
-        elif chat.internalId != None:
-            try:
-                return await client.get_entity(telethon.types.PeerChannel(-(1000000000000 + chat.internalId)))
-            except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                try:
-                    return await client.get_entity(telethon.types.PeerChat(-chat.internalId))
-                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    pass
+    errors = []
+
+    if chat.internalId != None:
+        try:
+            return await _get_entity(client, telethon.types.PeerChannel(-(1000000000000 + chat.internalId)))
+        except exceptions.ChatNotAvailableError as ex:
+            errors.append(str(ex))
+
+        try:
+            return await _get_entity(client, telethon.types.PeerChat(-chat.internalId))
+        except exceptions.ChatNotAvailableError as ex:
+            errors.append(str(ex))
         
-        if chat.username != None:
-            return await client.get_entity(chat.username)
-        elif chat.hash != None:
-            return await client.get_entity(chat.hash)
-        else:
-            return await client.get_entity(chat.link)
-    except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-        raise exceptions.ChatNotAvailableError(ex)
+    if chat.username != None:
+        try:
+            return await _get_entity(client, chat.username)
+        except exceptions.ChatNotAvailableError as ex:
+            errors.append(str(ex))
+
+    try:
+        return await _get_entity(client, chat.link)
+    except exceptions.ChatNotAvailableError as ex:
+        errors.append(str(ex))
+    
+    raise exceptions.ChatNotAvailableError(". ".join(errors))

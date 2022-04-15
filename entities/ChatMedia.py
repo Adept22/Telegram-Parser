@@ -10,7 +10,7 @@ class ChatMedia(entities.Entity, entities.Media):
         
     @property
     def name(self) -> 'str':
-        return "chat"
+        return "chat-media"
         
     @property
     def unique_constraint(self) -> 'dict | None':

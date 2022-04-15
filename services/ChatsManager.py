@@ -1,16 +1,18 @@
 from collections.abc import MutableMapping
 from singleton_decorator import singleton
 
+import entities
+
 @singleton
 class ChatsManager(MutableMapping):
     def __init__(self, *args, **kwargs):
         self.store = dict()
         self.update(dict(*args, **kwargs))  # use the free update to set keys
         
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> 'entities.TypeChat':
         return self.store[self._keytransform(key)]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value: 'entities.TypeChat'):
         self.store[self._keytransform(key)] = value
 
     def __delitem__(self, key):

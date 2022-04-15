@@ -14,7 +14,7 @@ class MemberMedia(entities.Entity, entities.Media):
     
     @property
     def name(self) -> 'str':
-        return "member"
+        return "member-media"
         
     @property
     def unique_constraint(self) -> 'dict | None':
