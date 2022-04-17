@@ -42,17 +42,14 @@ class MessagesProcess(multiprocessing.Process):
                 participant: 'telethon.types.TypeChannelParticipant' = await client(
                     telethon.tl.functions.channels.GetParticipantRequest(input_chat, input_sender)
                 )
-                participant = participant.participant
+                return participant.participant
             elif isinstance(peer, telethon.types.PeerChat):
                 chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(self.chat.internalId))
                 participants = [p.participant for p in chat_full.participants if p.user_id == input_sender.user_id] \
                     if chat_full.participants.participants else []
-                participant = participants[0] if len(participants) > 0 else None
-
+                return participants[0] if len(participants) > 0 else None
         except telethon.errors.RPCError as ex:
             logging.error(f"Can't get participant data for {input_sender.user_id} with chat {self.chat.internalId}. Exception: {ex}.")
-        else:
-            return participant
 
         return None
     
@@ -80,7 +77,7 @@ class MessagesProcess(multiprocessing.Process):
                 try:
                     client: 'TelegramClient' = await phone.new_client(loop=self.loop)
                 except exceptions.ClientNotAvailableError as ex:
-                    logging.error(f"Phone {phone.id} client not available.")
+                    logging.critical(f"Phone {phone.id} client not available.")
 
                     self.chat.phones.remove(phone)
                     self.chat.save()
@@ -139,7 +136,7 @@ class MessagesProcess(multiprocessing.Process):
                     else:
                         logging.info(f"Chat {self.chat.id} messages download success.")
                 except telethon.errors.RPCError as ex:
-                    logging.error(f"Chat {self.chat.id} not available. Exception {ex}")
+                    logging.critical(f"Chat {self.chat.id} not available. Exception {ex}")
 
                     self.chat.isAvailable = False
                     self.chat.save()

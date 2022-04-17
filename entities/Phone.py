@@ -1,7 +1,7 @@
 import asyncio, typing, telethon, telethon.sessions
+import multiprocessing
 import globalvars, entities, exceptions
-from processes import AuthorizationProcess
-from threads import JoinChatsThread
+from processes import AuthorizationProcess, JoinChatsProcess
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -20,14 +20,27 @@ class Phone(entities.Entity):
         
         self.code_hash: 'str | None' = None
 
+        self._join_queue = multiprocessing.Queue()
+
         self.authorization_process = AuthorizationProcess(self)
         self.authorization_process.start()
-        self.join_chats_thread = JoinChatsThread(self)
+        self.join_chats_thread = JoinChatsProcess(self)
         self.join_chats_thread.start()
 
     def __del__(self):
-        # TODO: Мы должны убивать треды при удалении чата.
-        pass
+        self.authorization_process.terminate()
+        self.join_chats_thread.terminate()
+
+    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
+        if self.authorization_process == None or not self.authorization_process.is_alive():
+            self.authorization_process = AuthorizationProcess(self)
+            self.authorization_process.start()
+
+        if self.join_chats_thread == None or not self.join_chats_thread.is_alive():
+            self.join_chats_thread = JoinChatsProcess(self)
+            self.join_chats_thread.start()
+        
+        return self
 
     @property
     def name(self) -> 'str':
@@ -90,4 +103,4 @@ class Phone(entities.Entity):
             raise exceptions.ClientNotAvailableError(ex)
 
     def join_chat(self, chat: 'entities.TypeChat') -> 'None':
-        self.join_chats_thread.queue.put(chat)
+        self._join_queue.put(chat)

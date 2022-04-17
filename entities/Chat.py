@@ -1,4 +1,9 @@
-import processes, entities, helpers
+import multiprocessing
+import typing
+import entities, processes, helpers
+
+if typing.TYPE_CHECKING:
+    from processes import ChatInitProcess, ChatMediaProcess, MembersProcess, MessagesProcess
 
 class Chat(entities.Entity):
     def __init__(
@@ -20,6 +25,8 @@ class Chat(entities.Entity):
         self.isAvailable: 'bool' = isAvailable
         self.availablePhones: 'entities.TypePhonesList' = entities.PhonesList(availablePhones)
         self.phones: 'entities.TypePhonesList' = entities.PhonesList(phones)
+        self.__iternaId_condition = multiprocessing.Condition()
+        self._internalId: 'int | None' = None
         self.internalId: 'int | None' = internalId
         self.title: 'str | None' = title
         self.description: 'str | None' = description
@@ -27,35 +34,35 @@ class Chat(entities.Entity):
 
         self.username, self.hash = helpers.get_hash(link)
 
-        self.chat_init_process = processes.ChatInitProcess(self)
-        self.chat_init_process.start()
-        self.chat_media_process = processes.ChatMediaProcess(self)
-        self.chat_media_process.start()
-        self.members_process = processes.MembersProcess(self)
-        self.members_process.start()
-        self.messages_process = processes.MessagesProcess(self)
-        self.messages_process.start()
+        self.chat_init_process: 'ChatInitProcess | None' = None
+        self.chat_media_process: 'ChatMediaProcess | None' = None
+        self.members_process: 'MembersProcess | None' = None
+        self.messages_process: 'MessagesProcess | None' = None
 
     def __del__(self):
-        try:
-            self.chat_init_process.kill()
-        except ValueError:
-            pass
+        self.chat_init_process.terminate()
+        self.chat_media_process.terminate()
+        self.members_process.terminate()
+        self.messages_process.terminate()
 
-        try:
-            self.chat_media_process.kill()
-        except ValueError:
-            pass
+    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypeChat':
+        if self.chat_init_process == None or not self.chat_init_process.is_alive():
+            self.chat_init_process = processes.ChatInitProcess(self)
+            self.chat_init_process.start()
 
-        try:
-            self.members_process.kill()
-        except ValueError:
-            pass
+        if self.chat_media_process == None or not self.chat_media_process.is_alive():
+            self.chat_media_process = processes.ChatMediaProcess(self)
+            self.chat_media_process.start()
 
-        try:
-            self.messages_process.kill()
-        except ValueError:
-            pass
+        if self.members_process == None or not self.members_process.is_alive():
+            self.members_process = processes.MembersProcess(self)
+            self.members_process.start()
+
+        if self.messages_process == None or not self.messages_process.is_alive():
+            self.messages_process = processes.MessagesProcess(self)
+            self.messages_process.start()
+
+        return self
         
     @property
     def name(self) -> 'str':
@@ -64,6 +71,22 @@ class Chat(entities.Entity):
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
+        
+    @property
+    def internalId(self) -> 'int | None':
+        with self.__iternaId_condition:
+            while self._internalId == None:
+                self.__iternaId_condition.wait()
+                
+            return self._internalId
+        
+    @internalId.setter
+    def internalId(self, new_value: 'int | None') -> 'int | None':
+        with self.__iternaId_condition:
+            self._internalId = new_value
+            
+            if self._internalId != None:
+                self.__iternaId_condition.notify_all()
 
     def serialize(self) -> 'dict':
         _dict =  {

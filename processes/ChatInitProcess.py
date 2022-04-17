@@ -21,50 +21,47 @@ class ChatInitProcess(multiprocessing.Process):
             for id in list(set(a_ps) - set(ps)):
                 a_ps[id].join_chat(self)
             
-        internal_id, chat_type = telethon.utils.resolve_id(self.chat.internalId or 0)
+        for phone in self.chat.phones:
+            try:
+                client = await phone.new_client(loop=self.loop)
+            except exceptions.ClientNotAvailableError as ex:
+                logging.critical(f"Phone {phone.id} client not available. Exception: {ex}")
 
-        if not isinstance(chat_type, telethon.types.PeerUser):
-            for phone in self.chat.phones:
-                try:
-                    client = await phone.new_client(loop=self.loop)
-                except exceptions.ClientNotAvailableError as ex:
-                    logging.error(f"Phone {phone.id} client not available. Exception: {ex}")
-
-                    self.chat.phones.remove(phone)
-                    
-                    continue
+                self.chat.phones.remove(phone)
                 
-                try:
-                    tg_chat = await helpers.get_entity(client, self.chat)
-                except exceptions.ChatNotAvailableError as ex:
-                    logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
+                continue
+            
+            try:
+                tg_chat = await helpers.get_entity(client, self.chat)
+            except exceptions.ChatNotAvailableError as ex:
+                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
 
-                    self.chat.phones.remove(phone)
-                    self.chat.availablePhones.remove(phone)
+                self.chat.phones.remove(phone)
+                self.chat.availablePhones.remove(phone)
 
-                    self.chat.save()
+                self.chat.save()
 
-                    continue
-                else:
-                    new_internal_id = telethon.utils.get_peer_id(tg_chat)
-                    
-                    if self.chat.internalId != new_internal_id:
-                        old_internal_id = self.chat.internalId
-                        self.chat.internalId = new_internal_id
-
-                        try:
-                            self.chat.save()
-                        except exceptions.UniqueConstraintViolationError:
-                            logging.critical(f"Chat with internal id {self.chat.internalId} exist. Current chat {self.chat.id}")
-
-                            self.chat.internalId = old_internal_id
-                            self.chat.isAvailable = False
-                            
-                            self.chat.save()
-
-                            break
+                continue
             else:
-                logging.error(f"Can't initialize chat {self.chat.id}.")
+                new_internal_id = telethon.utils.get_peer_id(tg_chat)
+                
+                if self.chat._internalId != new_internal_id:
+                    old_internal_id = self.chat._internalId
+                    self.chat.internalId = new_internal_id
+
+                    try:
+                        self.chat.save()
+                    except exceptions.UniqueConstraintViolationError:
+                        logging.critical(f"Chat with internal id {self.chat._internalId} exist. Current chat {self.chat.id}")
+
+                        self.chat.internalId = old_internal_id
+                        self.chat.isAvailable = False
+                        
+                        self.chat.save()
+
+                        break
+        else:
+            logging.error(f"Can't initialize chat {self.chat.id}.")
 
     def run(self):
         asyncio.run(self.async_run())

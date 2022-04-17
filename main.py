@@ -3,6 +3,7 @@ from logging.handlers import RotatingFileHandler
 from sys import stdout
 
 import globalvars, entities
+import processes
 from services import ApiService, PhonesManager, ChatsManager
 
 def set_chat(chat: 'dict') -> None:
@@ -15,27 +16,11 @@ def set_chat(chat: 'dict') -> None:
     if chat['id'] in ChatsManager():
         logging.debug(f"Updating chat {chat['id']}.")
 
-        chat: 'entities.TypeChat' = ChatsManager()[chat['id']].deserialize(chat)
-
-        # if not chat.chat_init_process.is_alive():
-        #     chat.chat_init_process.terminate()
-        #     chat.chat_init_process.start()
-            
-        # if not chat.chat_media_process.is_alive():
-        #     chat.chat_media_process.terminate()
-        #     chat.chat_media_process.start()
-
-        # if not chat.members_process.is_alive():
-        #     chat.members_process.terminate()
-        #     chat.members_process.start()
-
-        # if not chat.messages_process.is_alive():
-        #     chat.messages_process.terminate()
-        #     chat.messages_process.start()
+        ChatsManager()[chat['id']].deserialize(chat)()
     else:
         logging.debug(f"Setting up new chat {chat['id']}.")
 
-        ChatsManager()[chat.id] = entities.Chat(**chat)
+        ChatsManager()[chat["id"]] = entities.Chat(**chat)()
 
 def get_all_chats(chats: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
     new_chats = ApiService().get('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True, "_start": start, "_limit": limit})
@@ -65,19 +50,11 @@ def set_phone(phone: 'dict') -> None:
     if phone['id'] in PhonesManager():
         logging.debug(f"Updating phone {phone['id']}.")
 
-        phone: 'entities.TypePhone' = PhonesManager()[phone['id']].deserialize(phone)
-
-        # if not phone.authorization_process.is_alive():
-        #     phone.authorization_process.terminate()
-        #     phone.authorization_process.start()
-
-        # if not phone.join_chats_thread.is_alive():
-        #     phone.join_chats_thread.terminate()
-        #     phone.join_chats_thread.start()
+        PhonesManager()[phone['id']].deserialize(phone)()
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
 
-        PhonesManager()[phone.id] = entities.Phone(**phone)
+        PhonesManager()[phone["id"]] = entities.Phone(**phone)()
 
 def get_phones() -> None:
     phones = ApiService().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })

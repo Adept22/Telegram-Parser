@@ -52,16 +52,24 @@ async def _get_entity(client: 'TelegramClient', entity) -> 'telethon.types.TypeC
 async def get_entity(client: 'TelegramClient', chat: 'entities.TypeChat') -> 'telethon.types.TypeChat':
     errors = []
 
-    if chat.internalId != None:
-        try:
-            return await _get_entity(client, telethon.types.PeerChannel(-(1000000000000 + chat.internalId)))
-        except exceptions.ChatNotAvailableError as ex:
-            errors.append(str(ex))
+    if chat._internalId != None:
+        cls = telethon.utils.resolve_id(chat._internalId)[1]
 
-        try:
-            return await _get_entity(client, telethon.types.PeerChat(-chat.internalId))
-        except exceptions.ChatNotAvailableError as ex:
-            errors.append(str(ex))
+        if isinstance(cls, telethon.types.PeerUser):
+            try:
+                return await _get_entity(client, telethon.types.PeerChannel(-(1000000000000 + chat._internalId)))
+            except exceptions.ChatNotAvailableError as ex:
+                errors.append(str(ex))
+
+            try:
+                return await _get_entity(client, telethon.types.PeerChat(-chat._internalId))
+            except exceptions.ChatNotAvailableError as ex:
+                errors.append(str(ex))
+        else:
+            try:
+                return await _get_entity(client, cls(chat._internalId))
+            except exceptions.ChatNotAvailableError as ex:
+                errors.append(str(ex))
         
     if chat.username != None:
         try:

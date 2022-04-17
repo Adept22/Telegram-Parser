@@ -18,7 +18,7 @@ class ChatMediaProcess(multiprocessing.Process):
             try:
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.error(f"Phone {phone.id} client not available. Exception: {ex}")
+                logging.critical(f"Phone {phone.id} client not available. Exception: {ex}")
 
                 self.chat.phones.remove(phone)
                 

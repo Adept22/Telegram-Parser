@@ -1,4 +1,4 @@
-import threading, asyncio, logging, telethon, typing
+import threading, asyncio, logging, telethon
 import entities, exceptions
 
 class MessageMediaThread(threading.Thread):
@@ -19,7 +19,7 @@ class MessageMediaThread(threading.Thread):
         try:
             client = await self.phone.new_client(loop=self.loop)
         except exceptions.ClientNotAvailableError as ex:
-            logging.error(f"Phone {self.phone.id} client not available.")
+            logging.critical(f"Phone {self.phone.id} client not available.")
             
             return
 

@@ -42,7 +42,7 @@ class MembersProcess(multiprocessing.Process):
             try:
                 client = await phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.error(f"Phone {phone.id} client not available.")
+                logging.critical(f"Phone {phone.id} client not available.")
 
                 self.chat.phones.remove(phone)
                 
@@ -101,7 +101,7 @@ class MembersProcess(multiprocessing.Process):
                         except telethon.errors.RPCError as ex:
                             logging.error(f"Can't get member {member.id} media using phone {phone.id}.")
             except telethon.errors.RPCError as ex:
-                logging.error(f"Chat {self.chat.id} not available. Exception: {ex}")
+                logging.critical(f"Chat {self.chat.id} not available. Exception: {ex}")
                 
                 self.chat.isAvailable = False
                 self.chat.save()
