@@ -3,7 +3,7 @@ import typing
 import entities, processes, helpers
 
 if typing.TYPE_CHECKING:
-    from processes import ChatInitProcess, ChatMediaProcess, MembersProcess, MessagesProcess
+    from processes import ChatProcess, ChatMediaProcess, MembersProcess, MessagesProcess
 
 class Chat(entities.Entity):
     def __init__(
@@ -23,8 +23,8 @@ class Chat(entities.Entity):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable
-        self.availablePhones: 'entities.TypePhonesList' = entities.PhonesList(availablePhones)
-        self.phones: 'entities.TypePhonesList' = entities.PhonesList(phones)
+        self.availablePhones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList(availablePhones)
+        self.phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList(phones)
         self.__iternaId_condition = multiprocessing.Condition()
         self._internalId: 'int | None' = None
         self.internalId: 'int | None' = internalId
@@ -34,7 +34,7 @@ class Chat(entities.Entity):
 
         self.username, self.hash = helpers.get_hash(link)
 
-        self.chat_init_process: 'ChatInitProcess | None' = None
+        self.chat_init_process: 'ChatProcess | None' = None
         self.chat_media_process: 'ChatMediaProcess | None' = None
         self.members_process: 'MembersProcess | None' = None
         self.messages_process: 'MessagesProcess | None' = None
@@ -47,20 +47,20 @@ class Chat(entities.Entity):
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypeChat':
         if self.chat_init_process == None or not self.chat_init_process.is_alive():
-            self.chat_init_process = processes.ChatInitProcess(self)
+            self.chat_init_process = processes.ChatProcess(self)
             self.chat_init_process.start()
 
-        if self.chat_media_process == None or not self.chat_media_process.is_alive():
-            self.chat_media_process = processes.ChatMediaProcess(self)
-            self.chat_media_process.start()
+        # if self.chat_media_process == None or not self.chat_media_process.is_alive():
+        #     self.chat_media_process = processes.ChatMediaProcess(self)
+        #     self.chat_media_process.start()
 
-        if self.members_process == None or not self.members_process.is_alive():
-            self.members_process = processes.MembersProcess(self)
-            self.members_process.start()
+        # if self.members_process == None or not self.members_process.is_alive():
+        #     self.members_process = processes.MembersProcess(self)
+        #     self.members_process.start()
 
-        if self.messages_process == None or not self.messages_process.is_alive():
-            self.messages_process = processes.MessagesProcess(self)
-            self.messages_process.start()
+        # if self.messages_process == None or not self.messages_process.is_alive():
+        #     self.messages_process = processes.MessagesProcess(self)
+        #     self.messages_process.start()
 
         return self
         
@@ -75,10 +75,10 @@ class Chat(entities.Entity):
     @property
     def internalId(self) -> 'int | None':
         with self.__iternaId_condition:
-            while self._internalId == None:
+            while self._internalId == None or self._internalId > 0:
                 self.__iternaId_condition.wait()
                 
-            return self._internalId
+        return self._internalId
         
     @internalId.setter
     def internalId(self, new_value: 'int | None') -> 'int | None':
@@ -86,7 +86,8 @@ class Chat(entities.Entity):
             self._internalId = new_value
             
             if self._internalId != None:
-                self.__iternaId_condition.notify_all()
+                if self._internalId < 0:
+                    self.__iternaId_condition.notify_all()
 
     def serialize(self) -> 'dict':
         _dict =  {
@@ -97,8 +98,8 @@ class Chat(entities.Entity):
             "title": self.title,
             "description": self.description,
             "date": self.date,
-            "availablePhones": [{ "id": p.id } for p in self.availablePhones],
-            "phones": [{ "id": p.id } for p in self.phones],
+            "availablePhones": [{ "id": self.availablePhones[i].id } for i in range(0, len(self.availablePhones))],
+            "phones": [{ "id": self.phones[i].id } for i in range(0, len(self.phones))],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)

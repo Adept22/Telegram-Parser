@@ -1,5 +1,6 @@
 import multiprocessing, asyncio, logging, telethon, telethon.sessions
 import globalvars, entities
+from services import PhonesManager
 
 class AuthorizationProcess(multiprocessing.Process):
     def __init__(self, phone: 'entities.TypePhone'):
@@ -91,13 +92,16 @@ class AuthorizationProcess(multiprocessing.Process):
                     await asyncio.sleep(10)
             else:
                 logging.debug(f"Phone {self.phone.id} actually authorized.")
+                
+                PhonesManager()[self.phone.id] = self.phone
 
                 break
                 
         internal_id = await self.get_internal_id()
         
-        if internal_id != None:
+        if internal_id != None and self.phone.internalId != internal_id:
             self.phone.internalId = internal_id
+            self.phone.save()
                 
     def run(self):
         asyncio.run(self.async_run())

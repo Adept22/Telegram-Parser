@@ -54,7 +54,7 @@ def set_phone(phone: 'dict') -> None:
     else:
         logging.debug(f"Setting up new phone {phone['id']}.")
 
-        PhonesManager()[phone["id"]] = entities.Phone(**phone)()
+        entities.Phone(**phone)()
 
 def get_phones() -> None:
     phones = ApiService().get('telegram/phone', { "parser": {"id": os.environ['PARSER_ID']}, "isBanned": False })

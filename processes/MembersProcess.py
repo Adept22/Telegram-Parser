@@ -3,6 +3,7 @@ import entities, exceptions, helpers
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
+    from telethon.events.chataction import ChatAction
 
 class MembersProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
@@ -35,6 +36,56 @@ class MembersProcess(multiprocessing.Process):
 
         return chat_member_role.save()
 
+    async def handle_member(self, client, user):
+        logging.debug(f"Chat {self.chat.title}. Received user '{helpers.user_title(user)}'")
+
+        if user.is_self:
+            return
+
+        try:
+            member = await self.get_member(client, user)
+            chat_member = await self.get_chat_member(user.participant, member)
+            chat_member_role = await self.get_chat_member_role(user.participant, chat_member)
+        except exceptions.RequestException as ex:
+            logging.error(f"Can't save user '{user.id}'. Exception {ex}")
+
+            return
+        else:
+            logging.debug(f"Member {member.id} with role saved.")
+
+            try:
+                async for photo in client.iter_profile_photos(member.internalId):
+                    photo: 'telethon.types.TypePhoto'
+
+                    media = entities.MemberMedia(internalId=photo.id, member=member, date=photo.date.isoformat())
+
+                    try:
+                        media.save()
+                    except exceptions.RequestException as ex:
+                        logging.error(f"Can\'t save member {member.id} media. Exception: {ex}.")
+                    else:
+                        logging.info(f"Sucessfuly saved member {member.id} media.")
+
+                        size = photo.sizes[-2]
+
+                        try:
+                            await media.upload(
+                                client, 
+                                telethon.types.InputPhotoFileLocation(
+                                    id=photo.id,
+                                    access_hash=photo.access_hash,
+                                    file_reference=photo.file_reference,
+                                    thumb_size=size.type
+                                ), 
+                                size.size
+                            )
+                        except exceptions.RequestException as ex:
+                            logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
+                        else:
+                            logging.info(f"Sucessfuly uploaded member {member.id} media.")
+            except telethon.errors.RPCError as ex:
+                logging.error(f"Can't get member {member.id} media.")
+
     async def async_run(self):
         for phone in self.chat.phones:
             phone: 'entities.TypePhone'
@@ -48,58 +99,19 @@ class MembersProcess(multiprocessing.Process):
                 
                 continue
 
+            async def handle_event(event: 'ChatAction.Event'):
+                if event.user_added or event.user_joined:
+                    async for user in event.get_users():
+                        await self.handle_member(client, user)
+
+            client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=self.chat.internalId))
+
             try:
                 async for user in client.iter_participants(entity=self.chat.internalId, aggressive=True):
                     user: 'telethon.types.TypeUser'
 
-                    logging.debug(f"Chat {self.chat.title}. Received user '{helpers.user_title(user)}'")
+                    await self.handle_member(client, user)
 
-                    if user.is_self:
-                        continue
-
-                    try:
-                        member = await self.get_member(client, user)
-                        chat_member = await self.get_chat_member(user.participant, member)
-                        chat_member_role = await self.get_chat_member_role(user.participant, chat_member)
-                    except exceptions.RequestException as ex:
-                        logging.error(f"Can't save user '{user.id}'. Exception {ex}")
-
-                        continue
-                    else:
-                        logging.debug(f"Member {member.id} with role saved.")
-
-                        try:
-                            async for photo in client.iter_profile_photos(member.internalId):
-                                photo: 'telethon.types.TypePhoto'
-
-                                media = entities.MemberMedia(internalId=photo.id, member=member, date=photo.date.isoformat())
-
-                                try:
-                                    media.save()
-                                except exceptions.RequestException as ex:
-                                    logging.error(f"Can\'t save member {member.id} media. Exception: {ex}.")
-                                else:
-                                    logging.info(f"Sucessfuly saved member {member.id} media.")
-
-                                    size = photo.sizes[-2]
-
-                                    try:
-                                        await media.upload(
-                                            client, 
-                                            telethon.types.InputPhotoFileLocation(
-                                                id=photo.id,
-                                                access_hash=photo.access_hash,
-                                                file_reference=photo.file_reference,
-                                                thumb_size=size.type
-                                            ), 
-                                            size.size
-                                        )
-                                    except exceptions.RequestException as ex:
-                                        logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
-                                    else:
-                                        logging.info(f"Sucessfuly uploaded member {member.id} media.")
-                        except telethon.errors.RPCError as ex:
-                            logging.error(f"Can't get member {member.id} media using phone {phone.id}.")
             except telethon.errors.RPCError as ex:
                 logging.critical(f"Chat {self.chat.id} not available. Exception: {ex}")
                 

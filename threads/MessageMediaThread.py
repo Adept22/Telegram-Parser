@@ -31,7 +31,7 @@ class MessageMediaThread(threading.Thread):
                 id=entity.id,
                 access_hash=entity.access_hash,
                 file_reference=entity.file_reference,
-                thumb_size=size.type
+                thumb_size=entity.sizes[-2].type
             )
         elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
             entity = self.tg_message.document
