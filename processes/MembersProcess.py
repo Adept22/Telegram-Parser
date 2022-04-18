@@ -1,4 +1,4 @@
-import multiprocessing, asyncio, typing, logging, telethon
+import multiprocessing, setproctitle, asyncio, typing, logging, telethon
 import entities, exceptions, helpers
 
 if typing.TYPE_CHECKING:
@@ -8,9 +8,11 @@ if typing.TYPE_CHECKING:
 class MembersProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f'MembersProcess-{chat.id}', daemon=True)
+
+        setproctitle.setproctitle(self.name)
         
         self.media_path = f"./downloads/members"
-        self.chat = chat
+        self.chat: 'entities.TypeChat' = chat
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
@@ -96,6 +98,7 @@ class MembersProcess(multiprocessing.Process):
                 logging.critical(f"Phone {phone.id} client not available.")
 
                 self.chat.phones.remove(phone)
+                self.chat.save()
                 
                 continue
 
@@ -105,22 +108,26 @@ class MembersProcess(multiprocessing.Process):
                         await self.handle_member(client, user)
 
             client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=self.chat.internalId))
+            
+            while True:
+                try:
+                    async for user in client.iter_participants(entity=self.chat.internalId, aggressive=True):
+                        user: 'telethon.types.TypeUser'
 
-            try:
-                async for user in client.iter_participants(entity=self.chat.internalId, aggressive=True):
-                    user: 'telethon.types.TypeUser'
+                        await self.handle_member(client, user)
+                    else:
+                        logging.info(f"Chat \'{self.chat.id}\' participants download success.")
+                except telethon.errors.FloodWaitError as ex:
+                    logging.error(f"Telegram members request of chat {self.chat.id} must wait {ex.seconds} seconds.")
 
-                    await self.handle_member(client, user)
+                    await asyncio.wait(ex.seconds)
+                except telethon.errors.RPCError as ex:
+                    logging.critical(f"Chat {self.chat.id} not available. Exception: {ex}")
+                    
+                    self.chat.isAvailable = False
+                    self.chat.save()
 
-            except telethon.errors.RPCError as ex:
-                logging.critical(f"Chat {self.chat.id} not available. Exception: {ex}")
-                
-                self.chat.isAvailable = False
-                self.chat.save()
-            else:
-                logging.info(f"Chat \'{self.chat.id}\' participants download success.")
-                
-            break
+                    break
         else:
             logging.error(f"Chat {self.chat.id} participants download failed.")
         

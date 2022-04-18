@@ -1,10 +1,11 @@
-import multiprocessing, asyncio, logging, telethon, telethon.sessions
-import globalvars, entities
-from services import PhonesManager
+import multiprocessing, asyncio, setproctitle, logging, telethon, telethon.sessions
+import globalvars, entities, services
 
 class AuthorizationProcess(multiprocessing.Process):
     def __init__(self, phone: 'entities.TypePhone'):
         multiprocessing.Process.__init__(self, name=f'AuthorizationProcess-{phone.id}', daemon=True)
+
+        setproctitle.setproctitle(self.name)
         
         self.phone = phone
         
@@ -45,7 +46,12 @@ class AuthorizationProcess(multiprocessing.Process):
 
     async def async_run(self):
         if not self.client.is_connected():
-            await self.client.connect()
+            try:
+                await self.client.connect()
+            except OSError as ex:
+                logging.critical(f"Unable to connect client of {self.phone.id}. Exception: {ex}")
+
+                return
 
         while True:
             if not await self.client.is_user_authorized():
@@ -53,26 +59,18 @@ class AuthorizationProcess(multiprocessing.Process):
                     logging.debug(f"Phone {self.phone.id} automatic try to sing in with code {self.phone.code}.")
         
                     try:
-                        await self.client.sign_in(
-                            phone=self.phone.number, 
-                            code=self.phone.code, 
-                            phone_code_hash=self.phone.code_hash
-                        )
+                        await self.client.sign_in(self.phone.number, self.phone.code, phone_code_hash=self.phone.code_hash)
                     except telethon.errors.RPCError as ex:
                         logging.error(f"Cannot authentificate phone {self.phone.id} with code {self.phone.code}. Exception: {ex}")
                         
                         self.phone.isVerified = False
                         self.phone.code = None
                         self.phone.code_hash = None
-                    else:
-                        self.phone.session = self.client.session.save()
-                        self.phone.isVerified = True
-                        self.phone.code = None
-                        self.phone.code_hash = None
+                        self.phone.save()
 
-                    self.phone.save()
-                        
-                    break
+                        continue
+                    else:
+                        break
                 elif self.phone.code_hash == None:
                     try:
                         await self.send_code()
@@ -84,24 +82,34 @@ class AuthorizationProcess(multiprocessing.Process):
                         self.phone.isVerified = False
                         self.phone.code = None
                         self.phone.code_hash = None
+                        self.phone.is_authorized = False
 
                         self.phone.save()
                         
-                        break
+                        return
                 else:
                     await asyncio.sleep(10)
-            else:
-                logging.debug(f"Phone {self.phone.id} actually authorized.")
-                
-                PhonesManager()[self.phone.id] = self.phone
 
+                    continue
+            else:
                 break
+        
+        self.phone.session = self.client.session.save()
+        self.phone.isVerified = True
+        self.phone.code = None
+        self.phone.code_hash = None
+        self.phone.is_authorized = True
                 
         internal_id = await self.get_internal_id()
         
         if internal_id != None and self.phone.internalId != internal_id:
             self.phone.internalId = internal_id
-            self.phone.save()
-                
+
+        self.phone.save()
+
+        services.PhonesManager[self.phone.id] = self.phone
+
+        logging.debug(f"Phone {self.phone.id} actually authorized.")
+        
     def run(self):
         asyncio.run(self.async_run())

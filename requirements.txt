@@ -6,7 +6,7 @@ cbor==1.0.0
 cbor2==5.4.2
 cffi==1.15.0
 click==8.0.3
-coloredlogs==15.0.1
+colorlog==6.6.0
 cryptography==36.0.1
 decorator==5.1.0
 decorators==2.0.7
@@ -30,6 +30,7 @@ pycparser==2.21
 python-socks==2.0.0
 quart==0.16.1
 rsa==4.8
+setproctitle==1.2.3
 singleton-decorator==1.0.0
 Telethon==1.24.0
 toml==0.10.2

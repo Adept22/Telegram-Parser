@@ -1,5 +1,5 @@
-import multiprocessing, concurrent.futures, typing, asyncio, logging, telethon
-import entities, threads, exceptions, helpers
+import multiprocessing, setproctitle, typing, asyncio, logging, telethon
+import entities, threads, exceptions
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -7,6 +7,8 @@ if typing.TYPE_CHECKING:
 class MessagesProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f"MessagesProcess-{chat.id}", daemon=True)
+
+        setproctitle.setproctitle(self.name)
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -135,20 +137,27 @@ class MessagesProcess(multiprocessing.Process):
 
             client.add_event_handler(handle_event, telethon.events.NewMessage(chats=self.chat.internalId, incoming=True))
 
-            try:
-                async for tg_message in client.iter_messages(entity=self.chat.internalId, max_id=0):
-                    tg_message: 'telethon.types.TypeMessage'
-                    
-                    await self.handle_message(phone, client, tg_message)
+            while True:
+                try:
+                    async for tg_message in client.iter_messages(entity=self.chat.internalId, max_id=0):
+                        tg_message: 'telethon.types.TypeMessage'
+                        
+                        await self.handle_message(phone, client, tg_message)
+                    else:
+                        logging.info(f"Chat {self.chat.id} messages download success.")
+                except telethon.errors.FloodWaitError as ex:
+                    logging.error(f"Telegram messages request of chat {self.chat.id} must wait {ex.seconds} seconds.")
+
+                    await asyncio.wait(ex.seconds)
+                except telethon.errors.RPCError as ex:
+                    logging.critical(f"Chat {self.chat.id} not available. Exception {ex}")
+
+                    self.chat.isAvailable = False
+                    self.chat.save()
+
+                    break
                 else:
-                    logging.info(f"Chat {self.chat.id} messages download success.")
-            except telethon.errors.RPCError as ex:
-                logging.critical(f"Chat {self.chat.id} not available. Exception {ex}")
-
-                self.chat.isAvailable = False
-                self.chat.save()
-
-            break
+                    logging.info(f"Chat \'{self.chat.id}\' participants download success.")
         else:
             logging.error(f"Chat {self.chat.id} messages download failed.")
         

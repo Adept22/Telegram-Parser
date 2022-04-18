@@ -3,7 +3,7 @@ from collections.abc import MutableMapping
 from singleton_decorator import singleton
 
 @singleton
-class PhonesManager(MutableMapping):
+class PhonesManagerService(MutableMapping):
     def __init__(self, *args, **kwargs):
         self._condition = multiprocessing.Condition()
 
@@ -12,7 +12,11 @@ class PhonesManager(MutableMapping):
         self.update(dict(*args, **kwargs))  # use the free update to set keys
         
     def __getitem__(self, key):
-        return self.store[key]
+        with self._condition:
+            while not len(self):
+                self._condition.wait()
+            
+            return self.store[key]
 
     def __setitem__(self, key, value):
         with self._condition:

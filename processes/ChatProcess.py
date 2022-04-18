@@ -1,5 +1,6 @@
-import os, multiprocessing, asyncio, logging, typing, telethon
+import os, multiprocessing, setproctitle, asyncio, logging, typing, telethon
 import entities, exceptions, helpers
+from services import PhonesManager
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -9,14 +10,24 @@ class ChatProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f'ChatProcess-{chat.id}', daemon=True)
 
-        os.nice(10)
+        setproctitle.setproctitle(self.name)
 
         self.chat = chat
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
 
+
     async def async_run(self):
+        for phone in helpers.get_all('telegram/chat-available-phone', { "chat": { "id": self.chat.id }, "parser": { "id": os.environ['PARSER_ID'] }}):
+            
+            if phone["id"] in PhonesManager:
+                self.chat.available_phones.append(PhonesManager[phone["id"]])
+
+        for phone in helpers.get_all('telegram/chat-phone', { "chat": { "id": self.chat.id }, "parser": { "id": os.environ['PARSER_ID'] }}):
+            if phone["id"] in PhonesManager:
+                self.chat.available_phones.append(PhonesManager[phone["id"]])
+        
         if len(self.chat.phones) < 3 and len(self.chat.availablePhones) > len(self.chat.phones):
             # Using range for avoid process blocking
             a_ps: 'dict[str, entities.TypePhone]' = dict([(self.chat.availablePhones[i].id, self.chat.availablePhones[i]) for i in range(0, len(self.chat.availablePhones))])

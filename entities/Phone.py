@@ -1,10 +1,10 @@
 import asyncio, typing, telethon, telethon.sessions
 import multiprocessing
-import globalvars, entities, exceptions
-from processes import AuthorizationProcess, JoinChatsProcess
+import globalvars, entities, exceptions, processes
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
+    from processes import AuthorizationProcess, JoinChatsProcess
 
 class Phone(entities.Entity):
     def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
@@ -20,24 +20,24 @@ class Phone(entities.Entity):
         
         self.code_hash: 'str | None' = None
 
+        self._is_authorized = False
+        self._is_authorized_condition = multiprocessing.Condition()
+        self.authorization_process: 'AuthorizationProcess | None' = None
+
         self._join_queue = multiprocessing.Queue()
+        self.join_chats_thread: 'JoinChatsProcess | None' = None
 
-        self.authorization_process = AuthorizationProcess(self)
-        self.authorization_process.start()
-        self.join_chats_thread = JoinChatsProcess(self)
-        self.join_chats_thread.start()
-
-    def __del__(self):
-        self.authorization_process.terminate()
-        self.join_chats_thread.terminate()
+    # def __del__(self):
+    #     self.authorization_process.terminate()
+    #     self.join_chats_thread.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
         if self.authorization_process == None or not self.authorization_process.is_alive():
-            self.authorization_process = AuthorizationProcess(self)
+            self.authorization_process = processes.AuthorizationProcess(self)
             self.authorization_process.start()
 
         if self.join_chats_thread == None or not self.join_chats_thread.is_alive():
-            self.join_chats_thread = JoinChatsProcess(self)
+            self.join_chats_thread = processes.JoinChatsProcess(self)
             self.join_chats_thread.start()
         
         return self
@@ -49,6 +49,22 @@ class Phone(entities.Entity):
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
+        
+    @property
+    def is_authorized(self) -> 'bool':
+        with self._is_authorized_condition:
+            while not self._is_authorized:
+                self._is_authorized_condition.wait()
+                
+            return self._is_authorized
+        
+    @is_authorized.setter
+    def is_authorized(self, new_value) -> 'None':
+        with self._is_authorized_condition:
+            self._is_authorized = new_value
+            
+            if self._is_authorized:
+                self._is_authorized_condition.notify_all()
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -79,28 +95,27 @@ class Phone(entities.Entity):
         return self
     
     async def new_client(self, loop = asyncio.get_event_loop()) -> 'TelegramClient':
-        client = telethon.TelegramClient(
-            session=telethon.sessions.StringSession(self.session), 
-            api_id=globalvars.parser['api_id'],
-            api_hash=globalvars.parser['api_hash'],
-            loop=loop
-        )
-        
         try:
-            if not client.is_connected():
-                await client.connect()
-            
-            if await client.is_user_authorized():
-                await client.get_me()
+            if self.is_authorized:
+                client = telethon.TelegramClient(
+                    session=telethon.sessions.StringSession(self.session), 
+                    api_id=globalvars.parser['api_id'],
+                    api_hash=globalvars.parser['api_hash'],
+                    loop=loop
+                )
                 
-                return client
-            else:
-                if not self.authorization_process.is_alive():
-                    self.authorization_process.start()
-
-                raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
-        except Exception as ex:
-            raise exceptions.ClientNotAvailableError(ex)
+                try:
+                    if not client.is_connected():
+                        await client.connect()
+                except OSError as ex:
+                    raise exceptions.ClientNotAvailableError(str(ex))
+                else:
+                    if await client.is_user_authorized() and await client.get_me() != None:
+                        return client
+            raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
+        except exceptions.ClientNotAvailableError as ex:
+            self.is_authorized = False
+            self()
 
     def join_chat(self, chat: 'entities.TypeChat') -> 'None':
         self._join_queue.put(chat)

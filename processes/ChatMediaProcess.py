@@ -1,4 +1,4 @@
-import os, multiprocessing, asyncio, logging, typing, telethon
+import os, multiprocessing, setproctitle, asyncio, logging, typing, telethon
 import entities, exceptions
 
 if typing.TYPE_CHECKING:
@@ -9,7 +9,7 @@ class ChatMediaProcess(multiprocessing.Process):
     def __init__(self, chat: 'entities.TypeChat'):
         multiprocessing.Process.__init__(self, name=f'ChatMediaProcess-{chat.id}', daemon=True)
 
-        os.nice(10)
+        setproctitle.setproctitle(self.name)
 
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -52,6 +52,7 @@ class ChatMediaProcess(multiprocessing.Process):
                 logging.critical(f"Phone {phone.id} client not available. Exception: {ex}")
 
                 self.chat.phones.remove(phone)
+                self.chat.save()
                 
                 continue
 
@@ -61,17 +62,22 @@ class ChatMediaProcess(multiprocessing.Process):
 
             client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=self.chat.internalId))
             
-            try:
-                async for photo in client.iter_profile_photos(entity=self.chat.internalId):
-                    photo: 'telethon.types.TypePhoto'
+            while True:
+                try:
+                    async for photo in client.iter_profile_photos(entity=self.chat.internalId):
+                        photo: 'telethon.types.TypePhoto'
 
-                    await self.handle_media(client, photo)
-            except telethon.errors.RPCError as ex:
-                logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
-                
-                continue
-            else:
-                break
+                        await self.handle_media(client, photo)
+                    else:
+                        logging.info(f"Chat \'{self.chat.id}\' participants download success.")
+                except telethon.errors.FloodWaitError as ex:
+                    logging.error(f"Telegram chat media request of chat {self.chat.id} must wait {ex.seconds} seconds.")
+
+                    await asyncio.wait(ex.seconds)
+                except telethon.errors.RPCError as ex:
+                    logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
+                    
+                    break
         else:
             logging.error(f"Can't get chat {self.chat.id} medias.")
 

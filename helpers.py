@@ -3,9 +3,18 @@ import logging
 import re, typing, telethon
 
 import entities, exceptions
+from services import ApiService
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
+
+def get_all(entity: 'str', body: 'dict', entities: 'list' = [], start: 'int' = 0, limit: 'int' = 50):
+    new_entities = ApiService().get(entity, {**body, "_start": start, "_limit": limit})
+
+    if len(new_entities) > 0:
+        entities += get_all(entity, body, new_entities, start + limit, limit)
+
+    return entities
 
 def get_hash(link: 'str') -> 'tuple[str | None, str | None]':
     if link is None:
@@ -31,11 +40,6 @@ def user_title(user: 'telethon.types.TypeUser'):
         return user.first_name or user.last_name
     else:
         return user.id
-
-def get_type(chat: 'telethon.types.TypeChat'):
-    internal_id, chat_type = telethon.utils.resolve_id(chat.internalId or 0)
-    
-    return chat_type
 
 async def _get_entity(client: 'TelegramClient', entity) -> 'telethon.types.TypeChat':
     try:

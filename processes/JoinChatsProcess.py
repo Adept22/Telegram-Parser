@@ -1,9 +1,11 @@
-import multiprocessing, asyncio, logging, telethon
-import entities, exceptions, helpers
+import multiprocessing, setproctitle, asyncio, logging, telethon
+import entities, exceptions
 
 class JoinChatsProcess(multiprocessing.Process):
     def __init__(self, phone: 'entities.TypePhone'):
         multiprocessing.Process.__init__(self, name=f'JoinChatsProcess-{phone.id}', daemon=True)
+
+        setproctitle.setproctitle(self.name)
         
         self.phone = phone
         self.loop = asyncio.new_event_loop()

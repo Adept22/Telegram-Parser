@@ -11,8 +11,6 @@ class Chat(entities.Entity):
         id: 'str', 
         link: 'str', 
         isAvailable: 'bool', 
-        availablePhones: 'list[dict]' = [], 
-        phones: 'list[dict]' = [], 
         internalId: 'int' = None, 
         title: 'str' = None, 
         description: 'str' = None, 
@@ -23,8 +21,6 @@ class Chat(entities.Entity):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable
-        self.availablePhones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList(availablePhones)
-        self.phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList(phones)
         self.__iternaId_condition = multiprocessing.Condition()
         self._internalId: 'int | None' = None
         self.internalId: 'int | None' = internalId
@@ -34,33 +30,36 @@ class Chat(entities.Entity):
 
         self.username, self.hash = helpers.get_hash(link)
 
+        self.available_phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList()
+        self.phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList()
+
         self.chat_init_process: 'ChatProcess | None' = None
         self.chat_media_process: 'ChatMediaProcess | None' = None
         self.members_process: 'MembersProcess | None' = None
         self.messages_process: 'MessagesProcess | None' = None
 
-    def __del__(self):
-        self.chat_init_process.terminate()
-        self.chat_media_process.terminate()
-        self.members_process.terminate()
-        self.messages_process.terminate()
+    # def __del__(self):
+    #     self.chat_init_process.terminate()
+    #     self.chat_media_process.terminate()
+    #     self.members_process.terminate()
+    #     self.messages_process.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypeChat':
         if self.chat_init_process == None or not self.chat_init_process.is_alive():
             self.chat_init_process = processes.ChatProcess(self)
             self.chat_init_process.start()
 
-        # if self.chat_media_process == None or not self.chat_media_process.is_alive():
-        #     self.chat_media_process = processes.ChatMediaProcess(self)
-        #     self.chat_media_process.start()
+        if self.chat_media_process == None or not self.chat_media_process.is_alive():
+            self.chat_media_process = processes.ChatMediaProcess(self)
+            self.chat_media_process.start()
 
-        # if self.members_process == None or not self.members_process.is_alive():
-        #     self.members_process = processes.MembersProcess(self)
-        #     self.members_process.start()
+        if self.members_process == None or not self.members_process.is_alive():
+            self.members_process = processes.MembersProcess(self)
+            self.members_process.start()
 
-        # if self.messages_process == None or not self.messages_process.is_alive():
-        #     self.messages_process = processes.MessagesProcess(self)
-        #     self.messages_process.start()
+        if self.messages_process == None or not self.messages_process.is_alive():
+            self.messages_process = processes.MessagesProcess(self)
+            self.messages_process.start()
 
         return self
         
@@ -97,9 +96,7 @@ class Chat(entities.Entity):
             "internalId": self.internalId,
             "title": self.title,
             "description": self.description,
-            "date": self.date,
-            "availablePhones": [{ "id": self.availablePhones[i].id } for i in range(0, len(self.availablePhones))],
-            "phones": [{ "id": self.phones[i].id } for i in range(0, len(self.phones))],
+            "date": self.date
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
@@ -108,8 +105,6 @@ class Chat(entities.Entity):
         self.id = _dict['id']
         self.link = _dict['link']
         self.isAvailable = _dict['isAvailable']
-        self.availablePhones = entities.PhonesList(_dict['availablePhones'])
-        self.phones = entities.PhonesList(_dict['phones'])
         self.internalId = _dict.get('internalId')
         self.title = _dict.get('title')
         self.description = _dict.get('description')
