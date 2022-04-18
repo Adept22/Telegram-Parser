@@ -38,3 +38,6 @@ class Entity(ABC):
                 self.save()
 
         return self
+
+    def delete(self) -> 'None':
+        ApiService().delete(f'telegram/{self.name}', self.serialize())

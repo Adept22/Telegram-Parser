@@ -69,7 +69,7 @@ class MessagesProcess(multiprocessing.Process):
             
         return None, None
 
-    async def handle_message(self, phone: 'entities.TypePhone', client: 'TelegramClient', tg_message: 'telethon.types.TypeMessage'):
+    async def handle_message(self, chat_phone: 'entities.TypePhone', client: 'TelegramClient', tg_message: 'telethon.types.TypeMessage'):
         logging.debug(f"Chat {self.chat.id}. Receive message {tg_message.id}.")
         
         if not isinstance(tg_message, telethon.types.Message):
@@ -111,7 +111,7 @@ class MessagesProcess(multiprocessing.Process):
             logging.debug(f"Message {message.id} saved.")
             
             if tg_message.media != None:
-                message_media_thread = threads.MessageMediaThread(phone, message, tg_message)
+                message_media_thread = threads.MessageMediaThread(chat_phone, message, tg_message)
                 message_media_thread.start()
 
             return message
@@ -119,21 +119,22 @@ class MessagesProcess(multiprocessing.Process):
         return None
 
     async def async_run(self):
-        for phone in self.chat.phones:
+        for chat_phone in self.chat.phones:
+            chat_phone: 'entities.TypeChatPhone'
+
             logging.info(f"Recieving messages from chat {self.chat.id}.")
 
             try:
-                client: 'TelegramClient' = await phone.new_client(loop=self.loop)
+                client: 'TelegramClient' = await chat_phone.phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.critical(f"Phone {phone.id} client not available.")
+                logging.critical(f"Phone {chat_phone.id} client not available.")
 
-                self.chat.phones.remove(phone)
-                self.chat.save()
+                self.chat.phones.remove(chat_phone)
                 
                 continue
 
             async def handle_event(event):
-                await self.handle_message(phone, client, event.message)
+                await self.handle_message(chat_phone.phone, client, event.message)
 
             client.add_event_handler(handle_event, telethon.events.NewMessage(chats=self.chat.internalId, incoming=True))
 
@@ -142,7 +143,7 @@ class MessagesProcess(multiprocessing.Process):
                     async for tg_message in client.iter_messages(entity=self.chat.internalId, max_id=0):
                         tg_message: 'telethon.types.TypeMessage'
                         
-                        await self.handle_message(phone, client, tg_message)
+                        await self.handle_message(chat_phone, client, tg_message)
                     else:
                         logging.info(f"Chat {self.chat.id} messages download success.")
                 except telethon.errors.FloodWaitError as ex:

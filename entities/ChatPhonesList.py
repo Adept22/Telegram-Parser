@@ -2,15 +2,13 @@ import logging
 import multiprocessing
 from collections.abc import MutableSequence
 
-import entities, services
+import globalvars, entities
 
-class PhonesList(MutableSequence):
-    def __init__(self, _list: 'list[dict]' = [], *args, **kwargs):
+class ChatPhonesList(MutableSequence):
+    def __init__(self, _list: 'list[entities.TypePhone]' = [], *args, **kwargs):
         self._condition = multiprocessing.Condition()
 
-        self._list = [services.PhonesManager[p['id']] for p in _list if p['id'] in services.PhonesManager]
-
-        logging.info(f"List of phones initialized")
+        self._list = _list
 
     def __repr__(self) -> 'str':
         return "<{0} {1}>".format(self.__class__.__name__, self._list)
@@ -51,9 +49,6 @@ class PhonesList(MutableSequence):
         self._list.insert(i, value)
 
     def append(self, value: 'entities.TypePhone') -> 'None':
-        if not value.id in services.PhonesManager:
-            raise ValueError(f"Phone {value} does not exist in manager.")
-
         if value.id not in [i.id for i in self._list]:
             self._list.append(value)
 

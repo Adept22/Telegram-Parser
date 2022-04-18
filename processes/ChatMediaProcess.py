@@ -45,14 +45,15 @@ class ChatMediaProcess(multiprocessing.Process):
                 logging.info(f"Sucessfuly uploaded chat {self.chat.id} media.")
 
     async def async_run(self):
-        for phone in self.chat.phones:
-            try:
-                client = await phone.new_client(loop=self.loop)
-            except exceptions.ClientNotAvailableError as ex:
-                logging.critical(f"Phone {phone.id} client not available. Exception: {ex}")
+        for chat_phone in self.chat.phones:
+            chat_phone: 'entities.TypeChatPhone'
 
-                self.chat.phones.remove(phone)
-                self.chat.save()
+            try:
+                client = await chat_phone.phone.new_client(loop=self.loop)
+            except exceptions.ClientNotAvailableError as ex:
+                logging.critical(f"Phone {chat_phone.id} client not available. Exception: {ex}")
+
+                self.chat.phones.remove(chat_phone)
                 
                 continue
 
@@ -75,7 +76,7 @@ class ChatMediaProcess(multiprocessing.Process):
 
                     await asyncio.wait(ex.seconds)
                 except telethon.errors.RPCError as ex:
-                    logging.error(f"Can\'t get chat {self.chat.id} using phone {phone.id}. Exception {ex}")
+                    logging.error(f"Can\'t get chat {self.chat.id} using phone {chat_phone.id}. Exception {ex}")
                     
                     break
         else:

@@ -2,10 +2,10 @@ import threading, asyncio, logging, telethon
 import entities, exceptions
 
 class MessageMediaThread(threading.Thread):
-    def __init__(self, phone: 'entities.TypePhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+    def __init__(self, chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
         threading.Thread.__init__(self, name=f"MessageMediaThread-{message.id}", daemon=True)
         
-        self.phone = phone
+        self.chat_phone = chat_phone
         self.message = message
         self.tg_message: 'telethon.types.TypeMessage' = tg_message
 
@@ -17,9 +17,9 @@ class MessageMediaThread(threading.Thread):
         logging.debug(f"Try to save message '{self.message.id}' media.")
 
         try:
-            client = await self.phone.new_client(loop=self.loop)
+            client = await self.chat_phone.phone.new_client(loop=self.loop)
         except exceptions.ClientNotAvailableError as ex:
-            logging.critical(f"Phone {self.phone.id} client not available.")
+            logging.critical(f"Phone {self.chat_phone.id} client not available.")
             
             return
 

@@ -1,9 +1,8 @@
 import multiprocessing
 from collections.abc import MutableMapping
-from singleton_decorator import singleton
+# from singleton_decorator import singleton
 
-@singleton
-class PhonesManagerService(MutableMapping):
+class PhonesManager(MutableMapping):
     def __init__(self, *args, **kwargs):
         self._condition = multiprocessing.Condition()
 

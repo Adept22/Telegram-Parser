@@ -1,6 +1,5 @@
-import multiprocessing
-import typing
-import entities, processes, helpers
+import multiprocessing, typing
+import globalvars, entities, processes, helpers
 
 if typing.TYPE_CHECKING:
     from processes import ChatProcess, ChatMediaProcess, MembersProcess, MessagesProcess
@@ -30,8 +29,7 @@ class Chat(entities.Entity):
 
         self.username, self.hash = helpers.get_hash(link)
 
-        self.available_phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList()
-        self.phones: 'entities.TypePhonesList[entities.TypePhone]' = entities.PhonesList()
+        self.phones: 'entities.TypeChatPhonesList[entities.TypeChatPhone]' = entities.ChatPhonesList()
 
         self.chat_init_process: 'ChatProcess | None' = None
         self.chat_media_process: 'ChatMediaProcess | None' = None
@@ -44,9 +42,9 @@ class Chat(entities.Entity):
     #     self.members_process.terminate()
     #     self.messages_process.terminate()
 
-    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypeChat':
+    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'Chat':
         if self.chat_init_process == None or not self.chat_init_process.is_alive():
-            self.chat_init_process = processes.ChatProcess(self)
+            self.chat_init_process = processes.ChatProcess(self, globalvars.PhonesManager)
             self.chat_init_process.start()
 
         if self.chat_media_process == None or not self.chat_media_process.is_alive():
@@ -101,7 +99,7 @@ class Chat(entities.Entity):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'entities.TypeChat':
+    def deserialize(self, _dict: 'dict') -> 'Chat':
         self.id = _dict['id']
         self.link = _dict['link']
         self.isAvailable = _dict['isAvailable']

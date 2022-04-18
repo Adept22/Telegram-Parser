@@ -1,6 +1,7 @@
 import asyncio, typing, telethon, telethon.sessions
 import multiprocessing
 import globalvars, entities, exceptions, processes
+import services
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -33,7 +34,7 @@ class Phone(entities.Entity):
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
         if self.authorization_process == None or not self.authorization_process.is_alive():
-            self.authorization_process = processes.AuthorizationProcess(self)
+            self.authorization_process = processes.AuthorizationProcess(self, globalvars.PhonesManager)
             self.authorization_process.start()
 
         if self.join_chats_thread == None or not self.join_chats_thread.is_alive():

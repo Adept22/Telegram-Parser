@@ -1,49 +1,44 @@
-import os, multiprocessing, setproctitle, asyncio, logging, typing, telethon
+import multiprocessing, setproctitle, asyncio, logging, typing, telethon
 import entities, exceptions, helpers
-from services import PhonesManager
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.events.chataction import ChatAction
 
 class ChatProcess(multiprocessing.Process):
-    def __init__(self, chat: 'entities.TypeChat'):
+    def __init__(self, chat: 'entities.TypeChat', manager):
         multiprocessing.Process.__init__(self, name=f'ChatProcess-{chat.id}', daemon=True)
 
         setproctitle.setproctitle(self.name)
 
         self.chat = chat
+        self.manager = manager
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
 
-
     async def async_run(self):
-        for phone in helpers.get_all('telegram/chat-available-phone', { "chat": { "id": self.chat.id }, "parser": { "id": os.environ['PARSER_ID'] }}):
-            
-            if phone["id"] in PhonesManager:
-                self.chat.available_phones.append(PhonesManager[phone["id"]])
+        chat_phones = helpers.get_all('telegram/chat-phone', { "chat": { "id": self.chat.id }})
+        chat_phones = filter(lambda chat_phone: chat_phone["phone"]["id"] in self.manager, chat_phones)
 
-        for phone in helpers.get_all('telegram/chat-phone', { "chat": { "id": self.chat.id }, "parser": { "id": os.environ['PARSER_ID'] }}):
-            if phone["id"] in PhonesManager:
-                self.chat.available_phones.append(PhonesManager[phone["id"]])
-        
-        if len(self.chat.phones) < 3 and len(self.chat.availablePhones) > len(self.chat.phones):
-            # Using range for avoid process blocking
-            a_ps: 'dict[str, entities.TypePhone]' = dict([(self.chat.availablePhones[i].id, self.chat.availablePhones[i]) for i in range(0, len(self.chat.availablePhones))])
-            ps: 'dict[str, entities.TypePhone]' = dict([(self.chat.phones[i].id, self.chat.phones[i]) for i in range(0, len(self.chat.phones))])
+        for chat_phone in filter(lambda chat_phone: chat_phone["isUsing"], chat_phones):
+            chat_phone = entities.ChatPhone(**chat_phone, chat=self.chat, phone=self.manager[chat_phone["phone"]["id"]])
 
-            for id in list(set(a_ps) - set(ps)):
-                a_ps[id].join_chat(self)
+            self.chat.phones.append(chat_phone)
+
+        if len(self.chat.phones) < 3 and len(chat_phones) > len(self.chat.phones):
+            for chat_phone in filter(lambda chat_phone: not chat_phone["isUsing"], chat_phones):
+                self.manager[chat_phone["phone"]["id"]].join_chat(self)
             
-        for phone in self.chat.phones:
+        for chat_phone in self.chat.phones:
+            chat_phone: 'entities.TypeChatPhone'
+
             try:
-                client: 'TelegramClient' = await phone.new_client(loop=self.loop)
+                client: 'TelegramClient' = await chat_phone.phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.critical(f"Phone {phone.id} client not available. Exception: {ex}")
+                logging.critical(f"Chat phone {chat_phone.id} client not available. Exception: {ex}")
 
-                self.chat.phones.remove(phone)
-                self.chat.save()
+                self.chat.phones.remove(chat_phone)
                 
                 continue
 
@@ -52,11 +47,9 @@ class ChatProcess(multiprocessing.Process):
             try:
                 tg_chat = await helpers.get_entity(client, self.chat)
             except exceptions.ChatNotAvailableError as ex:
-                logging.error(f"Can\'t get chat TG entity {self.chat.id} using phone {phone.id}. Exception {ex}")
+                logging.error(f"Can\'t get chat TG entity {self.chat.id} using chat phone {chat_phone.id}. Exception {ex}")
 
-                self.chat.phones.remove(phone)
-                self.chat.availablePhones.remove(phone)
-                self.chat.save()
+                self.chat.phones.remove(chat_phone)
 
                 continue
             else:

@@ -3,19 +3,18 @@ from logging.handlers import RotatingFileHandler
 from sys import stdout
 
 import globalvars, entities, services, helpers
-from services import ChatsManager
 
 def set_chat(chat: 'dict') -> None:
     if chat['isAvailable'] == False:
-        if chat['id'] in ChatsManager():
-            del ChatsManager()[chat['id']]
+        if chat['id'] in services.ChatsManager():
+            del services.ChatsManager()[chat['id']]
 
         return
 
-    if chat['id'] in ChatsManager():
-        ChatsManager()[chat['id']].deserialize(chat)()
+    if chat['id'] in services.ChatsManager():
+        services.ChatsManager()[chat['id']].deserialize(chat)()
     else:
-        ChatsManager()[chat["id"]] = entities.Chat(**chat)()
+        services.ChatsManager()[chat["id"]] = entities.Chat(**chat)()
 
 def get_chats() -> None:
     chats = helpers.get_all('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
@@ -25,22 +24,22 @@ def get_chats() -> None:
     for chat in chats:
         set_chat(chat)
 
-    logging.debug(f'Chats in manager {len(ChatsManager().items())}')
+    logging.debug(f'Chats in manager {len(services.ChatsManager().items())}')
 
 def set_phone(phone: 'dict') -> None:
-    if len(services.PhonesManager) > 0:
-        if phone['id'] in services.PhonesManager:
+    if len(globalvars.PhonesManager) > 0:
+        if phone['id'] in globalvars.PhonesManager:
             if phone['isBanned'] == True:
-                del services.PhonesManager[phone['id']]
+                del globalvars.PhonesManager[phone['id']]
             else:
-                services.PhonesManager[phone['id']].deserialize(phone)()
+                globalvars.PhonesManager[phone['id']].deserialize(phone)()
 
             return
     
     entities.Phone(**phone)()
 
 def get_phones() -> None:
-    phones = helpers.get_all('telegram/parser-phone', {"parser": {"id": os.environ['PARSER_ID']}})
+    phones = helpers.get_all('telegram/phone', {"parser": {"id": os.environ['PARSER_ID']}})
 
     logging.debug(f"Received {len(phones)} phones.")
 

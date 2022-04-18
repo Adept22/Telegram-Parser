@@ -89,16 +89,15 @@ class MembersProcess(multiprocessing.Process):
                 logging.error(f"Can't get member {member.id} media.")
 
     async def async_run(self):
-        for phone in self.chat.phones:
-            phone: 'entities.TypePhone'
+        for chat_phone in self.chat.phones:
+            chat_phone: 'entities.TypeChatPhone'
 
             try:
-                client = await phone.new_client(loop=self.loop)
+                client = await chat_phone.phone.new_client(loop=self.loop)
             except exceptions.ClientNotAvailableError as ex:
-                logging.critical(f"Phone {phone.id} client not available.")
+                logging.critical(f"Phone {chat_phone.id} client not available.")
 
-                self.chat.phones.remove(phone)
-                self.chat.save()
+                self.chat.phones.remove(chat_phone)
                 
                 continue
 

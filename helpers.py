@@ -12,7 +12,7 @@ def get_all(entity: 'str', body: 'dict', entities: 'list' = [], start: 'int' = 0
     new_entities = ApiService().get(entity, {**body, "_start": start, "_limit": limit})
 
     if len(new_entities) > 0:
-        entities += get_all(entity, body, new_entities, start + limit, limit)
+        return get_all(entity, body, entities + new_entities, start + limit, limit)
 
     return entities
 
