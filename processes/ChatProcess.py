@@ -1,10 +1,12 @@
-import threading, asyncio, logging, telethon
-import globalvars, entities, exceptions, helpers
+import multiprocessing, asyncio, logging, telethon
+import entities, exceptions, helpers
 
-class ChatInitThread(threading.Thread):
-    def __init__(self, chat: 'entities.TypeChat'):
-        threading.Thread.__init__(self, name=f'ChatInitThread-{chat.id}', daemon=True)
+class ChatProcess(multiprocessing.Process):
+    def __init__(self, manager_phones, manager_chats, chat: 'entities.TypeChat'):
+        multiprocessing.Process.__init__(self, name=f'ChatProcess-{chat.id}', daemon=True)
 
+        self.manager_phones = manager_phones
+        self.manager_chats = manager_chats
         self.chat = chat
         self.loop = asyncio.new_event_loop()
         
@@ -12,10 +14,11 @@ class ChatInitThread(threading.Thread):
 
     async def async_run(self):
         chat_phones = helpers.get_all('telegram/chat-phone', { "chat": { "id": self.chat.id }})
-        chat_phones = list(filter(lambda chat_phone: chat_phone["phone"]["id"] in globalvars.phones_manager, chat_phones))
-        chat_phones = [entities.ChatPhone(id=chat_phone["id"], chat=self.chat, phone=globalvars.phones_manager[chat_phone["phone"]["id"]], isUsing=chat_phone["isUsing"]) for chat_phone in chat_phones]
+        chat_phones = list(filter(lambda chat_phone: chat_phone["phone"]["id"] in self.manager_phones, chat_phones))
+        chat_phones = [entities.ChatPhone(id=chat_phone["id"], chat=self.chat, phone=self.manager_phones[chat_phone["phone"]["id"]], isUsing=chat_phone["isUsing"]) for chat_phone in chat_phones]
         
         using_phones = list(filter(lambda chat_phone: chat_phone.isUsing, chat_phones))
+
         for i, chat_phone in enumerate(using_phones):
             """Appending using phones"""
             try:
@@ -65,12 +68,15 @@ class ChatInitThread(threading.Thread):
 
         if len(self.chat.phones) < 3 and len(chat_phones) > len(self.chat.phones):
             not_using_phones = list(filter(lambda chat_phone: not chat_phone.isUsing, chat_phones))
-            for chat_phone in not_using_phones:
-                globalvars.phones_manager[chat_phone.phone.id].join_chat(self.chat, chat_phone)
-            
-        globalvars.chats_manager[self.chat.id] = self.chat
 
-        logging.debug(f'Chats in manager {len(globalvars.chats_manager)}')
+            for chat_phone in not_using_phones:
+                self.manager_phones[chat_phone.phone.id].join_chat(self.chat, chat_phone)
+            
+        self.manager_chats[self.chat.id] = self.chat
+
+        logging.debug(f'Chats in manager {len(self.manager_chats)}')
+
+        self.chat()
 
     def run(self):
         asyncio.run(self.async_run())

@@ -1,10 +1,11 @@
-import threading
+import multiprocessing
+from multiprocessing.managers import NamespaceProxy
 from collections.abc import MutableMapping
 # from singleton_decorator import singleton
 
 class PhonesManager(MutableMapping):
     def __init__(self, *args, **kwargs):
-        self._condition = threading.Condition()
+        self._condition = multiprocessing.Condition()
 
         self.store = dict()
 
@@ -35,3 +36,6 @@ class PhonesManager(MutableMapping):
     
     def __len__(self):
         return len(self.store)
+
+class PhonesManagerProxy(NamespaceProxy):
+    _exposed_ = ('__getattribute__', '__setattr__', '__delattr__')

@@ -2,7 +2,7 @@ import threading, typing
 import entities, threads, helpers
 
 if typing.TYPE_CHECKING:
-    from threads import ChatInitThread, ChatInfoThread, MembersThread, MessagesThread
+    from threads import ChatProcess, ChatInfoThread, MembersThread, MessagesThread
 
 class Chat(entities.Entity):
     def __init__(
@@ -31,7 +31,7 @@ class Chat(entities.Entity):
 
         self.phones: 'entities.TypeChatPhonesList[entities.TypeChatPhone]' = entities.ChatPhonesList()
 
-        self.chat_init_thread: 'ChatInitThread | None' = None
+        self.chat_init_thread: 'ChatProcess | None' = None
 
         self.chat_info_process: 'ChatInfoThread | None' = None
         self.members_process: 'MembersThread | None' = None
@@ -44,10 +44,6 @@ class Chat(entities.Entity):
     #     self.messages_process.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'Chat':
-        if self.chat_init_thread == None or not self.chat_init_thread.is_alive():
-            self.chat_init_thread = threads.ChatInitThread(self)
-            self.chat_init_thread.start()
-
         if self.chat_info_process == None or not self.chat_info_process.is_alive():
             self.chat_info_process = threads.ChatInfoThread(self)
             self.chat_info_process.start()

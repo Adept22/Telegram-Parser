@@ -1,10 +1,11 @@
-import threading, asyncio, logging, telethon, telethon.sessions
+import multiprocessing, asyncio, logging, telethon, telethon.sessions
 import globalvars, entities
 
-class AuthorizationThread(threading.Thread):
-    def __init__(self, phone: 'entities.TypePhone'):
-        threading.Thread.__init__(self, name=f'AuthorizationThread-{phone.id}', daemon=True)
+class PhoneProcess(multiprocessing.Process):
+    def __init__(self, manager_phones, phone: 'entities.TypePhone'):
+        multiprocessing.Process.__init__(self, name=f'PhoneProcess-{phone.id}', daemon=True)
         
+        self.manager_phones = manager_phones
         self.phone = phone
         self.loop = asyncio.new_event_loop()
         
@@ -105,9 +106,9 @@ class AuthorizationThread(threading.Thread):
 
         logging.debug(f"Phone {self.phone.id} actually authorized.")
 
-        globalvars.phones_manager[self.phone.id] = self.phone
+        self.manager_phones[self.phone.id] = self.phone
         
-        logging.debug(f"Phone in manager {len(globalvars.phones_manager)}.")
+        logging.debug(f"Phone in manager {len(self.manager_phones)}.")
         
     def run(self):
         asyncio.run(self.async_run())

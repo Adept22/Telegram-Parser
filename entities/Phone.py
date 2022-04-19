@@ -1,10 +1,9 @@
-import asyncio, typing, queue, telethon, telethon.sessions
-import threading
+import threading, asyncio, typing, queue, telethon, telethon.sessions
 import globalvars, entities, exceptions, threads
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
-    from threads import AuthorizationThread, JoinChatsThread
+    from threads import JoinChatsThread
 
 class Phone(entities.Entity):
     def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
@@ -22,7 +21,6 @@ class Phone(entities.Entity):
 
         self._is_authorized = False
         self._is_authorized_condition = threading.Condition()
-        self.authorization_thread: 'AuthorizationThread | None' = None
 
         self._join_queue = queue.Queue()
         self.join_chats_process: 'JoinChatsThread | None' = None
@@ -32,10 +30,6 @@ class Phone(entities.Entity):
     #     self.join_chats_process.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
-        if self.authorization_thread == None or not self.authorization_thread.is_alive():
-            self.authorization_thread = threads.AuthorizationThread(self)
-            self.authorization_thread.start()
-
         if self.join_chats_process == None or not self.join_chats_process.is_alive():
             self.join_chats_process = threads.JoinChatsThread(self)
             self.join_chats_process.start()

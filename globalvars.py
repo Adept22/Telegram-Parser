@@ -1,4 +1,5 @@
 import os, socket
+from managers import ParserManager
 import services
 
 def get_all_entities(entity: 'str', params: 'dict' = {}, entities: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
@@ -22,8 +23,11 @@ def init():
     else:
         raise Exception("Can't start parser. Environment variable 'PARSER_ID' not set.")
 
-    global phones_manager
-    phones_manager = services.PhonesManager()
+    manager = ParserManager()
+    manager.start()
 
-    global chats_manager
-    chats_manager = services.ChatsManager()
+    global manager_phones
+    manager_phones = manager.phones()
+
+    global manager_chats
+    manager_chats = manager.chats()

@@ -1,20 +1,20 @@
-import os, asyncio, logging, colorlog
+import os, sys, asyncio, logging, colorlog
 from logging.handlers import RotatingFileHandler
-from sys import stdout
 
-import globalvars, entities, helpers
+import globalvars, entities, processes, helpers
 
-def set_chat(chat: 'dict', ) -> None:
-    if len(globalvars.chats_manager) > 0:
-        if chat['id'] in globalvars.chats_manager:
+def set_chat(chat: 'dict') -> None:
+    if len(globalvars.manager_chats) > 0:
+        if chat['id'] in globalvars.manager_chats:
             if chat['isAvailable'] == False:
-                del globalvars.chats_manager[chat['id']]
+                del globalvars.manager_chats[chat['id']]
             else:
-                globalvars.chats_manager[chat['id']].deserialize(chat)()
+                globalvars.manager_chats[chat['id']].deserialize(chat)
 
             return
 
-    entities.Chat(**chat)()
+    chat_process = processes.ChatProcess(entities.Chat(**chat))
+    chat_process.start()
 
 def get_chats() -> None:
     chats = helpers.get_all('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
@@ -25,16 +25,17 @@ def get_chats() -> None:
         set_chat(chat)
 
 def set_phone(phone: 'dict') -> None:
-    if len(globalvars.phones_manager) > 0:
-        if phone['id'] in globalvars.phones_manager:
+    if len(globalvars.manager_phones) > 0:
+        if phone['id'] in globalvars.manager_phones:
             if phone['isBanned'] == True:
-                del globalvars.phones_manager[phone['id']]
+                del globalvars.manager_phones[phone['id']]
             else:
-                globalvars.phones_manager[phone['id']].deserialize(phone)()
+                globalvars.manager_phones[phone['id']].deserialize(phone)
 
             return
     
-    entities.Phone(**phone)()
+    phone_process = processes.PhoneProcess(entities.Phone(**phone))
+    phone_process.start()
 
 def get_phones() -> None:
     phones = helpers.get_all('telegram/phone', {"parser": {"id": os.environ['PARSER_ID']}})
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=5)
     fh.setLevel(logging.INFO)
 
-    sh = logging.StreamHandler(stdout)
+    sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(logging.DEBUG)
     sh.setFormatter(colorlog.ColoredFormatter("%(log_color)s" + format, datefmt))
 

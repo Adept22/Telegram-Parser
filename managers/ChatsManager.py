@@ -1,3 +1,4 @@
+from multiprocessing.managers import NamespaceProxy
 from collections.abc import MutableMapping
 # from singleton_decorator import singleton
 
@@ -25,3 +26,6 @@ class ChatsManager(MutableMapping):
 
     def _keytransform(self, key):
         return key
+
+class ChatsManagerProxy(NamespaceProxy):
+    _exposed_ = ('__getattribute__', '__setattr__', '__delattr__')
