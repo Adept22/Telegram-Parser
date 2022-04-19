@@ -1,15 +1,13 @@
-import multiprocessing, setproctitle, asyncio, typing, logging, telethon
+import threading, asyncio, typing, logging, telethon
 import entities, exceptions, helpers
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.events.chataction import ChatAction
 
-class MembersProcess(multiprocessing.Process):
+class MembersThread(threading.Thread):
     def __init__(self, chat: 'entities.TypeChat'):
-        multiprocessing.Process.__init__(self, name=f'MembersProcess-{chat.id}', daemon=True)
-
-        setproctitle.setproctitle(self.name)
+        threading.Thread.__init__(self, name=f'MembersThread-{chat.id}', daemon=True)
         
         self.media_path = f"./downloads/members"
         self.chat: 'entities.TypeChat' = chat
@@ -64,11 +62,11 @@ class MembersProcess(multiprocessing.Process):
                     try:
                         media.save()
                     except exceptions.RequestException as ex:
-                        logging.error(f"Can\'t save member {member.id} media. Exception: {ex}.")
+                        logging.error(f"Can't save member {member.id} media. Exception: {ex}.")
                     else:
-                        logging.info(f"Sucessfuly saved member {member.id} media.")
+                        logging.info(f"Successfuly saved member {member.id} media.")
 
-                        size = photo.sizes[-2]
+                        size = next(((size.type, size.size) for size in photo.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
 
                         try:
                             await media.upload(
@@ -77,9 +75,9 @@ class MembersProcess(multiprocessing.Process):
                                     id=photo.id,
                                     access_hash=photo.access_hash,
                                     file_reference=photo.file_reference,
-                                    thumb_size=size.type
+                                    thumb_size=size[0]
                                 ), 
-                                size.size
+                                size[1]
                             )
                         except exceptions.RequestException as ex:
                             logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
@@ -97,10 +95,13 @@ class MembersProcess(multiprocessing.Process):
             except exceptions.ClientNotAvailableError as ex:
                 logging.critical(f"Phone {chat_phone.id} client not available.")
 
+                chat_phone.isUsing = False
+                chat_phone.save()
+                
                 self.chat.phones.remove(chat_phone)
                 
                 continue
-
+            
             async def handle_event(event: 'ChatAction.Event'):
                 if event.user_added or event.user_joined:
                     async for user in event.get_users():
@@ -116,11 +117,15 @@ class MembersProcess(multiprocessing.Process):
                         await self.handle_member(client, user)
                     else:
                         logging.info(f"Chat \'{self.chat.id}\' participants download success.")
+
+                        break
+                except telethon.errors.common.MultiError as ex:
+                    await asyncio.sleep(30)
                 except telethon.errors.FloodWaitError as ex:
                     logging.error(f"Telegram members request of chat {self.chat.id} must wait {ex.seconds} seconds.")
 
-                    await asyncio.wait(ex.seconds)
-                except telethon.errors.RPCError as ex:
+                    await asyncio.sleep(ex.seconds)
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
                     logging.critical(f"Chat {self.chat.id} not available. Exception: {ex}")
                     
                     self.chat.isAvailable = False

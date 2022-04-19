@@ -1,10 +1,10 @@
-import multiprocessing
+import threading
 from collections.abc import MutableMapping
 # from singleton_decorator import singleton
 
 class PhonesManager(MutableMapping):
     def __init__(self, *args, **kwargs):
-        self._condition = multiprocessing.Condition()
+        self._condition = threading.Condition()
 
         self.store = dict()
 

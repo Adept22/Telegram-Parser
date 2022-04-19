@@ -1,14 +1,12 @@
-import multiprocessing, setproctitle, typing, asyncio, logging, telethon
+import threading, typing, asyncio, logging, telethon
 import entities, threads, exceptions
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
-class MessagesProcess(multiprocessing.Process):
+class MessagesThread(threading.Thread):
     def __init__(self, chat: 'entities.TypeChat'):
-        multiprocessing.Process.__init__(self, name=f"MessagesProcess-{chat.id}", daemon=True)
-
-        setproctitle.setproctitle(self.name)
+        threading.Thread.__init__(self, name=f"MessagesThread-{chat.id}", daemon=True)
         
         self.chat = chat
         self.loop = asyncio.new_event_loop()
@@ -51,7 +49,7 @@ class MessagesProcess(multiprocessing.Process):
                     if chat_full.participants.participants else []
                 return participants[0] if len(participants) > 0 else None
         except telethon.errors.RPCError as ex:
-            logging.werning(f"Can't get participant data for {input_sender.user_id} with chat {self.chat.internalId}. Exception: {ex}.")
+            logging.warning(f"Can't get participant data for {input_sender.user_id} with chat {self.chat.internalId}. Exception: {ex}.")
 
         return None
     
@@ -129,6 +127,9 @@ class MessagesProcess(multiprocessing.Process):
             except exceptions.ClientNotAvailableError as ex:
                 logging.critical(f"Phone {chat_phone.id} client not available.")
 
+                chat_phone.isUsing = False
+                chat_phone.save()
+                
                 self.chat.phones.remove(chat_phone)
                 
                 continue
@@ -146,11 +147,13 @@ class MessagesProcess(multiprocessing.Process):
                         await self.handle_message(chat_phone, client, tg_message)
                     else:
                         logging.info(f"Chat {self.chat.id} messages download success.")
+                except telethon.errors.common.MultiError as ex:
+                    await asyncio.sleep(30)
                 except telethon.errors.FloodWaitError as ex:
                     logging.error(f"Telegram messages request of chat {self.chat.id} must wait {ex.seconds} seconds.")
 
-                    await asyncio.wait(ex.seconds)
-                except telethon.errors.RPCError as ex:
+                    await asyncio.sleep(ex.seconds)
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
                     logging.critical(f"Chat {self.chat.id} not available. Exception {ex}")
 
                     self.chat.isAvailable = False
@@ -158,7 +161,7 @@ class MessagesProcess(multiprocessing.Process):
 
                     break
                 else:
-                    logging.info(f"Chat \'{self.chat.id}\' participants download success.")
+                    logging.info(f"Chat \'{self.chat.id}\' messages download success.")
         else:
             logging.error(f"Chat {self.chat.id} messages download failed.")
         

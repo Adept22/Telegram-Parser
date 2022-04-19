@@ -25,6 +25,9 @@ class Media(ABC):
         tg_media, 
         file_size: 'int'
     ) -> 'None':
+        if not file_size:
+            return
+
         chunk_number = 0
         chunk_size=downloads.MAX_CHUNK_SIZE
         total_chunks = math.ceil(file_size / chunk_size)

@@ -7,11 +7,6 @@ class ChatPhone(entities.Entity):
         self.phone: 'entities.TypePhone' = phone
         self.isUsing: 'bool' = isUsing
 
-    def __del__(self):
-        self.isUsing = False
-
-        self.save()
-
     @property
     def name(self) -> 'str':
         return "chat-phone"

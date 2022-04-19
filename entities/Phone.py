@@ -1,11 +1,10 @@
-import asyncio, typing, telethon, telethon.sessions
-import multiprocessing
-import globalvars, entities, exceptions, processes
-import services
+import asyncio, typing, queue, telethon, telethon.sessions
+import threading
+import globalvars, entities, exceptions, threads
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
-    from processes import AuthorizationProcess, JoinChatsProcess
+    from threads import AuthorizationThread, JoinChatsThread
 
 class Phone(entities.Entity):
     def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
@@ -22,24 +21,24 @@ class Phone(entities.Entity):
         self.code_hash: 'str | None' = None
 
         self._is_authorized = False
-        self._is_authorized_condition = multiprocessing.Condition()
-        self.authorization_process: 'AuthorizationProcess | None' = None
+        self._is_authorized_condition = threading.Condition()
+        self.authorization_thread: 'AuthorizationThread | None' = None
 
-        self._join_queue = multiprocessing.Queue()
-        self.join_chats_thread: 'JoinChatsProcess | None' = None
+        self._join_queue = queue.Queue()
+        self.join_chats_process: 'JoinChatsThread | None' = None
 
     # def __del__(self):
-    #     self.authorization_process.terminate()
-    #     self.join_chats_thread.terminate()
+    #     self.authorization_thread.terminate()
+    #     self.join_chats_process.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
-        if self.authorization_process == None or not self.authorization_process.is_alive():
-            self.authorization_process = processes.AuthorizationProcess(self, globalvars.PhonesManager)
-            self.authorization_process.start()
+        if self.authorization_thread == None or not self.authorization_thread.is_alive():
+            self.authorization_thread = threads.AuthorizationThread(self)
+            self.authorization_thread.start()
 
-        if self.join_chats_thread == None or not self.join_chats_thread.is_alive():
-            self.join_chats_thread = processes.JoinChatsProcess(self)
-            self.join_chats_thread.start()
+        if self.join_chats_process == None or not self.join_chats_process.is_alive():
+            self.join_chats_process = threads.JoinChatsThread(self)
+            self.join_chats_process.start()
         
         return self
 
@@ -118,5 +117,5 @@ class Phone(entities.Entity):
             self.is_authorized = False
             self()
 
-    def join_chat(self, chat: 'entities.TypeChat') -> 'None':
-        self._join_queue.put(chat)
+    def join_chat(self, *args) -> 'None':
+        self._join_queue.put(args)

@@ -22,5 +22,8 @@ def init():
     else:
         raise Exception("Can't start parser. Environment variable 'PARSER_ID' not set.")
 
-    global PhonesManager
-    PhonesManager = services.PhonesManager()
+    global phones_manager
+    phones_manager = services.PhonesManager()
+
+    global chats_manager
+    chats_manager = services.ChatsManager()

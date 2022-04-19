@@ -25,13 +25,14 @@ class MessageMediaThread(threading.Thread):
 
         if isinstance(self.tg_message.media, telethon.types.MessageMediaPhoto):
             entity = self.tg_message.photo
-            size = entity.sizes[-2].size
+            _size = next(((size.type, size.size) for size in entity.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
+            size = _size[1]
             date = entity.date.isoformat()
             entity = telethon.types.InputPhotoFileLocation(
                 id=entity.id,
                 access_hash=entity.access_hash,
                 file_reference=entity.file_reference,
-                thumb_size=entity.sizes[-2].type
+                thumb_size=_size[0]
             )
         elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
             entity = self.tg_message.document

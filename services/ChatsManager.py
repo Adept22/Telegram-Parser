@@ -1,9 +1,8 @@
 from collections.abc import MutableMapping
-from singleton_decorator import singleton
+# from singleton_decorator import singleton
 
 import entities
 
-@singleton
 class ChatsManager(MutableMapping):
     def __init__(self, *args, **kwargs):
         self.store = dict()

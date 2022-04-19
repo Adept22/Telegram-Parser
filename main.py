@@ -2,19 +2,19 @@ import os, asyncio, logging, colorlog
 from logging.handlers import RotatingFileHandler
 from sys import stdout
 
-import globalvars, entities, services, helpers
+import globalvars, entities, helpers
 
-def set_chat(chat: 'dict') -> None:
-    if chat['isAvailable'] == False:
-        if chat['id'] in services.ChatsManager():
-            del services.ChatsManager()[chat['id']]
+def set_chat(chat: 'dict', ) -> None:
+    if len(globalvars.chats_manager) > 0:
+        if chat['id'] in globalvars.chats_manager:
+            if chat['isAvailable'] == False:
+                del globalvars.chats_manager[chat['id']]
+            else:
+                globalvars.chats_manager[chat['id']].deserialize(chat)()
 
-        return
+            return
 
-    if chat['id'] in services.ChatsManager():
-        services.ChatsManager()[chat['id']].deserialize(chat)()
-    else:
-        services.ChatsManager()[chat["id"]] = entities.Chat(**chat)()
+    entities.Chat(**chat)()
 
 def get_chats() -> None:
     chats = helpers.get_all('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
@@ -24,15 +24,13 @@ def get_chats() -> None:
     for chat in chats:
         set_chat(chat)
 
-    logging.debug(f'Chats in manager {len(services.ChatsManager().items())}')
-
 def set_phone(phone: 'dict') -> None:
-    if len(globalvars.PhonesManager) > 0:
-        if phone['id'] in globalvars.PhonesManager:
+    if len(globalvars.phones_manager) > 0:
+        if phone['id'] in globalvars.phones_manager:
             if phone['isBanned'] == True:
-                del globalvars.PhonesManager[phone['id']]
+                del globalvars.phones_manager[phone['id']]
             else:
-                globalvars.PhonesManager[phone['id']].deserialize(phone)()
+                globalvars.phones_manager[phone['id']].deserialize(phone)()
 
             return
     
@@ -50,7 +48,8 @@ if __name__ == '__main__':
     globalvars.init()
 
     datefmt = "%d.%m.%Y %H:%M:%S"
-    format = "%(processName)s:%(process)d %(asctime)s %(levelname)s %(filename)s:%(funcName)s:%(lineno)d %(message)s"
+    # format = "%(processName)s:%(process)d %(asctime)s %(levelname)s %(filename)s:%(funcName)s:%(lineno)d %(message)s"
+    format = "%(threadName)s %(asctime)s %(levelname)s %(message)s"
 
     eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=10)
     eh.setLevel(logging.WARNING)

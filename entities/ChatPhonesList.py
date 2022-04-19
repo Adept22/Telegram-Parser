@@ -1,12 +1,12 @@
 import logging
-import multiprocessing
+import threading
 from collections.abc import MutableSequence
 
 import globalvars, entities
 
 class ChatPhonesList(MutableSequence):
-    def __init__(self, _list: 'list[entities.TypePhone]' = [], *args, **kwargs):
-        self._condition = multiprocessing.Condition()
+    def __init__(self, _list: 'list[entities.TypeChatPhone]' = [], *args, **kwargs):
+        self._condition = threading.Condition()
 
         self._list = _list
 
@@ -16,10 +16,10 @@ class ChatPhonesList(MutableSequence):
     def __str__(self) -> 'str':
         return str(self._list)
         
-    def __getitem__(self, i) -> 'entities.TypePhone':
+    def __getitem__(self, i) -> 'entities.TypeChatPhone':
         return self._list[i]
 
-    def __setitem__(self, i, value: 'entities.TypePhone') -> 'None':
+    def __setitem__(self, i, value: 'entities.TypeChatPhone') -> 'None':
         with self._condition:
             self._list[i] = value
 
@@ -28,7 +28,7 @@ class ChatPhonesList(MutableSequence):
     def __delitem__(self, i) -> 'None':
         del self._list[i]
 
-    def __iter__(self) -> 'entities.TypePhone':
+    def __iter__(self) -> 'entities.TypeChatPhone':
         with self._condition:
             while not len(self):
                 self._condition.wait()
@@ -38,19 +38,22 @@ class ChatPhonesList(MutableSequence):
     def __len__(self) -> 'int':
         return len(self._list)
 
-    def index(self, value: 'entities.TypePhone') -> 'int':
+    def index(self, value: 'entities.TypeChatPhone') -> 'int':
         for i, item in enumerate(self._list):
             if item.id == value.id:
                 return i
         else:
             raise ValueError("item not found")
 
-    def insert(self, i, value: 'entities.TypePhone') -> 'None':
+    def insert(self, i, value: 'entities.TypeChatPhone') -> 'None':
         self._list.insert(i, value)
 
-    def append(self, value: 'entities.TypePhone') -> 'None':
-        if value.id not in [i.id for i in self._list]:
-            self._list.append(value)
+    def append(self, value: 'entities.TypeChatPhone') -> 'None':
+        with self._condition:
+            if value.id not in [i.id for i in self._list]:
+                self._list.append(value)
 
-    def remove(self, value: 'entities.TypePhone') -> 'None':
+            self._condition.notify_all()
+
+    def remove(self, value: 'entities.TypeChatPhone') -> 'None':
         del self._list[self.index(value)]

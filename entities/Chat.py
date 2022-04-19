@@ -1,8 +1,8 @@
-import multiprocessing, typing
-import globalvars, entities, processes, helpers
+import threading, typing
+import entities, threads, helpers
 
 if typing.TYPE_CHECKING:
-    from processes import ChatProcess, ChatMediaProcess, MembersProcess, MessagesProcess
+    from threads import ChatInitThread, ChatInfoThread, MembersThread, MessagesThread
 
 class Chat(entities.Entity):
     def __init__(
@@ -20,7 +20,7 @@ class Chat(entities.Entity):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable
-        self.__iternaId_condition = multiprocessing.Condition()
+        self.__iternaId_condition = threading.Condition()
         self._internalId: 'int | None' = None
         self.internalId: 'int | None' = internalId
         self.title: 'str | None' = title
@@ -31,33 +31,34 @@ class Chat(entities.Entity):
 
         self.phones: 'entities.TypeChatPhonesList[entities.TypeChatPhone]' = entities.ChatPhonesList()
 
-        self.chat_init_process: 'ChatProcess | None' = None
-        self.chat_media_process: 'ChatMediaProcess | None' = None
-        self.members_process: 'MembersProcess | None' = None
-        self.messages_process: 'MessagesProcess | None' = None
+        self.chat_init_thread: 'ChatInitThread | None' = None
+
+        self.chat_info_process: 'ChatInfoThread | None' = None
+        self.members_process: 'MembersThread | None' = None
+        self.messages_process: 'MessagesThread | None' = None
 
     # def __del__(self):
-    #     self.chat_init_process.terminate()
-    #     self.chat_media_process.terminate()
+    #     self.chat_init_thread.terminate()
+    #     self.chat_info_process.terminate()
     #     self.members_process.terminate()
     #     self.messages_process.terminate()
 
     def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'Chat':
-        if self.chat_init_process == None or not self.chat_init_process.is_alive():
-            self.chat_init_process = processes.ChatProcess(self, globalvars.PhonesManager)
-            self.chat_init_process.start()
+        if self.chat_init_thread == None or not self.chat_init_thread.is_alive():
+            self.chat_init_thread = threads.ChatInitThread(self)
+            self.chat_init_thread.start()
 
-        if self.chat_media_process == None or not self.chat_media_process.is_alive():
-            self.chat_media_process = processes.ChatMediaProcess(self)
-            self.chat_media_process.start()
+        if self.chat_info_process == None or not self.chat_info_process.is_alive():
+            self.chat_info_process = threads.ChatInfoThread(self)
+            self.chat_info_process.start()
 
         if self.members_process == None or not self.members_process.is_alive():
-            self.members_process = processes.MembersProcess(self)
+            self.members_process = threads.MembersThread(self)
             self.members_process.start()
 
-        if self.messages_process == None or not self.messages_process.is_alive():
-            self.messages_process = processes.MessagesProcess(self)
-            self.messages_process.start()
+        # if self.messages_process == None or not self.messages_process.is_alive():
+        #     self.messages_process = threads.MessagesThread(self)
+        #     self.messages_process.start()
 
         return self
         
