@@ -1,8 +1,5 @@
-import multiprocessing, typing
-import entities, threads, helpers
-
-if typing.TYPE_CHECKING:
-    from threads import ChatProcess, ChatInfoThread, MembersThread, MessagesThread
+import multiprocessing
+import entities, helpers
 
 class Chat(entities.Entity):
     def __init__(
@@ -30,34 +27,7 @@ class Chat(entities.Entity):
         self.username, self.hash = helpers.get_hash(link)
 
         self.phones: 'entities.TypeChatPhonesList[entities.TypeChatPhone]' = entities.ChatPhonesList()
-
-        self.chat_init_thread: 'ChatProcess | None' = None
-
-        self.chat_info_process: 'ChatInfoThread | None' = None
-        self.members_process: 'MembersThread | None' = None
-        self.messages_process: 'MessagesThread | None' = None
-
-    # def __del__(self):
-    #     self.chat_init_thread.terminate()
-    #     self.chat_info_process.terminate()
-    #     self.members_process.terminate()
-    #     self.messages_process.terminate()
-
-    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'Chat':
-        if self.chat_info_process == None or not self.chat_info_process.is_alive():
-            self.chat_info_process = threads.ChatInfoThread(self)
-            self.chat_info_process.start()
-
-        if self.members_process == None or not self.members_process.is_alive():
-            self.members_process = threads.MembersThread(self)
-            self.members_process.start()
-
-        # if self.messages_process == None or not self.messages_process.is_alive():
-        #     self.messages_process = threads.MessagesThread(self)
-        #     self.messages_process.start()
-
-        return self
-        
+    
     @property
     def name(self) -> 'str':
         return "chat"

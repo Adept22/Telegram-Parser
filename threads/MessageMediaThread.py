@@ -1,75 +1,66 @@
-import threading, asyncio, logging, telethon
+import asyncio, logging, telethon
 import entities, exceptions
 
-class MessageMediaThread(threading.Thread):
-    def __init__(self, chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
-        threading.Thread.__init__(self, name=f"MessageMediaThread-{message.id}", daemon=True)
-        
-        self.chat_phone = chat_phone
-        self.message = message
-        self.tg_message: 'telethon.types.TypeMessage' = tg_message
+async def _message_media_thread(loop, chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+    logging.debug(f"Try to save message '{message.id}' media.")
 
-        self.loop = asyncio.new_event_loop()
+    try:
+        client = await chat_phone.phone.new_client(loop=loop)
+    except exceptions.ClientNotAvailableError as ex:
+        logging.critical(f"Phone {chat_phone.id} client not available.")
         
-        asyncio.set_event_loop(self.loop)
+        return
+
+    if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
+        entity = tg_message.photo
+        _size = next(((size.type, size.size) for size in entity.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
+        size = _size[1]
+        date = entity.date.isoformat()
+        entity = telethon.types.InputPhotoFileLocation(
+            id=entity.id,
+            access_hash=entity.access_hash,
+            file_reference=entity.file_reference,
+            thumb_size=_size[0]
+        )
+    elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
+        entity = tg_message.document
+        size = entity.size
+        date = entity.date.isoformat()
+        entity = telethon.types.InputDocumentFileLocation(
+            id=entity.id,
+            access_hash=entity.access_hash,
+            file_reference=entity.file_reference,
+            thumb_size=''
+        )
+    else:
+        return
+
+    # TODO:
+    # elif isinstance(tg_message.media, telethon.types.MessageMediaPoll):
+    #     pass
+    # elif isinstance(tg_message.media, telethon.types.MessageMediaVenue):
+    #     pass
+    # elif isinstance(tg_message.media, telethon.types.MessageMediaContact):
+    #     pass
     
-    async def async_run(self):
-        logging.debug(f"Try to save message '{self.message.id}' media.")
+    media = entities.MessageMedia(internalId=entity.id, message=message, date=date)
+    
+    try:
+        media.save()
+    except exceptions.RequestException as ex:
+        logging.error(f"Can\'t save message {message.id} media. Exception: {ex}.")
+    else:
+        logging.info(f"Sucessfuly saved message {message.id} media.")
 
         try:
-            client = await self.chat_phone.phone.new_client(loop=self.loop)
-        except exceptions.ClientNotAvailableError as ex:
-            logging.critical(f"Phone {self.chat_phone.id} client not available.")
-            
-            return
-
-        if isinstance(self.tg_message.media, telethon.types.MessageMediaPhoto):
-            entity = self.tg_message.photo
-            _size = next(((size.type, size.size) for size in entity.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
-            size = _size[1]
-            date = entity.date.isoformat()
-            entity = telethon.types.InputPhotoFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
-                thumb_size=_size[0]
-            )
-        elif isinstance(self.tg_message.media, telethon.types.MessageMediaDocument):
-            entity = self.tg_message.document
-            size = entity.size
-            date = entity.date.isoformat()
-            entity = telethon.types.InputDocumentFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
-                thumb_size=''
-            )
-        else:
-            return
-
-        # TODO:
-        # elif isinstance(self.tg_message.media, telethon.types.MessageMediaPoll):
-        #     pass
-        # elif isinstance(self.tg_message.media, telethon.types.MessageMediaVenue):
-        #     pass
-        # elif isinstance(self.tg_message.media, telethon.types.MessageMediaContact):
-        #     pass
-        
-        media = entities.MessageMedia(internalId=entity.id, message=self.message, date=date)
-        
-        try:
-            media.save()
+            await media.upload(client, entity, size)
         except exceptions.RequestException as ex:
-            logging.error(f"Can\'t save message {self.message.id} media. Exception: {ex}.")
+            logging.error(f"Can\'t upload message {message.id} media. Exception: {ex}.")
         else:
-            logging.info(f"Sucessfuly saved message {self.message.id} media.")
+            logging.info(f"Sucessfuly uploaded message {message.id} media.")
 
-            try:
-                await media.upload(client, entity, size)
-            except exceptions.RequestException as ex:
-                logging.error(f"Can\'t upload message {self.message.id} media. Exception: {ex}.")
-            else:
-                logging.info(f"Sucessfuly uploaded message {self.message.id} media.")
+async def message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    def run(self):
-        asyncio.run(self.async_run())
+    asyncio.run(_message_media_thread(loop, chat_phone, message, tg_message))

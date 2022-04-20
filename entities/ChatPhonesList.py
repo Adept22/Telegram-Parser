@@ -1,8 +1,7 @@
-import logging
 import multiprocessing
 from collections.abc import MutableSequence
 
-import globalvars, entities
+import entities
 
 class ChatPhonesList(MutableSequence):
     def __init__(self, _list: 'list[entities.TypeChatPhone]' = [], *args, **kwargs):

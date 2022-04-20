@@ -1,2 +1,2 @@
-from .ChatProcess import ChatProcess
-from .PhoneProcess import PhoneProcess
+from .PhoneProcess import phone_process
+from .ChatProcess import chat_process

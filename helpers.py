@@ -80,11 +80,6 @@ async def get_entity(client: 'TelegramClient', chat: 'entities.TypeChat') -> 'te
             return await _get_entity(client, chat.username)
         except exceptions.ChatNotAvailableError as ex:
             errors.append(str(ex))
-    else:
-        try:
-            return await _get_entity(client, chat.hash)
-        except exceptions.ChatNotAvailableError as ex:
-            errors.append(str(ex))
 
     try:
         return await _get_entity(client, chat.link)

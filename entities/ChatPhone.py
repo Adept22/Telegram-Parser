@@ -1,4 +1,5 @@
-import entities
+import threading
+import entities, threads
 
 class ChatPhone(entities.Entity):
     def __init__(self, id: 'str', chat: 'entities.TypeChat', phone: 'entities.TypePhone', isUsing: 'bool' = False, *args, **kwargs):
@@ -6,6 +7,8 @@ class ChatPhone(entities.Entity):
         self.chat: 'entities.TypeChat' = chat
         self.phone: 'entities.TypePhone' = phone
         self.isUsing: 'bool' = isUsing
+
+        self._join_lock = threading.Lock()
 
     @property
     def name(self) -> 'str':
@@ -35,3 +38,7 @@ class ChatPhone(entities.Entity):
         self.isUsing = _dict.get("isUsing", False)
 
         return self
+
+    def join_chat(self) -> 'None':
+        thread = threading.Thread(target=threads.join_chat_thread, args=(self, ))
+        thread.start()

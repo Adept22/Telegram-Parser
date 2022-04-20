@@ -1,99 +1,35 @@
-import os, sys, typing, multiprocessing, asyncio, logging, colorlog
+import os, sys, multiprocessing, asyncio, logging, colorlog
 from logging.handlers import RotatingFileHandler
 
 import globalvars, entities, processes, helpers
 
-if typing.TYPE_CHECKING:
-    from multiprocessing.pool import Pool
+manager = {}
 
-def set_chat(chat: 'dict', pool: 'Pool') -> None:
-    if len(globalvars.manager_chats) > 0:
-        if chat['id'] in globalvars.manager_chats:
-            if chat['isAvailable'] == False:
-                del globalvars.manager_chats[chat['id']]
-            else:
-                globalvars.manager_chats[chat['id']].deserialize(chat)
+def run(type, cls, process, pool, filter = {}) -> None:
+    if type not in manager:
+        manager[type] = {}
 
-            return
-        
-    chat_process = processes.ChatProcess(
-        entities.Chat(**chat), 
-        globalvars.manager_phones, 
-        globalvars.manager_chats,
-        globalvars.phones_manager_condition
-    )
-    chat_process.start()
+    entities = helpers.get_all(type, {**filter, "parser": {"id": os.environ['PARSER_ID']}})
 
-    # def callback(result):
-    #     logging.info(result)
-        
-    # def error_callback(result):
-    #     logging.error(result)
+    logging.debug(f"Received {len(entities)} of {type}.")
 
-    # pool.apply_async(
-    #     processes.ChatProcess, 
-    #     (entities.Chat(**chat), globalvars.manager_phones, globalvars.manager_chats),
-    #     callback,
-    #     error_callback
-    # )
+    new_entities = [cls(**entity) for entity in entities if entity["id"] not in manager[type]]
 
-def get_chats(pool: 'Pool') -> None:
-    chats = helpers.get_all('telegram/chat', {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
+    manager[type] = {**manager[type], **dict([(entity.id, entity) for entity in new_entities if entity.id not in manager[type]])}
 
-    logging.debug(f"Received {len(chats)} chats.")
-
-    for chat in chats:
-        set_chat(chat, pool)
-
-def set_phone(phone: 'dict', pool: 'Pool') -> None:
-    if len(globalvars.manager_phones) > 0:
-        if phone['id'] in globalvars.manager_phones:
-            if phone['isBanned'] == True:
-                del globalvars.manager_phones[phone['id']]
-            else:
-                globalvars.manager_phones[phone['id']].deserialize(phone)
-
-            return
-    
-    phone_process = processes.PhoneProcess(
-        entities.Phone(**phone), 
-        globalvars.manager_phones, 
-        globalvars.phones_manager_condition
-    )
-    phone_process.start()
-
-    # def callback(result):
-    #     logging.info(result)
-        
-    # def error_callback(result):
-    #     logging.error(result)
-
-    # pool.apply_async(
-    #     processes.PhoneProcess, 
-    #     (entities.Phone(**phone), globalvars.manager_phones),
-    #     callback,
-    #     error_callback
-    # )
-
-def get_phones(pool: 'Pool') -> None:
-    phones = helpers.get_all('telegram/phone', {"parser": {"id": os.environ['PARSER_ID']}})
-
-    logging.debug(f"Received {len(phones)} phones.")
-
-    for phone in phones:
-        set_phone(phone, pool)
+    pool.map_async(process, [cls(**entity) for entity in entities])
 
 if __name__ == '__main__':
     globalvars.init()
 
     datefmt = "%d.%m.%Y %H:%M:%S"
     # format = "%(processName)s:%(process)d %(asctime)s %(levelname)s %(filename)s:%(funcName)s:%(lineno)d %(message)s"
-    format = "%(threadName)s %(asctime)s %(levelname)s %(message)s"
+    format = "%(processName)s:%(threadName)s %(asctime)s %(levelname)s %(message)s"
 
-    eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=10)
-    eh.setLevel(logging.WARNING)
+    eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=20)
+    eh.setLevel(logging.ERROR)
 
-    fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=5)
+    fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=20)
     fh.setLevel(logging.INFO)
 
     sh = logging.StreamHandler(sys.stdout)
@@ -107,16 +43,11 @@ if __name__ == '__main__':
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
-    with multiprocessing.Pool() as phones_pool:
-        get_phones(phones_pool)
-
-        phones_pool.close()
-
-    with multiprocessing.Pool() as chats_pool:
-        get_chats(chats_pool)
-
-        phones_pool.close()
-        phones_pool.join()
+    phones_pool = multiprocessing.Pool()
+    chats_pool = multiprocessing.Pool()
 
     while True:
+        run('telegram/phone', entities.Phone, processes.phone_process, phones_pool)
+        run('telegram/chat', entities.Chat, processes.chat_process, chats_pool, {"isAvailable": True})
+        
         asyncio.run(asyncio.sleep(60))

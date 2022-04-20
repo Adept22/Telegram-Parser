@@ -1,9 +1,8 @@
-import multiprocessing, asyncio, typing, telethon, telethon.sessions
-import globalvars, entities, exceptions, threads
+import asyncio, typing, telethon, telethon.sessions
+import globalvars, entities, exceptions
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
-    from threads import JoinChatsThread
 
 class Phone(entities.Entity):
     def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
@@ -22,19 +21,9 @@ class Phone(entities.Entity):
         # self._is_authorized = False
         # self.__is_authorized_condition = multiprocessing.Condition()
 
-        # self._join_queue = multiprocessing.Queue()
-        self.join_chats_process: 'JoinChatsThread | None' = None
-
     # def __del__(self):
     #     self.authorization_thread.terminate()
-    #     self.join_chats_process.terminate()
-
-    def __call__(self, *args: 'typing.Any', **kwds: 'typing.Any') -> 'entities.TypePhone':
-        if self.join_chats_process == None or not self.join_chats_process.is_alive():
-            self.join_chats_process = threads.JoinChatsThread(self)
-            self.join_chats_process.start()
-        
-        return self
+    #     self.join_chats_thread.terminate()
 
     @property
     def name(self) -> 'str':
@@ -106,7 +95,3 @@ class Phone(entities.Entity):
                 return client
             else:
                 raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
-
-    def join_chat(self, *args) -> 'None':
-        # self.join_chats_process.queue.put(args)
-        pass

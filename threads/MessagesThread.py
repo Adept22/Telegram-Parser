@@ -1,41 +1,36 @@
+import re
 import threading, typing, asyncio, logging, telethon
-import entities, threads, exceptions
+import requests
+from requests import request
+import entities, threads, exceptions, services
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
-class MessagesThread(threading.Thread):
-    def __init__(self, chat: 'entities.TypeChat'):
-        threading.Thread.__init__(self, name=f"MessagesThread-{chat.id}", daemon=True)
-        
-        self.chat = chat
-        self.loop = asyncio.new_event_loop()
-        
-        asyncio.set_event_loop(self.loop)
-        
-    async def get_member(self, client: 'TelegramClient', user: 'telethon.types.TypePeer') -> 'entities.TypeMember':
+async def _messages_thread(loop, chat: 'entities.TypeChat'):
+    async def get_member(client: 'TelegramClient', user: 'telethon.types.TypePeer') -> 'entities.TypeMember':
         member = entities.Member(internalId=user.user_id)
 
         await member.expand(client)
 
         return member.save()
         
-    async def get_chat_member(self, participant, member):
-        chat_member = entities.ChatMember(chat=self.chat, member=member)
+    async def get_chat_member(participant, member):
+        chat_member = entities.ChatMember(chat=chat, member=member)
 
         await chat_member.expand(participant)
 
         return chat_member.save()
     
-    async def get_chat_member_role(self, participant, chat_member):
+    async def get_chat_member_role(participant, chat_member):
         chat_member_role = entities.ChatMemberRole(member=chat_member)
 
         await chat_member_role.expand(participant)
 
         return chat_member_role.save()
 
-    async def get_message_participant(self, client: 'TelegramClient', input_chat, input_sender: 'telethon.types.TypeInputPeer'):
-        peer = telethon.utils.get_peer(self.chat.internalId or 0)
+    async def get_message_participant(client: 'TelegramClient', input_chat, input_sender: 'telethon.types.TypeInputPeer'):
+        peer = telethon.utils.get_peer(chat.internalId or 0)
 
         try:
             if isinstance(peer, telethon.types.PeerChannel):
@@ -44,16 +39,16 @@ class MessagesThread(threading.Thread):
                 )
                 return participant.participant
             elif isinstance(peer, telethon.types.PeerChat):
-                chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(self.chat.internalId))
+                chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(chat.internalId))
                 participants = [p.participant for p in chat_full.participants if p.user_id == input_sender.user_id] \
                     if chat_full.participants.participants else []
                 return participants[0] if len(participants) > 0 else None
         except telethon.errors.RPCError as ex:
-            logging.warning(f"Can't get participant data for {input_sender.user_id} with chat {self.chat.internalId}. Exception: {ex}.")
+            logging.warning(f"Can't get participant data for {input_sender.user_id} with chat {chat.internalId}. Exception: {ex}.")
 
         return None
     
-    def get_fwd(self, fwd_from: 'telethon.types.TypeMessageFwdHeader | None'):
+    def get_fwd(fwd_from: 'telethon.types.TypeMessageFwdHeader | None'):
         if fwd_from != None:
             fwd_from_id = None
         
@@ -66,26 +61,32 @@ class MessagesThread(threading.Thread):
             return fwd_from_id, fwd_from.from_name if fwd_from.from_name != None else "Неизвестно"
             
         return None, None
+    
+    def handle_links(message):
+        for link in re.finditer(r't\.me\/(?:joinchat\/|\+)?[-_.a-zA-Z0-9]+', message):
+            link = f"https://{link.group()}"
 
-    async def handle_message(self, chat_phone: 'entities.TypePhone', client: 'TelegramClient', tg_message: 'telethon.types.TypeMessage'):
-        logging.debug(f"Chat {self.chat.id}. Receive message {tg_message.id}.")
-        
-        if not isinstance(tg_message, telethon.types.Message):
-            return
+            try:
+                services.ApiService().set(f'telegram/chat', { "link": link, "isAvailable": True })
+            except Exception as ex:
+                continue
+
+    async def handle_message(chat_phone: 'entities.TypePhone', client: 'TelegramClient', tg_message: 'telethon.types.TypeMessage'):
+        logging.debug(f"Chat {chat.id}. Receive message {tg_message.id}.")
         
         try:
-            fwd_from_id, fwd_from_name = self.get_fwd(tg_message.fwd_from)
+            fwd_from_id, fwd_from_name = get_fwd(tg_message.fwd_from)
 
             if isinstance(tg_message.from_id, telethon.types.PeerUser):
-                member = await self.get_member(client, tg_message.from_id)
-                participant = await self.get_message_participant(client, tg_message.input_chat, tg_message.input_sender)
-                chat_member = await self.get_chat_member(participant, member)
-                chat_member_role = await self.get_chat_member_role(participant, chat_member)
+                member = await get_member(client, tg_message.from_id)
+                participant = await get_message_participant(client, tg_message.input_chat, tg_message.input_sender)
+                chat_member = await get_chat_member(participant, member)
+                chat_member_role = await get_chat_member_role(participant, chat_member)
             else:
                 chat_member = None
 
             if tg_message.reply_to != None:
-                reply_to = entities.Message(internalId=tg_message.reply_to.reply_to_msg_id, chat=self.chat)
+                reply_to = entities.Message(internalId=tg_message.reply_to.reply_to_msg_id, chat=chat)
                 reply_to.save()
             else:
                 reply_to = None
@@ -93,7 +94,7 @@ class MessagesThread(threading.Thread):
             message = entities.Message(
                 internalId=tg_message.id, 
                 text=tg_message.message, 
-                chat=self.chat, 
+                chat=chat, 
                 member=chat_member,
                 replyTo=reply_to, 
                 isPinned=tg_message.pinned,     
@@ -104,66 +105,78 @@ class MessagesThread(threading.Thread):
             )
             message.save()
         except exceptions.RequestException as ex:
-            logging.error(f"Can't save chat {self.chat.id} message {tg_message.id}. Exception {ex}")
+            logging.error(f"Can't save chat {chat.id} message {tg_message.id}. Exception {ex}")
         else:
             logging.debug(f"Message {message.id} saved.")
             
             if tg_message.media != None:
-                message_media_thread = threads.MessageMediaThread(chat_phone, message, tg_message)
-                message_media_thread.start()
+                thread = threading.Thread(target=threads.message_media_thread, args=(chat_phone, message, tg_message))
+                thread.start()
 
             return message
 
         return None
 
-    async def async_run(self):
-        for chat_phone in self.chat.phones:
-            chat_phone: 'entities.TypeChatPhone'
+    for chat_phone in chat.phones:
+        chat_phone: 'entities.TypeChatPhone'
 
-            logging.info(f"Recieving messages from chat {self.chat.id}.")
+        logging.info(f"Recieving messages from chat {chat.id}.")
 
+        try:
+            client: 'TelegramClient' = await chat_phone.phone.new_client(loop=loop)
+        except exceptions.ClientNotAvailableError as ex:
+            logging.critical(f"Phone {chat_phone.id} client not available.")
+
+            chat_phone.isUsing = False
+            chat_phone.save()
+            
+            chat.phones.remove(chat_phone)
+            
+            continue
+
+        async def handle_event(event):
+            if not isinstance(tg_message, telethon.types.Message):
+                return
+
+            handle_links(event.message.message)
+            
+            # await handle_message(chat_phone.phone, client, event.message)
+
+        client.add_event_handler(handle_event, telethon.events.NewMessage(chats=chat.internalId, incoming=True))
+
+        while True:
             try:
-                client: 'TelegramClient' = await chat_phone.phone.new_client(loop=self.loop)
-            except exceptions.ClientNotAvailableError as ex:
-                logging.critical(f"Phone {chat_phone.id} client not available.")
-
-                chat_phone.isUsing = False
-                chat_phone.save()
-                
-                self.chat.phones.remove(chat_phone)
-                
-                continue
-
-            async def handle_event(event):
-                await self.handle_message(chat_phone.phone, client, event.message)
-
-            client.add_event_handler(handle_event, telethon.events.NewMessage(chats=self.chat.internalId, incoming=True))
-
-            while True:
-                try:
-                    async for tg_message in client.iter_messages(entity=self.chat.internalId, max_id=0):
-                        tg_message: 'telethon.types.TypeMessage'
-                        
-                        await self.handle_message(chat_phone, client, tg_message)
-                    else:
-                        logging.info(f"Chat {self.chat.id} messages download success.")
-                except telethon.errors.common.MultiError as ex:
-                    await asyncio.sleep(30)
-                except telethon.errors.FloodWaitError as ex:
-                    logging.error(f"Telegram messages request of chat {self.chat.id} must wait {ex.seconds} seconds.")
-
-                    await asyncio.sleep(ex.seconds)
-                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    logging.critical(f"Chat {self.chat.id} not available. Exception {ex}")
-
-                    self.chat.isAvailable = False
-                    self.chat.save()
-
-                    break
-                else:
-                    logging.info(f"Chat \'{self.chat.id}\' messages download success.")
-        else:
-            logging.error(f"Chat {self.chat.id} messages download failed.")
+                async for tg_message in client.iter_messages(entity=chat.internalId, max_id=0):
+                    tg_message: 'telethon.types.TypeMessage'
         
-    def run(self):
-        asyncio.run(self.async_run())
+                    if not isinstance(tg_message, telethon.types.Message):
+                        continue
+
+                    handle_links(tg_message.message)
+            
+                    # await handle_message(chat_phone, client, tg_message)
+                else:
+                    logging.info(f"Chat {chat.id} messages download success.")
+            except telethon.errors.common.MultiError as ex:
+                await asyncio.sleep(30)
+            except telethon.errors.FloodWaitError as ex:
+                logging.error(f"Telegram messages request of chat {chat.id} must wait {ex.seconds} seconds.")
+
+                await asyncio.sleep(ex.seconds)
+            except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                logging.critical(f"Chat {chat.id} not available. Exception {ex}")
+
+                chat.isAvailable = False
+                chat.save()
+
+                break
+            else:
+                logging.info(f"Chat \'{chat.id}\' messages download success.")
+    else:
+        logging.error(f"Chat {chat.id} messages download failed.")
+
+async def messages_thread(chat: 'entities.TypeChat'):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    asyncio.run(_messages_thread(loop, chat))
