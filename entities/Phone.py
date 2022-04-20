@@ -1,4 +1,4 @@
-import threading, asyncio, typing, queue, telethon, telethon.sessions
+import multiprocessing, asyncio, typing, telethon, telethon.sessions
 import globalvars, entities, exceptions, threads
 
 if typing.TYPE_CHECKING:
@@ -19,10 +19,10 @@ class Phone(entities.Entity):
         
         self.code_hash: 'str | None' = None
 
-        self._is_authorized = False
-        self._is_authorized_condition = threading.Condition()
+        # self._is_authorized = False
+        # self.__is_authorized_condition = multiprocessing.Condition()
 
-        self._join_queue = queue.Queue()
+        # self._join_queue = multiprocessing.Queue()
         self.join_chats_process: 'JoinChatsThread | None' = None
 
     # def __del__(self):
@@ -44,21 +44,21 @@ class Phone(entities.Entity):
     def unique_constraint(self) -> 'dict | None':
         return None
         
-    @property
-    def is_authorized(self) -> 'bool':
-        with self._is_authorized_condition:
-            while not self._is_authorized:
-                self._is_authorized_condition.wait()
+    # @property
+    # def is_authorized(self) -> 'bool':
+    #     with self.__is_authorized_condition:
+    #         while not self._is_authorized:
+    #             self.__is_authorized_condition.wait()
                 
-            return self._is_authorized
+    #         return self._is_authorized
         
-    @is_authorized.setter
-    def is_authorized(self, new_value) -> 'None':
-        with self._is_authorized_condition:
-            self._is_authorized = new_value
+    # @is_authorized.setter
+    # def is_authorized(self, new_value) -> 'None':
+    #     with self.__is_authorized_condition:
+    #         self._is_authorized = new_value
             
-            if self._is_authorized:
-                self._is_authorized_condition.notify_all()
+    #         if self._is_authorized:
+    #             self.__is_authorized_condition.notify_all()
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -89,27 +89,24 @@ class Phone(entities.Entity):
         return self
     
     async def new_client(self, loop = asyncio.get_event_loop()) -> 'TelegramClient':
+        client = telethon.TelegramClient(
+            session=telethon.sessions.StringSession(self.session), 
+            api_id=globalvars.parser['api_id'],
+            api_hash=globalvars.parser['api_hash'],
+            loop=loop
+        )
+        
         try:
-            if self.is_authorized:
-                client = telethon.TelegramClient(
-                    session=telethon.sessions.StringSession(self.session), 
-                    api_id=globalvars.parser['api_id'],
-                    api_hash=globalvars.parser['api_hash'],
-                    loop=loop
-                )
-                
-                try:
-                    if not client.is_connected():
-                        await client.connect()
-                except OSError as ex:
-                    raise exceptions.ClientNotAvailableError(str(ex))
-                else:
-                    if await client.is_user_authorized() and await client.get_me() != None:
-                        return client
-            raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
-        except exceptions.ClientNotAvailableError as ex:
-            self.is_authorized = False
-            self()
+            if not client.is_connected():
+                await client.connect()
+        except OSError as ex:
+            raise exceptions.ClientNotAvailableError(str(ex))
+        else:
+            if await client.is_user_authorized() and await client.get_me() != None:
+                return client
+            else:
+                raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')
 
     def join_chat(self, *args) -> 'None':
-        self._join_queue.put(args)
+        # self.join_chats_process.queue.put(args)
+        pass

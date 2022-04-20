@@ -1,12 +1,24 @@
-import multiprocessing, asyncio, logging, telethon, telethon.sessions
+import multiprocessing, setproctitle, typing, asyncio, logging, telethon, telethon.sessions
 import globalvars, entities
 
+if typing.TYPE_CHECKING:
+    from multiprocessing import Condition
+    from multiprocessing.managers import DictProxy
+
 class PhoneProcess(multiprocessing.Process):
-    def __init__(self, manager_phones, phone: 'entities.TypePhone'):
+    def __init__(
+        self, 
+        phone: 'entities.TypePhone', 
+        manager_phones: 'DictProxy', 
+        phones_manager_condition: 'Condition'
+    ):
         multiprocessing.Process.__init__(self, name=f'PhoneProcess-{phone.id}', daemon=True)
+
+        setproctitle.setproctitle(self.name)
         
-        self.manager_phones = manager_phones
         self.phone = phone
+        self.manager_phones = manager_phones
+        self.phones_manager_condition = phones_manager_condition
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
@@ -80,7 +92,7 @@ class PhoneProcess(multiprocessing.Process):
                         self.phone.isVerified = False
                         self.phone.code = None
                         self.phone.code_hash = None
-                        self.phone.is_authorized = False
+                        # self.phone.is_authorized = False
                         self.phone.save()
                         
                         return
@@ -95,7 +107,7 @@ class PhoneProcess(multiprocessing.Process):
         self.phone.isVerified = True
         self.phone.code = None
         self.phone.code_hash = None
-        self.phone.is_authorized = True
+        # self.phone.is_authorized = True
                 
         internal_id = await self.get_internal_id()
         
@@ -106,7 +118,11 @@ class PhoneProcess(multiprocessing.Process):
 
         logging.debug(f"Phone {self.phone.id} actually authorized.")
 
-        self.manager_phones[self.phone.id] = self.phone
+        with self.phones_manager_condition:
+            self.manager_phones[self.phone.id] = self.phone
+
+            self.phones_manager_condition.notify_all()
+
         
         logging.debug(f"Phone in manager {len(self.manager_phones)}.")
         

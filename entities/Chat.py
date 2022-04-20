@@ -1,4 +1,4 @@
-import threading, typing
+import multiprocessing, typing
 import entities, threads, helpers
 
 if typing.TYPE_CHECKING:
@@ -20,7 +20,7 @@ class Chat(entities.Entity):
         self.id: 'str' = id
         self.link: 'str' = link
         self.isAvailable: 'bool' = isAvailable
-        self.__iternaId_condition = threading.Condition()
+        self.__iternaId_condition = multiprocessing.Condition()
         self._internalId: 'int | None' = None
         self.internalId: 'int | None' = internalId
         self.title: 'str | None' = title

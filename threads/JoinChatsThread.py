@@ -1,4 +1,4 @@
-import threading, asyncio, logging, telethon
+import threading, asyncio, logging, telethon, queue
 import entities, exceptions
 
 class JoinChatsThread(threading.Thread):
@@ -7,6 +7,7 @@ class JoinChatsThread(threading.Thread):
 
         self.phone = phone
         self.loop = asyncio.new_event_loop()
+        self.queue = queue.Queue()
         self.lock = threading.Lock()
         
         asyncio.set_event_loop(self.loop)

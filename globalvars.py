@@ -1,5 +1,7 @@
+import multiprocessing
 import os, socket
 from managers import ParserManager
+from multiprocessing.managers import SyncManager
 import services
 
 def get_all_entities(entity: 'str', params: 'dict' = {}, entities: 'list' = [], start: 'int' = 0, limit: 'int' = 50) -> 'list[dict]':
@@ -26,8 +28,11 @@ def init():
     manager = ParserManager()
     manager.start()
 
+    # global phones_manager_condition
+    # phones_manager_condition = multiprocessing.Condition()
+
     global manager_phones
-    manager_phones = manager.phones()
+    manager_phones = manager.dict()
 
     global manager_chats
-    manager_chats = manager.chats()
+    manager_chats = manager.dict()

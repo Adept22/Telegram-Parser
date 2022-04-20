@@ -1,12 +1,12 @@
 import logging
-import threading
+import multiprocessing
 from collections.abc import MutableSequence
 
 import globalvars, entities
 
 class ChatPhonesList(MutableSequence):
     def __init__(self, _list: 'list[entities.TypeChatPhone]' = [], *args, **kwargs):
-        self._condition = threading.Condition()
+        self._condition = multiprocessing.Condition()
 
         self._list = _list
 

@@ -1,13 +1,20 @@
-import multiprocessing, asyncio, logging, telethon
+import multiprocessing, setproctitle, asyncio, logging, telethon
 import entities, exceptions, helpers
 
 class ChatProcess(multiprocessing.Process):
-    def __init__(self, manager_phones, manager_chats, chat: 'entities.TypeChat'):
+    def __init__(
+        self, 
+        chat: 'entities.TypeChat', 
+        manager_phones, 
+        manager_chats
+    ):
         multiprocessing.Process.__init__(self, name=f'ChatProcess-{chat.id}', daemon=True)
 
+        setproctitle.setproctitle(self.name)
+
+        self.chat = chat
         self.manager_phones = manager_phones
         self.manager_chats = manager_chats
-        self.chat = chat
         self.loop = asyncio.new_event_loop()
         
         asyncio.set_event_loop(self.loop)
@@ -15,7 +22,14 @@ class ChatProcess(multiprocessing.Process):
     async def async_run(self):
         chat_phones = helpers.get_all('telegram/chat-phone', { "chat": { "id": self.chat.id }})
         chat_phones = list(filter(lambda chat_phone: chat_phone["phone"]["id"] in self.manager_phones, chat_phones))
-        chat_phones = [entities.ChatPhone(id=chat_phone["id"], chat=self.chat, phone=self.manager_phones[chat_phone["phone"]["id"]], isUsing=chat_phone["isUsing"]) for chat_phone in chat_phones]
+        chat_phones = [
+            entities.ChatPhone(
+                chat_phone["id"], 
+                self.chat, 
+                self.manager_phones[chat_phone["phone"]["id"]], 
+                chat_phone["isUsing"]
+            ) for chat_phone in chat_phones
+        ]
         
         using_phones = list(filter(lambda chat_phone: chat_phone.isUsing, chat_phones))
 
