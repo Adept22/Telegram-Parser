@@ -15,9 +15,11 @@ def run(type, cls, process, pool, filter = {}) -> None:
 
     new_entities = [cls(**entity) for entity in entities if entity["id"] not in manager[type]]
 
+    logging.debug(f"New entities {len(new_entities)} of {type}.")
+
     manager[type] = {**manager[type], **dict([(entity.id, entity) for entity in new_entities if entity.id not in manager[type]])}
 
-    pool.map_async(process, [cls(**entity) for entity in entities])
+    pool.map_async(process, [cls(**entity) for entity in new_entities])
 
 if __name__ == '__main__':
     globalvars.init()
