@@ -3,23 +3,30 @@ from logging.handlers import RotatingFileHandler
 
 import globalvars, entities, processes, helpers
 
-manager = {}
+processes_manager = {}
 
 def run(type, cls, process, pool, filter = {}) -> None:
-    if type not in manager:
-        manager[type] = {}
+    if type not in processes_manager:
+        processes_manager[type] = {}
 
     entities = helpers.get_all(type, {**filter, "parser": {"id": os.environ['PARSER_ID']}})
 
     logging.debug(f"Received {len(entities)} of {type}.")
 
-    new_entities = [cls(**entity) for entity in entities if entity["id"] not in manager[type]]
+    # with pool:
+    #     futures = {entity["id"]: pool.submit(process, cls(**entity)) for entity in entities if entity["id"] not in processes_manager[type]}
 
-    logging.debug(f"New entities {len(new_entities)} of {type}.")
+    #     processes_manager[type] = {**processes_manager[type], **futures}
 
-    manager[type] = {**manager[type], **dict([(entity.id, entity) for entity in new_entities if entity.id not in manager[type]])}
+    entities = [cls(**entity) for entity in entities if entity["id"] not in processes_manager[type]]
 
-    pool.map_async(process, [cls(**entity) for entity in new_entities])
+    logging.debug(f"New entities {len(entities)} of {type}.")
+
+    for entity in entities:
+        processes_manager[type][entity.id] = multiprocessing.Process(target=process, args=(entity, ), daemon=True, name=f"{type}-{entity.id}")
+        processes_manager[type][entity.id].start()
+
+    # pool.map_async(process, new_entities)
 
 if __name__ == '__main__':
     globalvars.init()
@@ -28,17 +35,17 @@ if __name__ == '__main__':
     # format = "%(processName)s:%(process)d %(asctime)s %(levelname)s %(filename)s:%(funcName)s:%(lineno)d %(message)s"
     format = "%(processName)s:%(threadName)s %(asctime)s %(levelname)s %(message)s"
 
-    eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=20)
-    eh.setLevel(logging.ERROR)
+    # eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=20)
+    # eh.setLevel(logging.ERROR)
 
-    fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=20)
-    fh.setLevel(logging.INFO)
+    # fh = RotatingFileHandler(filename='log/app.log', maxBytes=1048576, backupCount=20)
+    # fh.setLevel(logging.INFO)
 
     sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(logging.DEBUG)
     sh.setFormatter(colorlog.ColoredFormatter("%(log_color)s" + format, datefmt))
 
-    logging.basicConfig(datefmt=datefmt, format=format, handlers=[eh, fh, sh], level=logging.DEBUG)
+    logging.basicConfig(datefmt=datefmt, format=format, handlers=[sh], level=logging.DEBUG)
 
     logging.getLogger('asyncio').setLevel(logging.CRITICAL)
     logging.getLogger('telethon').setLevel(logging.CRITICAL)

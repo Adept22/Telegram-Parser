@@ -1,18 +1,12 @@
 import asyncio, logging, telethon
-import entities, exceptions
+import entities, services
 
 async def _join_chat_thread(loop, chat_phone: 'entities.TypeChatPhone'):
     chat = chat_phone.chat
     phone = chat_phone.phone
 
-    try:
-        client = await phone.new_client(loop=loop)
-    except exceptions.ClientNotAvailableError as ex:
-        logging.error(f"Chat {chat.id} not available for phone {phone.id}.")
-
-        return
-        
-    while True:
+    # while True:
+    async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
         try:
             if chat.hash is None:
                 updates = await client(telethon.functions.channels.JoinChannelRequest(chat.username))
@@ -28,26 +22,22 @@ async def _join_chat_thread(loop, chat_phone: 'entities.TypeChatPhone'):
         except telethon.errors.FloodWaitError as ex:
             logging.warning(f"Chat {chat.id} wiring for phone {phone.id} must wait {ex.seconds}.")
 
-            await asyncio.sleep(ex.seconds)
+            # await asyncio.sleep(ex.seconds)
 
-            continue
+            # continue
         except(
             telethon.errors.ChannelsTooMuchError, 
             telethon.errors.SessionPasswordNeededError
         ) as ex:
             logging.error(f"Chat {chat.id} not available for phone {phone.id}. Exception {ex}")
 
-            chat_phone.isUsing = False
-            chat_phone.save()
-
-            break
-        except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-            logging.critical(f"Chat {chat.id} not available.")
+            # chat_phone.isUsing = False
+            # chat_phone.save()
+        except (TypeError, KeyError, ValueError, telethon.errors.RPCError) as ex:
+            logging.critical(f"Chat {chat.id} not available. Exception {ex}.")
 
             chat.isAvailable = False
             chat.save()
-
-            break
         else:
             logging.info(f"Phone {phone.id} succesfully wired with chat {chat.id}.")
 
@@ -67,14 +57,11 @@ async def _join_chat_thread(loop, chat_phone: 'entities.TypeChatPhone'):
 
             chat.phones.append(chat_phone)
 
-            break
-
 def join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
     loop = asyncio.new_event_loop()
-    
     asyncio.set_event_loop(loop)
 
-    with chat_phone._join_lock:
+    with chat_phone.chat._join_lock:
         if len(chat_phone.chat.phones) >= 3:
             return
 

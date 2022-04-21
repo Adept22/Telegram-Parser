@@ -1,4 +1,5 @@
 import multiprocessing
+import threading
 import entities, helpers
 
 class Chat(entities.Entity):
@@ -27,6 +28,8 @@ class Chat(entities.Entity):
         self.username, self.hash = helpers.get_hash(link)
 
         self.phones: 'entities.TypeChatPhonesList[entities.TypeChatPhone]' = entities.ChatPhonesList()
+
+        self._join_lock = threading.Lock()
     
     @property
     def name(self) -> 'str':

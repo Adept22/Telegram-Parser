@@ -112,17 +112,20 @@ class ApiService():
         )
         try:
             r.raise_for_status()
-        except requests.exceptions.HTTPError as ex:
-            r: 'requests.Response' = ex.response
+        except requests.exceptions.RequestException as ex:
+            r: 'requests.Response | None' = ex.response
+
+            if r == None:
+                return self.send(method, url, body, params, files)
+            elif r.status_code == 502 or r.status_code == 504:
+                return self.send(method, url, body, params, files)
             
             try:
                 content = r.json()["message"]
             except json.decoder.JSONDecodeError as ex:
                 content = None
                 
-            if r.status_code == 502:
-                return self.send(method, url, body, params, files)
-            elif r.status_code == 409:
+            if r.status_code == 409:
                 raise exceptions.UniqueConstraintViolationError(content)
             else:
                 raise exceptions.RequestException(r.status_code, content)

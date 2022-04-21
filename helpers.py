@@ -44,12 +44,12 @@ def user_title(user: 'telethon.types.TypeUser'):
 async def _get_entity(client: 'TelegramClient', entity) -> 'telethon.types.TypeChat':
     try:
         return await client.get_entity(entity)
-    except telethon.errors.FloodWaitError as ex:
-        logging.warning(f"FloodWaitError excepted. Sleep {ex.seconds}")
+    # except telethon.errors.FloodWaitError as ex:
+    #     logging.warning(f"FloodWaitError excepted. Sleep {ex.seconds}")
 
-        await asyncio.sleep(ex.seconds)
+    #     await asyncio.sleep(ex.seconds)
 
-        return await _get_entity(client, entity)
+    #     return await _get_entity(client, entity)
     except (KeyError, ValueError, telethon.errors.RPCError) as ex:
         raise exceptions.ChatNotAvailableError(str(ex))
 

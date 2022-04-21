@@ -27,7 +27,7 @@ async def _phone_process(loop, phone: 'entities.TypePhone'):
             
             phone.code_hash = sent.phone_code_hash
         except telethon.errors.rpcerrorlist.FloodWaitError as ex:
-            logging.error(f"Flood exception for phone {phone.id}. Sleep {ex.seconds}.")
+            logging.warning(f"Flood exception for phone {phone.id}. Sleep {ex.seconds}.")
             
             await asyncio.sleep(ex.seconds)
             

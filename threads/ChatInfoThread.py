@@ -1,18 +1,12 @@
 import asyncio, logging, typing, telethon
 import entities, exceptions
+import services
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.events.chataction import ChatAction
 
-def chat_info_thread(chat: 'entities.TypeChat'):
-    asyncio.run(_chat_info_thread(chat))
-
-async def _chat_info_thread(chat: 'entities.TypeChat'):
-    loop = asyncio.new_event_loop()
-    
-    asyncio.set_event_loop(loop)
-
+async def _chat_info_thread(loop, chat: 'entities.TypeChat'):
     def handle_title(new_title: 'str'):
         chat.title = new_title
 
@@ -43,42 +37,42 @@ async def _chat_info_thread(chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        try:
-            client = await chat_phone.phone.new_client(loop=loop)
-        except exceptions.ClientNotAvailableError as ex:
-            logging.critical(f"Phone {chat_phone.id} client not available. Exception: {ex}")
+        async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+            async def handle_event(event: 'ChatAction.Event'):
+                if event.new_photo:
+                    await handle_media(client, event.photo)
 
-            chat_phone.isUsing = False
-            chat_phone.save()
+                if event.new_title:
+                    handle_title(event.new_title)
+
+            client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
             
-            chat.phones.remove(chat_phone)
-            
-            continue
+            while True:
+                try:
+                    async for photo in client.iter_profile_photos(entity=chat.internalId):
+                        photo: 'telethon.types.TypePhoto'
 
-        async def handle_event(event: 'ChatAction.Event'):
-            if event.new_photo:
-                await handle_media(client, event.photo)
+                        await handle_media(client, photo)
+                    else:
+                        logging.info(f"Chat {chat.id} medias download success.")
 
-            if event.new_title:
-                handle_title(event.new_title)
+                        return
+                except telethon.errors.FloodWaitError as ex:
+                    logging.warning(f"Telegram chat media request of chat {chat.id} must wait {ex.seconds} seconds.")
 
-        client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
-        
-        while True:
-            try:
-                async for photo in client.iter_profile_photos(entity=chat.internalId):
-                    photo: 'telethon.types.TypePhoto'
+                    await asyncio.sleep(ex.seconds)
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                    logging.critical(f"Can't get chat {chat.id} using phone {chat_phone.id}. Exception {ex}")
 
-                    await handle_media(client, photo)
-                else:
-                    logging.info(f"Chat {chat.id} medias download success.")
-            except telethon.errors.FloodWaitError as ex:
-                logging.error(f"Telegram chat media request of chat {chat.id} must wait {ex.seconds} seconds.")
-
-                await asyncio.sleep(ex.seconds)
-            except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                logging.error(f"Can't get chat {chat.id} using phone {chat_phone.id}. Exception {ex}")
-                
-                break
+                    chat.isAvailable = False
+                    chat.save()
+                    
+                    return
     else:
         logging.error(f"Can't get chat {chat.id} medias.")
+
+def chat_info_thread(chat: 'entities.TypeChat'):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    asyncio.run(_chat_info_thread(loop, chat))

@@ -76,22 +76,4 @@ class Phone(entities.Entity):
         self.code = _dict.get("code")
 
         return self
-    
-    async def new_client(self, loop = asyncio.get_event_loop()) -> 'TelegramClient':
-        client = telethon.TelegramClient(
-            session=telethon.sessions.StringSession(self.session), 
-            api_id=globalvars.parser['api_id'],
-            api_hash=globalvars.parser['api_hash'],
-            loop=loop
-        )
         
-        try:
-            if not client.is_connected():
-                await client.connect()
-        except OSError as ex:
-            raise exceptions.ClientNotAvailableError(str(ex))
-        else:
-            if await client.is_user_authorized() and await client.get_me() != None:
-                return client
-            else:
-                raise exceptions.ClientNotAvailableError(f'Phone {self.id} not authorized')

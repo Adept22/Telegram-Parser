@@ -1,5 +1,6 @@
 import asyncio, typing, logging, telethon
 import entities, exceptions, helpers
+import services
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -80,48 +81,39 @@ async def _members_thread(loop, chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        try:
-            client = await chat_phone.phone.new_client(loop=loop)
-        except exceptions.ClientNotAvailableError as ex:
-            logging.critical(f"Phone {chat_phone.id} client not available.")
+        async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+            async def handle_event(event: 'ChatAction.Event'):
+                if event.user_added or event.user_joined:
+                    async for user in event.get_users():
+                        await handle_member(client, user)
 
-            chat_phone.isUsing = False
-            chat_phone.save()
+            client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
             
-            chat.phones.remove(chat_phone)
-            
-            continue
-        
-        async def handle_event(event: 'ChatAction.Event'):
-            if event.user_added or event.user_joined:
-                async for user in event.get_users():
-                    await handle_member(client, user)
+            while True:
+                try:
+                    async for user in client.iter_participants(entity=chat.internalId, aggressive=True):
+                        user: 'telethon.types.TypeUser'
 
-        client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
-        
-        while True:
-            try:
-                async for user in client.iter_participants(entity=chat.internalId, aggressive=True):
-                    user: 'telethon.types.TypeUser'
+                        await handle_member(client, user)
+                    else:
+                        logging.info(f"Chat \'{chat.id}\' participants download success.")
 
-                    await handle_member(client, user)
-                else:
-                    logging.info(f"Chat \'{chat.id}\' participants download success.")
+                        return
+                except telethon.errors.common.MultiError as ex:
+                    await asyncio.sleep(30)
+                except telethon.errors.FloodWaitError as ex:
+                    logging.warning(f"Telegram members request of chat {chat.id} must wait {ex.seconds} seconds.")
 
-                    break
-            except telethon.errors.common.MultiError as ex:
-                await asyncio.sleep(30)
-            except telethon.errors.FloodWaitError as ex:
-                logging.error(f"Telegram members request of chat {chat.id} must wait {ex.seconds} seconds.")
+                    # await asyncio.sleep(ex.seconds)
 
-                await asyncio.sleep(ex.seconds)
-            except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                logging.critical(f"Chat {chat.id} not available. Exception: {ex}")
-                
-                chat.isAvailable = False
-                chat.save()
+                    continue
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                    logging.critical(f"Chat {chat.id} not available. Exception: {ex}")
+                    
+                    chat.isAvailable = False
+                    chat.save()
 
-                break
+                    return
     else:
         logging.error(f"Chat {chat.id} participants download failed.")
 

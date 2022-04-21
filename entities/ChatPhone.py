@@ -8,8 +8,6 @@ class ChatPhone(entities.Entity):
         self.phone: 'entities.TypePhone' = phone
         self.isUsing: 'bool' = isUsing
 
-        self._join_lock = threading.Lock()
-
     @property
     def name(self) -> 'str':
         return "chat-phone"
