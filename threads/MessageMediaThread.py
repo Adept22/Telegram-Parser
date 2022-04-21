@@ -2,10 +2,10 @@ import asyncio, logging, telethon
 import entities, exceptions
 import services
 
-async def _message_media_thread(loop, chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
     logging.debug(f"Try to save message '{message.id}' media.")
 
-    async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+    async with services.ChatPhoneClient(chat_phone) as client:
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
             entity = tg_message.photo
             _size = next(((size.type, size.size) for size in entity.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
@@ -55,7 +55,4 @@ async def _message_media_thread(loop, chat_phone: 'entities.TypeChatPhone', mess
                 logging.info(f"Sucessfuly uploaded message {message.id} media.")
 
 def message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    asyncio.run(_message_media_thread(loop, chat_phone, message, tg_message))
+    asyncio.run(_message_media_thread(chat_phone, message, tg_message))

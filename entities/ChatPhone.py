@@ -38,5 +38,5 @@ class ChatPhone(entities.Entity):
         return self
 
     def join_chat(self) -> 'None':
-        thread = threading.Thread(target=threads.join_chat_thread, args=(self, ))
+        thread = threading.Thread(target=threads.join_chat_thread, args=(self, ), name=f"JoinChatThread-{self.id}")
         thread.start()

@@ -24,11 +24,11 @@ class ChatPhoneClient(telethon.TelegramClient):
         else:
             raise exceptions.ClientNotAvailableError(f'Phone {self.chat_phone.id} not authorized')
     
-    async def __aexit__(self, *args):
-        if args[0] != None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type != None:
             self.chat_phone.isUsing = False
             self.chat_phone.save()
 
             self.chat_phone.chat.phones.remove(self.chat_phone)
             
-        return await super().__aexit__(*args)
+        return await super().__aexit__(exc_type, exc_val, exc_tb)

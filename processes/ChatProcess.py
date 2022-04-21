@@ -2,7 +2,7 @@ import asyncio, logging, telethon, concurrent.futures
 import entities, exceptions, helpers, threads
 import services
 
-async def _chat_process(loop, chat: 'entities.TypeChat'):
+async def _chat_process(chat: 'entities.TypeChat'):
     chat_phones = helpers.get_all('telegram/chat-phone', { "chat": { "id": chat.id }})
     
     logging.debug(f"Received {len(chat_phones)} of chat {chat.id}.")
@@ -15,21 +15,28 @@ async def _chat_process(loop, chat: 'entities.TypeChat'):
             chat_phone["isUsing"]
         ) for chat_phone in chat_phones
     ]
-    
-    using_phones = list(filter(lambda chat_phone: chat_phone.isUsing, chat_phones))
 
-    for i, chat_phone in enumerate(using_phones):
-        """Appending using phones"""
-        chat.phones.append(chat_phone)
+    with concurrent.futures.ThreadPoolExecutor(thread_name_prefix=f"JoinChat-{chat.id}") as executor:
+        fs = [executor.submit(threads.join_chat_thread, chat_phone) for chat_phone in chat_phones if not chat_phone.isUsing]
 
-    if len(chat.phones) < 3 and len(chat_phones) > len(chat.phones):
-        not_using_phones = list(filter(lambda chat_phone: not chat_phone.isUsing, chat_phones))
+        def result_iterator():
+            try:
+                fs.reverse()
+                while fs:
+                    yield fs.pop().result()
+            finally:
+                for future in fs:
+                    future.cancel()
 
-        for chat_phone in not_using_phones:
-            chat_phone.join_chat()
+        for result in result_iterator():
+            if sum([1 for chat_phone in chat_phones if chat_phone.isUsing]) >= 3:
+                break
 
-    for chat_phone in chat.phones:
-        async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+        for future in fs:
+            future.cancel()
+
+    for chat_phone in (chat_phone for chat_phone in chat_phones if chat_phone.isUsing):
+        async with services.ChatPhoneClient(chat_phone) as client:
             logging.debug(f"Try get TG entity of chat {chat.id} by chat phone {chat_phone.id}.")
 
             try:
@@ -70,23 +77,16 @@ async def _chat_process(loop, chat: 'entities.TypeChat'):
                         chat.delete()
 
                         return
-
-    for chat_phone in chat.phones:
-        if not chat_phone.isUsing:
-            chat.phones.remove(chat_phone)
-
-    futures = []
     
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        # pool.submit(threads.chat_info_thread, chat)
-        futures.append(pool.submit(threads.members_thread, chat))
-        futures.append(pool.submit(threads.messages_thread, chat))
+    for chat_phone in (chat_phone for chat_phone in chat_phones if chat_phone.isUsing):
+        """Appending using phones"""
+        chat.phones.append(chat_phone)
         
-        concurrent.futures.wait(futures)
+    with concurrent.futures.ThreadPoolExecutor(thread_name_prefix="ChatExecutor-") as executor:
+        # executor.submit(threads.chat_info_thread, chat)
+        executor.submit(threads.members_thread, chat)
+        executor.submit(threads.messages_thread, chat)
 
 def chat_process(chat: 'entities.TypeChat'):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    asyncio.run(_chat_process(loop, chat))
+    asyncio.run(_chat_process(chat))
     

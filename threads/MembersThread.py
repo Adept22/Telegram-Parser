@@ -6,7 +6,7 @@ if typing.TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.events.chataction import ChatAction
 
-async def _members_thread(loop, chat: 'entities.TypeChat'):
+async def _members_thread(chat: 'entities.TypeChat'):
     async def get_member(client: 'TelegramClient', user: 'telethon.types.TypeUser') -> 'entities.TypeMember':
         member = entities.Member(internalId=user.id, username=user.username, firstName=user.first_name, lastName=user.last_name, phone=user.phone)
 
@@ -43,45 +43,45 @@ async def _members_thread(loop, chat: 'entities.TypeChat'):
 
             return
         else:
-            logging.debug(f"Member {member.id} with role saved.")
+            logging.info(f"Member {member.id} with role saved.")
 
-            try:
-                async for photo in client.iter_profile_photos(member.internalId):
-                    photo: 'telethon.types.TypePhoto'
+            # try:
+            #     async for photo in client.iter_profile_photos(member.internalId):
+            #         photo: 'telethon.types.TypePhoto'
 
-                    media = entities.MemberMedia(internalId=photo.id, member=member, date=photo.date.isoformat())
+            #         media = entities.MemberMedia(internalId=photo.id, member=member, date=photo.date.isoformat())
 
-                    try:
-                        media.save()
-                    except exceptions.RequestException as ex:
-                        logging.error(f"Can't save member {member.id} media. Exception: {ex}.")
-                    else:
-                        logging.info(f"Successfuly saved member {member.id} media.")
+            #         try:
+            #             media.save()
+            #         except exceptions.RequestException as ex:
+            #             logging.error(f"Can't save member {member.id} media. Exception: {ex}.")
+            #         else:
+            #             logging.info(f"Successfuly saved member {member.id} media.")
 
-                        size = next(((size.type, size.size) for size in photo.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
+            #             size = next(((size.type, size.size) for size in photo.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
 
-                        try:
-                            await media.upload(
-                                client, 
-                                telethon.types.InputPhotoFileLocation(
-                                    id=photo.id,
-                                    access_hash=photo.access_hash,
-                                    file_reference=photo.file_reference,
-                                    thumb_size=size[0]
-                                ), 
-                                size[1]
-                            )
-                        except exceptions.RequestException as ex:
-                            logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
-                        else:
-                            logging.info(f"Sucessfuly uploaded member {member.id} media.")
-            except telethon.errors.RPCError as ex:
-                logging.error(f"Can't get member {member.id} media.")
+            #             try:
+            #                 await media.upload(
+            #                     client, 
+            #                     telethon.types.InputPhotoFileLocation(
+            #                         id=photo.id,
+            #                         access_hash=photo.access_hash,
+            #                         file_reference=photo.file_reference,
+            #                         thumb_size=size[0]
+            #                     ), 
+            #                     size[1]
+            #                 )
+            #             except exceptions.RequestException as ex:
+            #                 logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
+            #             else:
+            #                 logging.info(f"Sucessfuly uploaded member {member.id} media.")
+            # except telethon.errors.RPCError as ex:
+            #     logging.error(f"Can't get member {member.id} media.")
 
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+        async with services.ChatPhoneClient(chat_phone) as client:
             async def handle_event(event: 'ChatAction.Event'):
                 if event.user_added or event.user_joined:
                     async for user in event.get_users():
@@ -95,12 +95,10 @@ async def _members_thread(loop, chat: 'entities.TypeChat'):
                         user: 'telethon.types.TypeUser'
 
                         await handle_member(client, user)
-                    else:
-                        logging.info(f"Chat \'{chat.id}\' participants download success.")
-
-                        return
                 except telethon.errors.common.MultiError as ex:
                     await asyncio.sleep(30)
+
+                    continue
                 except telethon.errors.FloodWaitError as ex:
                     logging.warning(f"Telegram members request of chat {chat.id} must wait {ex.seconds} seconds.")
 
@@ -112,13 +110,12 @@ async def _members_thread(loop, chat: 'entities.TypeChat'):
                     
                     chat.isAvailable = False
                     chat.save()
-
-                    return
+                else:
+                    logging.info(f"Chat \'{chat.id}\' participants download success.")
+                    
+                return
     else:
         logging.error(f"Chat {chat.id} participants download failed.")
 
 def members_thread(chat: 'entities.TypeChat'):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    asyncio.run(_members_thread(loop, chat))
+    asyncio.run(_members_thread(chat))

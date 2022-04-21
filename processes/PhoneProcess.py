@@ -1,12 +1,11 @@
 import multiprocessing, setproctitle, typing, asyncio, logging, telethon, telethon.sessions
 import globalvars, entities
 
-async def _phone_process(loop, phone: 'entities.TypePhone'):
+async def _phone_process(phone: 'entities.TypePhone'):
     client = telethon.TelegramClient(
         session=telethon.sessions.StringSession(phone.session), 
         api_id=globalvars.parser['api_id'], 
-        api_hash=globalvars.parser['api_hash'], 
-        loop=loop
+        api_hash=globalvars.parser['api_hash']
     )
         
     async def get_internal_id() -> 'int | None':
@@ -97,8 +96,5 @@ async def _phone_process(loop, phone: 'entities.TypePhone'):
 
 
 def phone_process(phone: 'entities.TypePhone'):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    asyncio.run(_phone_process(loop, phone))
+    asyncio.run(_phone_process(phone))
     

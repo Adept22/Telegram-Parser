@@ -1,4 +1,4 @@
-import os, sys, multiprocessing, asyncio, logging, colorlog
+import os, sys, multiprocessing, asyncio, logging, colorlog, concurrent.futures
 from logging.handlers import RotatingFileHandler
 
 import globalvars, entities, processes, helpers
@@ -9,16 +9,18 @@ def run(type, cls, process, pool, filter = {}) -> None:
     if type not in processes_manager:
         processes_manager[type] = {}
 
-    entities = helpers.get_all(type, {**filter, "parser": {"id": os.environ['PARSER_ID']}})
+    # entities = helpers.get_all(type, {**filter})
+    entities = helpers.get_all(type, filter)
 
     logging.debug(f"Received {len(entities)} of {type}.")
 
-    # with pool:
-    #     futures = {entity["id"]: pool.submit(process, cls(**entity)) for entity in entities if entity["id"] not in processes_manager[type]}
+    # pool.map(process, )
 
-    #     processes_manager[type] = {**processes_manager[type], **futures}
+    # for entity in entities:
+    #     if entity["id"] not in processes_manager[type]:
+    #         processes_manager[type][entity["id"]] = pool.submit(process, cls(**entity))
 
-    entities = [cls(**entity) for entity in entities if entity["id"] not in processes_manager[type]]
+    # entities = [cls(**entity) for entity in entities if entity["id"] not in processes_manager[type]]
 
     logging.debug(f"New entities {len(entities)} of {type}.")
 
@@ -52,11 +54,14 @@ if __name__ == '__main__':
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
-    phones_pool = multiprocessing.Pool()
-    chats_pool = multiprocessing.Pool()
+    # phones_pool = multiprocessing.Pool()
+    # chats_pool = multiprocessing.Pool()
+
+    phones_pool = concurrent.futures.ProcessPoolExecutor()
+    chats_pool = concurrent.futures.ProcessPoolExecutor()
 
     while True:
-        run('telegram/phone', entities.Phone, processes.phone_process, phones_pool)
-        run('telegram/chat', entities.Chat, processes.chat_process, chats_pool, {"isAvailable": True})
+        run('telegram/phone', entities.Phone, processes.phone_process, phones_pool, {"parser": {"id": os.environ['PARSER_ID']}})
+        run('telegram/chat', entities.Chat, processes.chat_process, chats_pool, {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
         
         asyncio.run(asyncio.sleep(60))

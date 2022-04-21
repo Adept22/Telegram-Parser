@@ -6,7 +6,7 @@ if typing.TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.events.chataction import ChatAction
 
-async def _chat_info_thread(loop, chat: 'entities.TypeChat'):
+async def _chat_info_thread(chat: 'entities.TypeChat'):
     def handle_title(new_title: 'str'):
         chat.title = new_title
 
@@ -37,7 +37,7 @@ async def _chat_info_thread(loop, chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        async with services.ChatPhoneClient(chat_phone, loop=loop) as client:
+        async with services.ChatPhoneClient(chat_phone) as client:
             async def handle_event(event: 'ChatAction.Event'):
                 if event.new_photo:
                     await handle_media(client, event.photo)
@@ -53,26 +53,23 @@ async def _chat_info_thread(loop, chat: 'entities.TypeChat'):
                         photo: 'telethon.types.TypePhoto'
 
                         await handle_media(client, photo)
-                    else:
-                        logging.info(f"Chat {chat.id} medias download success.")
-
-                        return
                 except telethon.errors.FloodWaitError as ex:
                     logging.warning(f"Telegram chat media request of chat {chat.id} must wait {ex.seconds} seconds.")
 
                     await asyncio.sleep(ex.seconds)
+
+                    continue
                 except (KeyError, ValueError, telethon.errors.RPCError) as ex:
                     logging.critical(f"Can't get chat {chat.id} using phone {chat_phone.id}. Exception {ex}")
 
                     chat.isAvailable = False
                     chat.save()
+                else:
+                    logging.info(f"Chat {chat.id} medias download success.")
                     
-                    return
+                return
     else:
         logging.error(f"Can't get chat {chat.id} medias.")
 
 def chat_info_thread(chat: 'entities.TypeChat'):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    asyncio.run(_chat_info_thread(loop, chat))
+    asyncio.run(_chat_info_thread(chat))

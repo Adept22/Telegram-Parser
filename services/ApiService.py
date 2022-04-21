@@ -139,4 +139,3 @@ class ApiService():
             return self.send(method, url, body, params, files)
 
         return content
-        
