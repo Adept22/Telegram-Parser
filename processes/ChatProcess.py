@@ -15,52 +15,53 @@ async def _chat_process(chat: 'entities.TypeChat'):
         ) for chat_phone in chat_phones
     }
 
-    with concurrent.futures.ThreadPoolExecutor(50, f"JoinChat-{chat.id}") as executor:
-        fs = {executor.submit(threads.join_chat_thread, chat_phones[id]): id for id in chat_phones if not chat_phones[id].isUsing}
+    if sum([1 for id in chat_phones if chat_phones[id].isUsing]) < 3:
+        with concurrent.futures.ThreadPoolExecutor(len(chat_phones), f"JoinChat-{chat.id}") as executor:
+            fs = {executor.submit(threads.join_chat_thread, chat_phones[id]): id for id in chat_phones if not chat_phones[id].isUsing}
 
-        for f in concurrent.futures.as_completed(fs):
-            try:
-                result: 'telethon.types.TypeChat | bool' = f.result()
-            except exceptions.ChatNotAvailableError as ex:
-                for f in fs:
-                    f.cancel()
+            for f in concurrent.futures.as_completed(fs):
+                try:
+                    result: 'telethon.types.TypeChat | bool' = f.result()
+                except exceptions.ChatNotAvailableError as ex:
+                    for f in fs:
+                        f.cancel()
 
-                chat.isAvailable = False
-                chat.save()
+                    chat.isAvailable = False
+                    chat.save()
 
-                return
-            except Exception as ex:
-                logging.exception(ex)
-            else:
-                if result == False:
-                    chat_phones[fs[f]].isUsing = False
+                    return
+                except Exception as ex:
+                    logging.exception(ex)
                 else:
-                    chat_phones[fs[f]].isUsing = True
+                    if result == False:
+                        chat_phones[fs[f]].isUsing = False
+                    else:
+                        chat_phones[fs[f]].isUsing = True
 
-                    internal_id = telethon.utils.get_peer_id(result)
+                        internal_id = telethon.utils.get_peer_id(result)
 
-                    if chat._internalId != internal_id:
-                        chat.internalId = internal_id
-                        
-                        try:
-                            chat.save()
-                        except exceptions.UniqueConstraintViolationError:
-                            logging.critical(f"Chat with internal id {internal_id} exist.")
+                        if chat._internalId != internal_id:
+                            chat.internalId = internal_id
+                            
+                            try:
+                                chat.save()
+                            except exceptions.UniqueConstraintViolationError:
+                                logging.critical(f"Chat with internal id {internal_id} exist.")
 
-                            for chat_phone in chat_phones:
-                                chat_phone.delete()
+                                for chat_phone in chat_phones:
+                                    chat_phone.delete()
 
-                            chat.delete()
+                                chat.delete()
 
-                            return
+                                return
 
-                chat_phones[fs[f]].save()
+                    chat_phones[fs[f]].save()
 
-                if sum([1 for id in chat_phones if chat_phones[id].isUsing]) >= 3:
-                    break
+                    if sum([1 for id in chat_phones if chat_phones[id].isUsing]) >= 3:
+                        break
 
-        for f in fs:
-            f.cancel()
+            for f in fs:
+                f.cancel()
     
     for id in chat_phones:
         """Appending using phones"""
