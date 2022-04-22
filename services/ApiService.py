@@ -1,5 +1,6 @@
 import math, os, requests, json
-from urllib import response
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from urllib.parse import urlencode
 
 import exceptions
@@ -102,6 +103,12 @@ class ApiService():
         self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/chunk', params=params, files=files)
 
     def send(self, method: 'str', url: 'str', body: 'dict' = None, params: 'dict' = None, files: 'dict' = None) -> 'dict | list[dict] | None':
+        session = requests.Session()
+        retry = Retry(connect=5, backoff_factor=1)
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+
         r = requests.request(
             method, 
             url, 

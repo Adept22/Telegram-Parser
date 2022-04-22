@@ -1,34 +1,19 @@
-import os, sys, multiprocessing, asyncio, logging, colorlog, concurrent.futures
+import multiprocessing
+import os, sys, asyncio, logging, colorlog
 from logging.handlers import RotatingFileHandler
 
-import globalvars, entities, processes, helpers
+import globalvars, processes, helpers
 
 processes_manager = {}
 
-def run(type, cls, process, pool, filter = {}) -> None:
-    if type not in processes_manager:
-        processes_manager[type] = {}
-
-    # entities = helpers.get_all(type, {**filter})
+def run(type, process, pool, filter = {}) -> None:
     entities = helpers.get_all(type, filter)
 
     logging.debug(f"Received {len(entities)} of {type}.")
-
-    # pool.map(process, )
-
-    # for entity in entities:
-    #     if entity["id"] not in processes_manager[type]:
-    #         processes_manager[type][entity["id"]] = pool.submit(process, cls(**entity))
-
-    # entities = [cls(**entity) for entity in entities if entity["id"] not in processes_manager[type]]
-
-    logging.debug(f"New entities {len(entities)} of {type}.")
-
+    
     for entity in entities:
-        processes_manager[type][entity.id] = multiprocessing.Process(target=process, args=(entity, ), daemon=True, name=f"{type}-{entity.id}")
-        processes_manager[type][entity.id].start()
-
-    # pool.map_async(process, new_entities)
+        if entity["id"] not in processes_manager:
+            processes_manager[entity["id"]] = pool.apply_async(process, (entity, ))
 
 if __name__ == '__main__':
     globalvars.init()
@@ -36,7 +21,7 @@ if __name__ == '__main__':
     datefmt = "%d.%m.%Y %H:%M:%S"
     # format = "%(processName)s:%(process)d %(asctime)s %(levelname)s %(filename)s:%(funcName)s:%(lineno)d %(message)s"
     format = "%(processName)s:%(threadName)s %(asctime)s %(levelname)s %(message)s"
-
+    
     # eh = RotatingFileHandler(filename='log/error.log', maxBytes=1048576, backupCount=20)
     # eh.setLevel(logging.ERROR)
 
@@ -54,14 +39,11 @@ if __name__ == '__main__':
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
-    # phones_pool = multiprocessing.Pool()
-    # chats_pool = multiprocessing.Pool()
-
-    phones_pool = concurrent.futures.ProcessPoolExecutor()
-    chats_pool = concurrent.futures.ProcessPoolExecutor()
+    phones_pool = multiprocessing.Pool()
+    chats_pool = multiprocessing.Pool(100)
 
     while True:
-        run('telegram/phone', entities.Phone, processes.phone_process, phones_pool, {"parser": {"id": os.environ['PARSER_ID']}})
-        run('telegram/chat', entities.Chat, processes.chat_process, chats_pool, {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
+        run('telegram/phone', processes.phone_process, phones_pool, {"parser": {"id": os.environ['PARSER_ID']}})
+        run('telegram/chat', processes.chat_process, chats_pool, {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
         
         asyncio.run(asyncio.sleep(60))

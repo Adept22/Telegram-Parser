@@ -1,5 +1,6 @@
 import asyncio, logging, telethon
 import entities, services
+import exceptions
 
 async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
     chat = chat_phone.chat
@@ -10,17 +11,19 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
             try:
                 if chat.hash is None:
                     updates = await client(telethon.functions.channels.JoinChannelRequest(chat.username))
-                    tg_chat: 'telethon.types.TypeChat' = updates.chats[0]
+
+                    return updates.chats[0]
                 else:
                     try:
                         updates = await client(telethon.functions.messages.ImportChatInviteRequest(chat.hash))
+
+                        return updates.chats[0]
                     except telethon.errors.UserAlreadyParticipantError as ex:
                         invite = await client(telethon.functions.messages.CheckChatInviteRequest(chat.hash))
-                        tg_chat = invite.chat if invite.chat else invite.channel
-                    else:
-                        tg_chat = updates.chats[0]
+
+                        return invite.chat if invite.chat else invite.channel
             except telethon.errors.FloodWaitError as ex:
-                logging.warning(f"Chat {chat.id} wiring for phone {phone.id} must wait {ex.seconds}.")
+                logging.warning(f"Chat wiring for phone {phone.id} must wait {ex.seconds}.")
 
                 await asyncio.sleep(ex.seconds)
 
@@ -29,34 +32,13 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
                 telethon.errors.ChannelsTooMuchError, 
                 telethon.errors.SessionPasswordNeededError
             ) as ex:
-                logging.error(f"Chat {chat.id} not available for phone {phone.id}. Exception {ex}")
+                logging.error(f"Chat not available for phone {phone.id}. Exception {ex}")
 
-                chat_phone.isUsing = False
-                chat_phone.save()
+                return False
             except (TypeError, KeyError, ValueError, telethon.errors.RPCError) as ex:
-                logging.critical(f"Chat {chat.id} not available. Exception {ex}.")
-
-                chat.isAvailable = False
-                chat.save()
-            else:
-                logging.info(f"Phone {phone.id} succesfully wired with chat {chat.id}.")
-
-                internal_id = telethon.utils.get_peer_id(tg_chat)
-
-                if chat._internalId != internal_id:
-                    chat.internalId = internal_id
-
-                if chat.title != tg_chat.title:
-                    chat.title = tg_chat.title
-
-                if chat.date != tg_chat.date.isoformat():
-                    chat.date = tg_chat.date.isoformat()
-
-                chat_phone.isUsing = True
-                chat_phone.save()
-
-            return
+                logging.critical(f"Chat not available. Exception {ex}.")
+                
+                raise exceptions.ChatNotAvailableError(str(ex))
 
 def join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
-    with chat_phone.chat._join_lock:
-        asyncio.run(_join_chat_thread(chat_phone))
+    return asyncio.run(_join_chat_thread(chat_phone))

@@ -1,8 +1,4 @@
-import asyncio, typing, telethon, telethon.sessions
-import globalvars, entities, exceptions
-
-if typing.TYPE_CHECKING:
-    from telethon import TelegramClient
+import entities
 
 class Phone(entities.Entity):
     def __init__(self, id: 'str', number: 'str', internalId: 'int' = None, session: 'str' = None, username: 'str' = None, firstName: 'str' = None, isVerified: 'bool' = False, isBanned: 'bool' = False, code: 'str' = None, *args, **kwargs):
@@ -18,13 +14,6 @@ class Phone(entities.Entity):
         
         self.code_hash: 'str | None' = None
 
-        # self._is_authorized = False
-        # self.__is_authorized_condition = multiprocessing.Condition()
-
-    # def __del__(self):
-    #     self.authorization_thread.terminate()
-    #     self.join_chats_thread.terminate()
-
     @property
     def name(self) -> 'str':
         return "phone"
@@ -32,22 +21,6 @@ class Phone(entities.Entity):
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
-        
-    # @property
-    # def is_authorized(self) -> 'bool':
-    #     with self.__is_authorized_condition:
-    #         while not self._is_authorized:
-    #             self.__is_authorized_condition.wait()
-                
-    #         return self._is_authorized
-        
-    # @is_authorized.setter
-    # def is_authorized(self, new_value) -> 'None':
-    #     with self.__is_authorized_condition:
-    #         self._is_authorized = new_value
-            
-    #         if self._is_authorized:
-    #             self.__is_authorized_condition.notify_all()
 
     def serialize(self) -> 'dict':
         _dict = {

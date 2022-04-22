@@ -3,6 +3,8 @@ import globalvars, entities
 
 async def _phone_process(phone: 'entities.TypePhone'):
     client = telethon.TelegramClient(
+        connection_retries=-1,
+        retry_delay=5, 
         session=telethon.sessions.StringSession(phone.session), 
         api_id=globalvars.parser['api_id'], 
         api_hash=globalvars.parser['api_hash']
@@ -18,15 +20,15 @@ async def _phone_process(phone: 'entities.TypePhone'):
         
     async def send_code():
         try:
-            logging.debug(f"Try to send code for {phone.id}.")
+            logging.debug(f"Try to send code.")
             
             sent = await client.send_code_request(phone=phone.number)
             
-            logging.debug(f"Code sended for {phone.id}.")
+            logging.info(f"Code sended.")
             
             phone.code_hash = sent.phone_code_hash
         except telethon.errors.rpcerrorlist.FloodWaitError as ex:
-            logging.warning(f"Flood exception for phone {phone.id}. Sleep {ex.seconds}.")
+            logging.warning(f"Flood exception. Sleep {ex.seconds}.")
             
             await asyncio.sleep(ex.seconds)
             
@@ -36,19 +38,19 @@ async def _phone_process(phone: 'entities.TypePhone'):
         try:
             await client.connect()
         except OSError as ex:
-            logging.critical(f"Unable to connect client of {phone.id}. Exception: {ex}")
+            logging.critical(f"Unable to connect client. Exception: {ex}")
 
             return
 
     while True:
         if not await client.is_user_authorized():
             if phone.code != None and phone.code_hash != None:
-                logging.debug(f"Phone {phone.id} automatic try to sing in with code {phone.code}.")
+                logging.debug(f"Try to sing in with code {phone.code}.")
     
                 try:
                     await client.sign_in(phone.number, phone.code, phone_code_hash=phone.code_hash)
                 except telethon.errors.RPCError as ex:
-                    logging.error(f"Cannot authentificate phone {phone.id} with code {phone.code}. Exception: {ex}")
+                    logging.error(f"Cannot authentificate. Exception: {ex}")
                     
                     phone.isVerified = False
                     phone.code = None
@@ -62,7 +64,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
                 try:
                     await send_code()
                 except telethon.errors.RPCError as ex:
-                    logging.error(f"Unable to sent code for {phone.id}. Exception: {ex}")
+                    logging.error(f"Unable to sent code. Exception: {ex}")
                     
                     phone.session = None
                     phone.isBanned = True
@@ -92,9 +94,10 @@ async def _phone_process(phone: 'entities.TypePhone'):
 
     phone.save()
 
-    logging.debug(f"Phone {phone.id} actually authorized.")
+    logging.info(f"Authorized.")
 
+    return
 
-def phone_process(phone: 'entities.TypePhone'):
-    asyncio.run(_phone_process(phone))
+def phone_process(phone: 'dict'):
+    return asyncio.run(_phone_process(entities.Phone(**phone)))
     

@@ -21,18 +21,18 @@ async def _chat_info_thread(chat: 'entities.TypeChat'):
         try:
             media.save()
         except exceptions.RequestException as ex:
-            logging.error(f"Can't save chat {chat.id} media. Exception: {ex}.")
+            logging.error(f"Can't save chat media. Exception: {ex}.")
         else:
-            logging.info(f"Successfuly saved chat {chat.id} media.")
+            logging.info(f"Chat media saved.")
 
             size = next(((size.type, size.size) for size in photo.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
 
             try:
                 await media.upload(client, telethon.types.InputPhotoFileLocation(photo.id, photo.access_hash, photo.file_reference, size[0]), size[1])
             except exceptions.RequestException as ex:
-                logging.error(f"Can't upload chat {chat.id} media. Exception: {ex}.")
+                logging.error(f"Can't upload chat media. Exception: {ex}.")
             else:
-                logging.info(f"Successfuly uploaded chat {chat.id} media.")
+                logging.info(f"Chat {chat.id} media uploaded.")
 
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
@@ -54,22 +54,22 @@ async def _chat_info_thread(chat: 'entities.TypeChat'):
 
                         await handle_media(client, photo)
                 except telethon.errors.FloodWaitError as ex:
-                    logging.warning(f"Telegram chat media request of chat {chat.id} must wait {ex.seconds} seconds.")
+                    logging.warning(f"Chat media request must wait {ex.seconds} seconds.")
 
                     await asyncio.sleep(ex.seconds)
 
                     continue
                 except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    logging.critical(f"Can't get chat {chat.id} using phone {chat_phone.id}. Exception {ex}")
+                    logging.critical(f"Can't get chat using phone {chat_phone.id}. Exception {ex}")
 
                     chat.isAvailable = False
                     chat.save()
                 else:
-                    logging.info(f"Chat {chat.id} medias download success.")
+                    logging.info(f"Chat medias download success.")
                     
                 return
     else:
-        logging.error(f"Can't get chat {chat.id} medias.")
+        logging.error(f"Can't get chat medias.")
 
 def chat_info_thread(chat: 'entities.TypeChat'):
     asyncio.run(_chat_info_thread(chat))

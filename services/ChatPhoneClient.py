@@ -28,7 +28,5 @@ class ChatPhoneClient(telethon.TelegramClient):
         if exc_type != None:
             self.chat_phone.isUsing = False
             self.chat_phone.save()
-
-            self.chat_phone.chat.phones.remove(self.chat_phone)
             
         return await super().__aexit__(exc_type, exc_val, exc_tb)

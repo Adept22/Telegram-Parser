@@ -29,7 +29,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
         return chat_member_role.save()
 
     async def handle_member(client, user):
-        logging.debug(f"Chat {chat.title}. Received user '{helpers.user_title(user)}'")
+        logging.debug(f"Received user '{user.id}'")
 
         if user.is_self:
             return
@@ -43,7 +43,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
 
             return
         else:
-            logging.info(f"Member {member.id} with role saved.")
+            logging.info(f"User {user.id} with role saved. Member {member.id}.")
 
             # try:
             #     async for photo in client.iter_profile_photos(member.internalId):
@@ -100,22 +100,22 @@ async def _members_thread(chat: 'entities.TypeChat'):
 
                     continue
                 except telethon.errors.FloodWaitError as ex:
-                    logging.warning(f"Telegram members request of chat {chat.id} must wait {ex.seconds} seconds.")
+                    logging.warning(f"Members request must wait {ex.seconds} seconds.")
 
                     # await asyncio.sleep(ex.seconds)
 
                     continue
                 except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    logging.critical(f"Chat {chat.id} not available. Exception: {ex}")
+                    logging.critical(f"Chat not available. Exception: {ex}")
                     
                     chat.isAvailable = False
                     chat.save()
                 else:
-                    logging.info(f"Chat \'{chat.id}\' participants download success.")
+                    logging.info(f"Participants download success.")
                     
                 return
     else:
-        logging.error(f"Chat {chat.id} participants download failed.")
+        logging.error(f"Participants download failed.")
 
 def members_thread(chat: 'entities.TypeChat'):
     asyncio.run(_members_thread(chat))

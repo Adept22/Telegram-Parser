@@ -42,7 +42,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                     if chat_full.participants.participants else []
                 return participants[0] if len(participants) > 0 else None
         except telethon.errors.RPCError as ex:
-            logging.warning(f"Can't get participant data for {input_sender.user_id} with chat {chat.internalId}. Exception: {ex}.")
+            logging.warning(f"Can't get participant data for {input_sender.user_id}. Exception: {ex}.")
 
         return None
     
@@ -116,7 +116,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        logging.info(f"Recieving messages from chat {chat.id}.")
+        logging.info(f"Recieving messages.")
 
         async with services.ChatPhoneClient(chat_phone) as client:
             async def handle_event(event):
@@ -141,26 +141,26 @@ async def _messages_thread(chat: 'entities.TypeChat'):
 
                         await handle_message(chat_phone, client, tg_message)
                     else:
-                        logging.info(f"Chat {chat.id} messages download success.")
+                        logging.info(f"Messages download success.")
 
                         return
                 except telethon.errors.common.MultiError as ex:
                     await asyncio.sleep(30)
                 except telethon.errors.FloodWaitError as ex:
-                    logging.warning(f"Telegram messages request of chat {chat.id} must wait {ex.seconds} seconds.")
+                    logging.warning(f"Messages request must wait {ex.seconds} seconds.")
 
                     # await asyncio.sleep(ex.seconds)
 
                     continue
                 except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    logging.critical(f"Chat {chat.id} not available. Exception {ex}")
+                    logging.critical(f"Chat not available. Exception {ex}")
 
                     chat.isAvailable = False
                     chat.save()
 
                     return
     else:
-        logging.error(f"Chat {chat.id} messages download failed.")
+        logging.error(f"Messages download failed.")
 
 def messages_thread(chat: 'entities.TypeChat'):
     asyncio.run(_messages_thread(chat))
