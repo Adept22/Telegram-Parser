@@ -1,19 +1,23 @@
-import multiprocessing
-import os, sys, asyncio, logging, colorlog
+import os, sys, asyncio, logging, colorlog, concurrent.futures, typing
 from logging.handlers import RotatingFileHandler
 
 import globalvars, processes, helpers
 
-processes_manager = {}
+if typing.TYPE_CHECKING:
+    from concurrent.futures import ProcessPoolExecutor, Future
 
-def run(type, process, pool, filter = {}) -> None:
+fs: 'list[str]' = []
+
+def run(type, process, pool: 'ProcessPoolExecutor', filter = {}) -> None:
     entities = helpers.get_all(type, filter)
 
     logging.debug(f"Received {len(entities)} of {type}.")
     
     for entity in entities:
-        if entity["id"] not in processes_manager:
-            processes_manager[entity["id"]] = pool.apply_async(process, (entity, ))
+        if entity["id"] not in fs:
+            pool.submit(process, entity)
+
+            fs.append(entity["id"])
 
 if __name__ == '__main__':
     globalvars.init()
@@ -39,11 +43,21 @@ if __name__ == '__main__':
     logging.getLogger('requests').setLevel(logging.CRITICAL)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
-    phones_pool = multiprocessing.Pool()
-    chats_pool = multiprocessing.Pool(100)
+    phones_pool = concurrent.futures.ProcessPoolExecutor(100)
+    chats_pool = concurrent.futures.ProcessPoolExecutor(20)
+
+    run(
+        'telegram/phone', 
+        processes.phone_process, 
+        phones_pool, 
+        {"parser": {"id": os.environ['PARSER_ID']}}
+    )
+    run(
+        'telegram/chat', 
+        processes.chat_process, 
+        chats_pool, 
+        {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True}
+    )
 
     while True:
-        run('telegram/phone', processes.phone_process, phones_pool, {"parser": {"id": os.environ['PARSER_ID']}})
-        run('telegram/chat', processes.chat_process, chats_pool, {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True})
-        
         asyncio.run(asyncio.sleep(60))

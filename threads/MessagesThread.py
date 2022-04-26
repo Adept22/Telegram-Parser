@@ -116,8 +116,6 @@ async def _messages_thread(chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        logging.info(f"Recieving messages.")
-
         async with services.ChatPhoneClient(chat_phone) as client:
             async def handle_event(event):
                 if not isinstance(tg_message, telethon.types.Message):

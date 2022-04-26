@@ -1,4 +1,4 @@
-import multiprocessing, setproctitle, typing, asyncio, logging, telethon, telethon.sessions
+import asyncio, logging, telethon, telethon.sessions
 import globalvars, entities
 
 async def _phone_process(phone: 'entities.TypePhone'):
@@ -78,6 +78,8 @@ async def _phone_process(phone: 'entities.TypePhone'):
             else:
                 await asyncio.sleep(10)
 
+                phone.update()
+
                 continue
         else:
             break
@@ -95,8 +97,6 @@ async def _phone_process(phone: 'entities.TypePhone'):
     phone.save()
 
     logging.info(f"Authorized.")
-
-    return
 
 def phone_process(phone: 'dict'):
     return asyncio.run(_phone_process(entities.Phone(**phone)))
