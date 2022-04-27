@@ -27,6 +27,8 @@ async def _chat_process(chat: 'entities.TypeChat'):
                 chat.save()
 
                 join_executor.shutdown(False)
+
+                return
             except Exception as ex:
                 logging.exception(ex)
             else:
@@ -67,8 +69,6 @@ async def _chat_process(chat: 'entities.TypeChat'):
         """Appending using phones"""
         if chat_phones[id].isUsing:
             chat.phones.append(chat_phones[id])
-        else:
-            del chat_phones[id]
 
     executor = concurrent.futures.ThreadPoolExecutor(thread_name_prefix=f"Chat-{chat.id}")
     # executor.submit(threads.chat_info_thread, chat)
@@ -86,5 +86,7 @@ async def _chat_process(chat: 'entities.TypeChat'):
             chat.update()
 
 def chat_process(chat: 'dict'):
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    
     asyncio.run(_chat_process(entities.Chat(**chat)))
     

@@ -59,7 +59,7 @@ class Chat(entities.Entity):
             "id": self.id,
             "link": self.link,
             "isAvailable": self.isAvailable,
-            "internalId": self.internalId,
+            "internalId": self._internalId,
             "title": self.title,
             "description": self.description,
             "date": self.date

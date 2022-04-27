@@ -1,5 +1,6 @@
 import asyncio, typing, logging, telethon
-import entities, exceptions, helpers
+import threading
+import entities, exceptions, threads
 import services
 
 if typing.TYPE_CHECKING:
@@ -28,9 +29,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
 
         return chat_member_role.save()
 
-    async def handle_member(client, user):
-        logging.debug(f"Received user '{user.id}'")
-
+    async def handle_member(chat_phone, client, user):
         if user.is_self:
             return
 
@@ -45,38 +44,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
         else:
             logging.info(f"User {user.id} with role saved. Member {member.id}.")
 
-            # try:
-            #     async for photo in client.iter_profile_photos(member.internalId):
-            #         photo: 'telethon.types.TypePhoto'
-
-            #         media = entities.MemberMedia(internalId=photo.id, member=member, date=photo.date.isoformat())
-
-            #         try:
-            #             media.save()
-            #         except exceptions.RequestException as ex:
-            #             logging.error(f"Can't save member {member.id} media. Exception: {ex}.")
-            #         else:
-            #             logging.info(f"Successfuly saved member {member.id} media.")
-
-            #             size = next(((size.type, size.size) for size in photo.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
-
-            #             try:
-            #                 await media.upload(
-            #                     client, 
-            #                     telethon.types.InputPhotoFileLocation(
-            #                         id=photo.id,
-            #                         access_hash=photo.access_hash,
-            #                         file_reference=photo.file_reference,
-            #                         thumb_size=size[0]
-            #                     ), 
-            #                     size[1]
-            #                 )
-            #             except exceptions.RequestException as ex:
-            #                 logging.error(f"Can\'t upload member {member.id} media. Exception: {ex}.")
-            #             else:
-            #                 logging.info(f"Sucessfuly uploaded member {member.id} media.")
-            # except telethon.errors.RPCError as ex:
-            #     logging.error(f"Can't get member {member.id} media.")
+            threading.Thread(target=threads.member_media_thread, args=(chat_phone, member, user)).start()
 
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
@@ -85,20 +53,27 @@ async def _members_thread(chat: 'entities.TypeChat'):
             async def handle_event(event: 'ChatAction.Event'):
                 if event.user_added or event.user_joined:
                     async for user in event.get_users():
-                        await handle_member(client, user)
+                        await handle_member(chat_phone, client, user)
 
             client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
-            
+
             while True:
                 try:
                     async for user in client.iter_participants(entity=chat.internalId, aggressive=True):
                         user: 'telethon.types.TypeUser'
 
-                        await handle_member(client, user)
+                        await handle_member(chat_phone, client, user)
                 except telethon.errors.common.MultiError as ex:
                     await asyncio.sleep(30)
 
                     continue
+                except (
+                    telethon.errors.ChatAdminRequiredError,
+                    telethon.errors.ChannelPrivateError,
+                ) as ex:
+                    logging.critical(f"Can't download participants. Exception: {ex}")
+
+                    return
                 except telethon.errors.FloodWaitError as ex:
                     logging.warning(f"Members request must wait {ex.seconds} seconds.")
 

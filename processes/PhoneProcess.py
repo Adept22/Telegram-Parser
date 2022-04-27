@@ -99,5 +99,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
     logging.info(f"Authorized.")
 
 def phone_process(phone: 'dict'):
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    
     return asyncio.run(_phone_process(entities.Phone(**phone)))
     

@@ -6,8 +6,8 @@ if typing.TYPE_CHECKING:
     from telethon import TelegramClient
 
 async def _messages_thread(chat: 'entities.TypeChat'):
-    async def get_member(client: 'TelegramClient', user: 'telethon.types.TypePeer') -> 'entities.TypeMember':
-        member = entities.Member(internalId=user.user_id)
+    async def get_member(client: 'TelegramClient', user: 'telethon.types.TypeUser') -> 'entities.TypeMember':
+        member = entities.Member(internalId=user.id, username=user.username, firstName=user.first_name, lastName=user.last_name, phone=user.phone)
 
         await member.expand(client)
 
@@ -27,22 +27,20 @@ async def _messages_thread(chat: 'entities.TypeChat'):
 
         return chat_member_role.save()
 
-    async def get_message_participant(client: 'TelegramClient', input_chat, input_sender: 'telethon.types.TypeInputPeer'):
-        peer = telethon.utils.get_peer(chat.internalId or 0)
-
+    async def get_message_participant(client: 'TelegramClient', peer_id, user):
         try:
-            if isinstance(peer, telethon.types.PeerChannel):
+            if isinstance(peer_id, telethon.types.PeerChannel):
                 participant: 'telethon.types.TypeChannelParticipant' = await client(
-                    telethon.tl.functions.channels.GetParticipantRequest(input_chat, input_sender)
+                    telethon.tl.functions.channels.GetParticipantRequest(peer_id, user)
                 )
                 return participant.participant
-            elif isinstance(peer, telethon.types.PeerChat):
-                chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(chat.internalId))
-                participants = [p.participant for p in chat_full.participants if p.user_id == input_sender.user_id] \
+            elif isinstance(peer_id, telethon.types.PeerChat):
+                chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(peer_id))
+                participants = [p.participant for p in chat_full.participants if p.user_id == user.id] \
                     if chat_full.participants.participants else []
                 return participants[0] if len(participants) > 0 else None
         except telethon.errors.RPCError as ex:
-            logging.warning(f"Can't get participant data for {input_sender.user_id}. Exception: {ex}.")
+            logging.warning(f"Can't get participant data for {user.id}. Exception: {ex}.")
 
         return None
     
@@ -76,10 +74,25 @@ async def _messages_thread(chat: 'entities.TypeChat'):
             fwd_from_id, fwd_from_name = get_fwd(tg_message.fwd_from)
 
             if isinstance(tg_message.from_id, telethon.types.PeerUser):
-                member = await get_member(client, tg_message.from_id)
-                participant = await get_message_participant(client, tg_message.input_chat, tg_message.input_sender)
-                chat_member = await get_chat_member(participant, member)
-                chat_member_role = await get_chat_member_role(participant, chat_member)
+                user = await client.get_entity(tg_message.from_id)
+
+                try:
+                    member = await get_member(client, user)
+                except exceptions.RequestException as ex:
+                    logging.error(f"Can't save user '{user.id}'. Exception {ex}")
+                else:
+                    logging.info(f"Message {user.id} member saved.")
+
+                    threading.Thread(target=threads.member_media_thread, args=(chat_phone, member, user)).start()
+
+                try:
+                    participant = await get_message_participant(client, tg_message.peer_id, user)
+                    chat_member = await get_chat_member(participant, member)
+                    chat_member_role = await get_chat_member_role(participant, chat_member)
+                except exceptions.RequestException as ex:
+                    logging.error(f"Can't save user '{user.id}' chat-member or chat-member-role. Exception {ex}")
+                else:
+                    logging.info(f"User {user.id} chat-member and chat-member-role saved.")
             else:
                 chat_member = None
 
@@ -88,6 +101,15 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                 reply_to.save()
             else:
                 reply_to = None
+
+            if tg_message.replies != None:
+                try:
+                    replies: 'telethon.types.messages.Messages' = await client(telethon.tl.functions.messages.GetRepliesRequest(tg_message.peer_id, tg_message.id, 0, None, 0, 0, 0, 0, 0))
+
+                    for reply in replies.messages:
+                        await handle_message(chat_phone, client, reply)
+                except Exception as ex:
+                    logging.exception(ex)
 
             message = entities.Message(
                 internalId=tg_message.id, 
@@ -108,8 +130,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
             logging.info(f"Message {message.id} saved.")
             
             # if tg_message.media != None:
-            #     thread = threading.Thread(target=threads.message_media_thread, args=(chat_phone, message, tg_message))
-            #     thread.start()
+            #     thread = threading.Thread(target=threads.message_media_thread, args=(chat_phone, message, tg_message)).start()
 
             # return message
 
@@ -123,7 +144,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
 
                 handle_links(event.message.message)
                 
-                await handle_message(chat_phone.phone, client, event.message)
+                await handle_message(chat_phone, client, event.message)
 
             client.add_event_handler(handle_event, telethon.events.NewMessage(chats=chat.internalId, incoming=True))
 
@@ -161,4 +182,6 @@ async def _messages_thread(chat: 'entities.TypeChat'):
         logging.error(f"Messages download failed.")
 
 def messages_thread(chat: 'entities.TypeChat'):
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
     asyncio.run(_messages_thread(chat))

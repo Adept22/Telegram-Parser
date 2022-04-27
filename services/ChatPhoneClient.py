@@ -10,7 +10,7 @@ class ChatPhoneClient(telethon.TelegramClient):
             **kwargs, 
             connection_retries=-1,
             retry_delay=5, 
-            session=telethon.sessions.StringSession(self.chat_phone.phone.session), 
+            session=telethon.sessions.StringSession(chat_phone.phone.session), 
             api_id=globalvars.parser['api_id'], 
             api_hash=globalvars.parser['api_hash']
         )
@@ -23,6 +23,9 @@ class ChatPhoneClient(telethon.TelegramClient):
             return self
         else:
             raise exceptions.ClientNotAvailableError(f'Phone {self.chat_phone.id} not authorized')
+            
+    async def __aenter__(self):
+        return await self.start()
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if exc_type != None:

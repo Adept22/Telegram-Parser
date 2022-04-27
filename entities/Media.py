@@ -23,9 +23,15 @@ class Media(ABC):
         self, 
         client: 'TelegramClient', 
         tg_media, 
-        file_size: 'int'
+        file_size: 'int',
+        extension: 'str'
     ) -> 'None':
-        if not file_size:
+        if not file_size or self.id == None:
+            return
+
+        media = ApiService().get(f'telegram/{self.name}', {"id": self.id})
+
+        if media.get("path") != None:
             return
 
         chunk_number = 0
@@ -40,7 +46,7 @@ class Media(ABC):
             ApiService()._chunk(
                 f'telegram/{self.name}', 
                 self.serialize(), 
-                str(tg_media.id), 
+                str(tg_media.id) + extension, 
                 chunk, 
                 chunk_number, 
                 chunk_size, 

@@ -1,4 +1,5 @@
 import asyncio, logging, telethon
+from distutils import extension
 import entities, exceptions
 import services
 
@@ -10,6 +11,7 @@ async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: '
             entity = tg_message.photo
             _size = next(((size.type, size.size) for size in entity.sizes if isinstance(size, telethon.types.PhotoSize)), ('', None))
             size = _size[1]
+            extension = telethon.utils.get_extension(entity)
             date = entity.date.isoformat()
             entity = telethon.types.InputPhotoFileLocation(
                 id=entity.id,
@@ -20,6 +22,7 @@ async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: '
         elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
             entity = tg_message.document
             size = entity.size
+            extension = telethon.utils.get_extension(entity)
             date = entity.date.isoformat()
             entity = telethon.types.InputDocumentFileLocation(
                 id=entity.id,
@@ -45,14 +48,16 @@ async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: '
         except exceptions.RequestException as ex:
             logging.error(f"Can\'t save message {message.id} media. Exception: {ex}.")
         else:
-            logging.info(f"Sucessfuly saved message {message.id} media.")
+            logging.info(f"Successfully saved message {message.id} media.")
 
             try:
-                await media.upload(client, entity, size)
+                await media.upload(client, entity, size, extension)
             except exceptions.RequestException as ex:
                 logging.error(f"Can\'t upload message {message.id} media. Exception: {ex}.")
             else:
-                logging.info(f"Sucessfuly uploaded message {message.id} media.")
+                logging.info(f"Successfully uploaded message {message.id} media.")
 
 def message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    
     asyncio.run(_message_media_thread(chat_phone, message, tg_message))

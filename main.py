@@ -44,20 +44,20 @@ if __name__ == '__main__':
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
     phones_pool = concurrent.futures.ProcessPoolExecutor(100)
-    chats_pool = concurrent.futures.ProcessPoolExecutor(20)
-
-    run(
-        'telegram/phone', 
-        processes.phone_process, 
-        phones_pool, 
-        {"parser": {"id": os.environ['PARSER_ID']}}
-    )
-    run(
-        'telegram/chat', 
-        processes.chat_process, 
-        chats_pool, 
-        {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True}
-    )
+    chats_pool = concurrent.futures.ProcessPoolExecutor(200)
 
     while True:
+        run(
+            'telegram/phone', 
+            processes.phone_process, 
+            phones_pool, 
+            {"parser": {"id": os.environ['PARSER_ID']}}
+        )
+        run(
+            'telegram/chat', 
+            processes.chat_process, 
+            chats_pool, 
+            {"parser": {"id": os.environ['PARSER_ID']}, "isAvailable": True}
+        )
+
         asyncio.run(asyncio.sleep(60))
