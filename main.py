@@ -51,7 +51,7 @@ if __name__ == '__main__':
             'telegram/phone', 
             processes.phone_process, 
             phones_pool, 
-            {"parser": {"id": os.environ['PARSER_ID']}}
+            {"parser": {"id": os.environ['PARSER_ID']}, "isBanned": False}
         )
         run(
             'telegram/chat', 

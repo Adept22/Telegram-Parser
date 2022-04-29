@@ -4,8 +4,6 @@ import entities, exceptions
 import services
 
 async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
-    logging.debug(f"Try to save message '{message.id}' media.")
-
     async with services.ChatPhoneClient(chat_phone) as client:
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
             entity = tg_message.photo

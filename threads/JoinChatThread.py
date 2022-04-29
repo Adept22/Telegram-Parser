@@ -10,18 +10,12 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
         while True:
             try:
                 if chat.hash is None:
-                    updates = await client(telethon.functions.channels.JoinChannelRequest(chat.username))
-
-                    return updates.chats[0]
+                    await client(telethon.functions.channels.JoinChannelRequest(chat.username))
                 else:
                     try:
-                        updates = await client(telethon.functions.messages.ImportChatInviteRequest(chat.hash))
-
-                        return updates.chats[0]
+                        await client(telethon.functions.messages.ImportChatInviteRequest(chat.hash))
                     except telethon.errors.UserAlreadyParticipantError as ex:
-                        invite = await client(telethon.functions.messages.CheckChatInviteRequest(chat.hash))
-
-                        return invite.chat if invite.chat else invite.channel
+                        await client(telethon.functions.messages.CheckChatInviteRequest(chat.hash))
             except telethon.errors.FloodWaitError as ex:
                 logging.warning(f"Chat wiring for phone {phone.id} must wait {ex.seconds}.")
 
@@ -39,6 +33,8 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
                 logging.critical(f"Chat not available. Exception {ex}.")
                 
                 raise exceptions.ChatNotAvailableError(str(ex))
+            else:
+                return True
 
 def join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
     return asyncio.run(_join_chat_thread(chat_phone))

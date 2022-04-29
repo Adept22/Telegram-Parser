@@ -56,8 +56,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
                     phone.code = None
                     phone.code_hash = None
                     phone.save()
-
-                    continue
+                    phone.code = None
                 else:
                     break
             elif phone.code_hash == None:
@@ -71,7 +70,6 @@ async def _phone_process(phone: 'entities.TypePhone'):
                     phone.isVerified = False
                     phone.code = None
                     phone.code_hash = None
-                    # phone.is_authorized = False
                     phone.save()
                     
                     return
@@ -79,8 +77,6 @@ async def _phone_process(phone: 'entities.TypePhone'):
                 await asyncio.sleep(10)
 
                 phone.update()
-
-                continue
         else:
             break
     

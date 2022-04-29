@@ -23,6 +23,12 @@ class Entity(ABC):
     def deserialize(self, _dict: 'dict') -> 'entities.TypeEntity':
         raise NotImplementedError
 
+    def update(self) -> 'entities.TypeEntity':
+        if not self.id:
+            raise ValueError("Entity hasn't id")
+
+        self.deserialize(ApiService().set(f'telegram/{self.name}', { "id": self.id }))
+
     def save(self) -> 'entities.TypeEntity':
         try:
             self.deserialize(ApiService().set(f'telegram/{self.name}', self.serialize()))

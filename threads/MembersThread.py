@@ -1,7 +1,5 @@
-import asyncio, typing, logging, telethon
-import threading
-import entities, exceptions, threads
-import services
+import asyncio, typing, logging, telethon, threading
+import entities, exceptions, threads, services
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -51,9 +49,10 @@ async def _members_thread(chat: 'entities.TypeChat'):
 
         async with services.ChatPhoneClient(chat_phone) as client:
             async def handle_event(event: 'ChatAction.Event'):
-                if event.user_added or event.user_joined:
+                if event.user_added or event.user_joined or event.user_left or event.user_kicked:
                     async for user in event.get_users():
                         await handle_member(chat_phone, client, user)
+
 
             client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
 
@@ -72,12 +71,10 @@ async def _members_thread(chat: 'entities.TypeChat'):
                     telethon.errors.ChannelPrivateError,
                 ) as ex:
                     logging.critical(f"Can't download participants. Exception: {ex}")
-
-                    return
                 except telethon.errors.FloodWaitError as ex:
                     logging.warning(f"Members request must wait {ex.seconds} seconds.")
 
-                    # await asyncio.sleep(ex.seconds)
+                    await asyncio.sleep(ex.seconds)
 
                     continue
                 except (KeyError, ValueError, telethon.errors.RPCError) as ex:
