@@ -1,5 +1,5 @@
-import asyncio, typing, logging, telethon, threading
-import entities, exceptions, threads, services
+import asyncio, typing, logging, telethon, multiprocessing
+import entities, exceptions, services, processes
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -42,7 +42,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
         else:
             logging.info(f"User {user.id} with role saved. Member {member.id}.")
 
-            threading.Thread(target=threads.member_media_thread, args=(chat_phone, member, user)).start()
+            multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, user)).start()
 
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'

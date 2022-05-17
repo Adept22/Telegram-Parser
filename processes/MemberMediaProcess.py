@@ -1,7 +1,7 @@
-import typing, asyncio, logging, telethon
+import asyncio, logging, telethon
 import entities, exceptions, services
 
-async def _member_media_thread(chat_phone: 'entities.TypeChatPhone', member: 'entities.TypeMember', user: 'telethon.types.TypeUser'):
+async def _member_media_process(chat_phone: 'entities.TypeChatPhone', member: 'entities.TypeMember', user: 'telethon.types.TypeUser'):
     async with services.ChatPhoneClient(chat_phone) as client:
         try:
             async for photo in client.iter_profile_photos(user):
@@ -34,7 +34,7 @@ async def _member_media_thread(chat_phone: 'entities.TypeChatPhone', member: 'en
         except (TypeError, KeyError, ValueError, telethon.errors.RPCError) as ex:
             logging.error(f"Can't get member {member.id} media.")
 
-def member_media_thread(chat_phone, member: 'entities.TypeMember', user: 'telethon.types.TypeUser'):
+def member_media_process(chat_phone, member: 'entities.TypeMember', user: 'telethon.types.TypeUser'):
     asyncio.set_event_loop(asyncio.new_event_loop())
 
-    asyncio.run(_member_media_thread(chat_phone, member, user))
+    asyncio.run(_member_media_process(chat_phone, member, user))

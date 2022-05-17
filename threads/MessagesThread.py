@@ -1,5 +1,5 @@
-import re, threading, typing, asyncio, logging, telethon
-import entities, threads, exceptions, services
+import multiprocessing, re, typing, asyncio, logging, telethon
+import entities, exceptions, services, processes
 
 if typing.TYPE_CHECKING:
     from telethon import TelegramClient
@@ -72,7 +72,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                     elif isinstance(tg_entity, telethon.types.User):
                         member = await set_member(client, tg_entity)
 
-                        threading.Thread(target=threads.member_media_thread, args=(chat_phone, member, tg_entity)).start()
+                        multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, tg_entity)).start()
                 except Exception as ex:
                     logging.info(f"Can't create new entity from link {link}. Exception {ex}")
                 else:
@@ -92,16 +92,18 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                 else:
                     logging.info(f"Message {user.id} member saved.")
 
-                    threading.Thread(target=threads.member_media_thread, args=(chat_phone, member, user)).start()
+                    multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, user)).start()
 
-                try:
-                    participant = await get_message_participant(client, tg_message.peer_id, user)
-                    chat_member = await set_chat_member(participant, member)
-                    chat_member_role = await set_chat_member_role(participant, chat_member)
-                except exceptions.RequestException as ex:
-                    logging.error(f"Can't save user '{user.id}' chat-member or chat-member-role. Exception {ex}")
-                else:
-                    logging.info(f"User {user.id} chat-member and chat-member-role saved.")
+                    try:
+                        participant = await get_message_participant(client, tg_message.peer_id, user)
+                        chat_member = await set_chat_member(participant, member)
+                        chat_member_role = await set_chat_member_role(participant, chat_member)
+                    except exceptions.RequestException as ex:
+                        logging.error(f"Can't save user '{user.id}' chat-member or chat-member-role. Exception {ex}")
+                        
+                        chat_member = None
+                    else:
+                        logging.info(f"User {user.id} chat-member and chat-member-role saved.")
             else:
                 chat_member = None
 
@@ -139,7 +141,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
             logging.info(f"Message {message.id} saved.")
             
             # if tg_message.media != None:
-            #     threading.Thread(target=threads.message_media_thread, args=(chat_phone, message, tg_message)).start()
+            #     multiprocessing.Process(target=processes.message_media_process, args=(chat_phone, message, tg_message)).start()
 
     messages = services.ApiService().get('telegram/message', { "chat": { "id": chat.id }, "_limit": 1, "_order": "ASC", "_sort": "internalId" })
 

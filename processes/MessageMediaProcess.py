@@ -1,9 +1,7 @@
 import asyncio, logging, telethon
-from distutils import extension
-import entities, exceptions
-import services
+import entities, exceptions, services
 
-async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+async def _message_media_process(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
     async with services.ChatPhoneClient(chat_phone) as client:
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
             entity = tg_message.photo
@@ -55,7 +53,7 @@ async def _message_media_thread(chat_phone: 'entities.TypeChatPhone', message: '
             else:
                 logging.info(f"Successfully uploaded message {message.id} media.")
 
-def message_media_thread(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
+def message_media_process(chat_phone: 'entities.TypeChatPhone', message: 'entities.TypeMessage', tg_message: 'telethon.types.TypeMessage'):
     asyncio.set_event_loop(asyncio.new_event_loop())
     
-    asyncio.run(_message_media_thread(chat_phone, message, tg_message))
+    asyncio.run(_message_media_process(chat_phone, message, tg_message))

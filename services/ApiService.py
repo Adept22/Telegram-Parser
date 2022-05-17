@@ -121,11 +121,6 @@ class ApiService():
             r.raise_for_status()
         except requests.exceptions.RequestException as ex:
             r: 'requests.Response | None' = ex.response
-
-            if r == None:
-                return self.send(method, url, body, params, files)
-            elif r.status_code == 502 or r.status_code == 504:
-                return self.send(method, url, body, params, files)
             
             try:
                 content = r.json()["message"]
@@ -140,9 +135,4 @@ class ApiService():
         if r.status_code == 204:
             return None
 
-        try:
-            content = r.json()
-        except json.decoder.JSONDecodeError as ex:
-            return self.send(method, url, body, params, files)
-
-        return content
+        return r.json()
