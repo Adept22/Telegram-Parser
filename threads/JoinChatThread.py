@@ -9,6 +9,11 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
     async with services.ChatPhoneClient(chat_phone) as client:
         while True:
             try:
+                dialogs = await client.get_dialogs(limit=0)
+
+                if dialogs.total >= 500:
+                    return False
+
                 if chat.hash is None:
                     await client(telethon.functions.channels.JoinChannelRequest(chat.username))
                 else:
@@ -24,7 +29,8 @@ async def _join_chat_thread(chat_phone: 'entities.TypeChatPhone'):
                 continue
             except(
                 telethon.errors.ChannelsTooMuchError, 
-                telethon.errors.SessionPasswordNeededError
+                telethon.errors.SessionPasswordNeededError,
+                telethon.errors.UserDeactivatedBanError
             ) as ex:
                 logging.error(f"Chat not available for phone {phone.id}. Exception {ex}")
 

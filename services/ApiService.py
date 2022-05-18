@@ -103,11 +103,11 @@ class ApiService():
         self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/chunk', params=params, files=files)
 
     def send(self, method: 'str', url: 'str', body: 'dict' = None, params: 'dict' = None, files: 'dict' = None) -> 'dict | list[dict] | None':
-        session = requests.Session()
-        retry = Retry(connect=5, backoff_factor=1)
-        adapter = HTTPAdapter(max_retries=retry)
-        session.mount('http://', adapter)
-        session.mount('https://', adapter)
+        # session = requests.Session()
+        # retry = Retry(connect=5, backoff_factor=1)
+        # adapter = HTTPAdapter(max_retries=retry)
+        # session.mount('http://', adapter)
+        # session.mount('https://', adapter)
 
         r = requests.request(
             method, 
@@ -115,7 +115,8 @@ class ApiService():
             headers={'Accept': 'application/json'}, 
             json=body, 
             params=params, 
-            files=files 
+            files=files, 
+            verify=False
         )
         try:
             r.raise_for_status()
@@ -123,9 +124,11 @@ class ApiService():
             r: 'requests.Response | None' = ex.response
             
             try:
-                content = r.json()["message"]
+                _json = r.json()
             except json.decoder.JSONDecodeError as ex:
-                content = None
+                content = r.text
+            else:
+                content = _json["message"]
                 
             if r.status_code == 409:
                 raise exceptions.UniqueConstraintViolationError(content)

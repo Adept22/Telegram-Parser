@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 import globalvars, processes, helpers
 
 if typing.TYPE_CHECKING:
-    from concurrent.futures import ProcessPoolExecutor, Future
+    from concurrent.futures import ProcessPoolExecutor
 
 fs: 'list[str]' = []
 
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
     phones_pool = concurrent.futures.ProcessPoolExecutor(100)
-    chats_pool = concurrent.futures.ProcessPoolExecutor(200)
+    chats_pool = concurrent.futures.ProcessPoolExecutor(50)
 
     while True:
         run(

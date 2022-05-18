@@ -81,6 +81,8 @@ async def _messages_thread(chat: 'entities.TypeChat'):
     async def handle_message(chat_phone: 'entities.TypePhone', client: 'TelegramClient', tg_message: 'telethon.types.TypeMessage'):
         try:
             fwd_from_id, fwd_from_name = get_fwd(tg_message.fwd_from)
+                    
+            chat_member = None
 
             if isinstance(tg_message.from_id, telethon.types.PeerUser):
                 user = await client.get_entity(tg_message.from_id)
@@ -100,12 +102,8 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                         chat_member_role = await set_chat_member_role(participant, chat_member)
                     except exceptions.RequestException as ex:
                         logging.error(f"Can't save user '{user.id}' chat-member or chat-member-role. Exception {ex}")
-                        
-                        chat_member = None
                     else:
                         logging.info(f"User {user.id} chat-member and chat-member-role saved.")
-            else:
-                chat_member = None
 
             if tg_message.reply_to != None:
                 reply_to = entities.Message(internalId=tg_message.reply_to.reply_to_msg_id, chat=chat)
