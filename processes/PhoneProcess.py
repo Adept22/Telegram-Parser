@@ -9,27 +9,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
         api_id=globalvars.parser['api_id'], 
         api_hash=globalvars.parser['api_hash']
     )
-        
-    async def get_internal_id() -> 'int | None':
-        try:
-            return getattr(await client.get_me(), "id")
-        except:
-            pass
-        
-        return None
-        
-    async def send_code():
-        try:
-            sent = await client.send_code_request(phone=phone.number)
-            
-            phone.code_hash = sent.phone_code_hash
-        except telethon.errors.rpcerrorlist.FloodWaitError as ex:
-            logging.warning(f"Flood exception. Sleep {ex.seconds}.")
-            
-            await asyncio.sleep(ex.seconds)
-            
-            await send_code()
-
+    
     if not client.is_connected():
         try:
             await client.connect()
@@ -70,7 +50,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
                     phone.code = None
                     phone.code_hash = None
                             
-                    internal_id = await get_internal_id()
+                    internal_id = getattr(await client.get_me(), "id")
                     
                     if internal_id != None and phone.internalId != internal_id:
                         phone.internalId = internal_id
@@ -80,11 +60,17 @@ async def _phone_process(phone: 'entities.TypePhone'):
                     break
                 elif phone.code_hash == None:
                     try:
-                        await send_code()
-                    except telethon.errors.RPCError as ex:
-                        phone.session = None
+                        sent = await client.send_code_request(phone=phone.number, force_sms=True)
+                        
+                        phone.code_hash = sent.phone_code_hash
 
-                        raise ex
+                        logging.info(f"Code sended.")
+                    except telethon.errors.rpcerrorlist.FloodWaitError as ex:
+                        logging.warning(f"Flood exception. Sleep {ex.seconds}.")
+                        
+                        await asyncio.sleep(ex.seconds)
+
+                        continue
                 else:
                     await asyncio.sleep(10)
 
@@ -92,6 +78,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
             except telethon.errors.RPCError as ex:
                 logging.error(f"Cannot authentificate. Exception: {ex}")
                 
+                phone.session = None
                 phone.isBanned = True
                 phone.isVerified = False
                 phone.code = None
