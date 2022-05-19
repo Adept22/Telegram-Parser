@@ -103,21 +103,25 @@ class ApiService():
         self.send("POST", os.environ['API_URL'] + '/' + type + '/' + body['id'] + '/chunk', params=params, files=files)
 
     def send(self, method: 'str', url: 'str', body: 'dict' = None, params: 'dict' = None, files: 'dict' = None) -> 'dict | list[dict] | None':
-        # session = requests.Session()
-        # retry = Retry(connect=5, backoff_factor=1)
-        # adapter = HTTPAdapter(max_retries=retry)
-        # session.mount('http://', adapter)
-        # session.mount('https://', adapter)
+        session = requests.Session()
+        retry = Retry(connect=5, backoff_factor=1)
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        
+        try:
+            r = requests.request(
+                method, 
+                url, 
+                headers={'Accept': 'application/json'}, 
+                json=body, 
+                params=params, 
+                files=files, 
+                verify=False
+            )
+        except requests.exceptions.ConnectionError as ex:
+            raise exceptions.RequestException(500, str(ex)) 
 
-        r = requests.request(
-            method, 
-            url, 
-            headers={'Accept': 'application/json'}, 
-            json=body, 
-            params=params, 
-            files=files, 
-            verify=False
-        )
         try:
             r.raise_for_status()
         except requests.exceptions.RequestException as ex:

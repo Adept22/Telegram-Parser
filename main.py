@@ -39,8 +39,8 @@ if __name__ == '__main__':
     logging.basicConfig(datefmt=datefmt, format=format, handlers=[sh], level=logging.DEBUG)
 
     logging.getLogger('asyncio').setLevel(logging.CRITICAL)
-    logging.getLogger('telethon').setLevel(logging.CRITICAL)
-    logging.getLogger('requests').setLevel(logging.CRITICAL)
+    logging.getLogger('telethon').setLevel(logging.INFO)
+    logging.getLogger('requests').setLevel(logging.INFO)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
     phones_pool = concurrent.futures.ProcessPoolExecutor(100)

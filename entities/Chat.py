@@ -7,7 +7,7 @@ class Chat(entities.Entity):
         self,  
         id: 'str', 
         link: 'str', 
-        isAvailable: 'bool', 
+        isAvailable: 'bool' = False, 
         internalId: 'int' = None, 
         title: 'str' = None, 
         description: 'str' = None, 
@@ -55,7 +55,7 @@ class Chat(entities.Entity):
                     self.__iternaId_condition.notify_all()
 
     def serialize(self) -> 'dict':
-        _dict =  {
+        return {
             "id": self.id,
             "link": self.link,
             "isAvailable": self.isAvailable,
@@ -64,8 +64,6 @@ class Chat(entities.Entity):
             "description": self.description,
             "date": self.date
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, _dict: 'dict') -> 'Chat':
         self.id = _dict['id']

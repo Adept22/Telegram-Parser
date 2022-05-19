@@ -148,47 +148,62 @@ async def _messages_thread(chat: 'entities.TypeChat'):
     for chat_phone in chat.phones:
         chat_phone: 'entities.TypeChatPhone'
 
-        async with services.ChatPhoneClient(chat_phone) as client:
-            async def handle_event(event):
-                if not isinstance(tg_message, telethon.types.Message):
-                    return
+        try:
+            async with services.ChatPhoneClient(chat_phone) as client:
+                async def handle_event(event):
+                    if not isinstance(event.message, telethon.types.Message):
+                        return
+                        
+                    await handle_links(client, event.message.message)
+                    
+                    await handle_message(chat_phone, client, event.message)
 
-                await handle_links(client, event.message.message)
-                
-                await handle_message(chat_phone, client, event.message)
+                client.add_event_handler(handle_event, telethon.events.NewMessage(chats=chat.internalId, incoming=True))
 
-            client.add_event_handler(handle_event, telethon.events.NewMessage(chats=chat.internalId, incoming=True))
-
-            while True:
                 try:
-                    async for tg_message in client.iter_messages(chat.internalId, 1000, max_id=max_id):
-                        tg_message: 'telethon.types.TypeMessage'
+                    async with client.takeout(contacts=True, users=True, chats=True, megagroups=True, channels=True, files=True, max_file_size=2097152) as takeout:
+                        try:
+                            async for tg_message in takeout.iter_messages(chat.internalId, 1000, max_id=max_id):
+                                tg_message: 'telethon.types.TypeMessage'
 
-                        if not isinstance(tg_message, telethon.types.Message):
+                                if not isinstance(tg_message, telethon.types.Message):
+                                    continue
+
+                                await handle_links(takeout, tg_message.message)
+
+                                await handle_message(chat_phone, takeout, tg_message)
+                            else:
+                                logging.info(f"Messages download success.")
+                        except telethon.errors.common.MultiError as ex:
                             continue
+                        except telethon.errors.FloodWaitError as ex:
+                            logging.warning(f"Messages request must wait {ex.seconds} seconds.")
 
-                        await handle_links(client, tg_message.message)
+                            continue
+                        except (
+                            telethon.errors.TakeoutInitDelayError, 
+                            telethon.errors.TakeoutInvalidError, 
+                            telethon.errors.TakeoutRequiredError
+                        ) as ex:
+                            raise ex
+                        except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                            logging.critical(f"Chat not available. Exception {ex}")
 
-                        await handle_message(chat_phone, client, tg_message)
-                    else:
-                        logging.info(f"Messages download success.")
-                except telethon.errors.common.MultiError as ex:
-                    await asyncio.sleep(30)
+                            chat.isAvailable = False
+                            chat.save()
 
-                    continue
-                except telethon.errors.FloodWaitError as ex:
-                    logging.warning(f"Messages request must wait {ex.seconds} seconds.")
-
-                    await asyncio.sleep(ex.seconds)
-
-                    continue
-                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                    logging.critical(f"Chat not available. Exception {ex}")
-
-                    chat.isAvailable = False
-                    chat.save()
-
-                return
+                        return
+                except telethon.errors.TakeoutInitDelayError as ex:
+                    logging.warning(f"Messages takeout request must wait {ex.seconds} seconds.")
+                except (
+                    telethon.errors.TakeoutInvalidError, 
+                    telethon.errors.TakeoutRequiredError
+                ) as ex:
+                    logging.critical(f"Takeout error. Exception {ex}")
+        except exceptions.ClientNotAvailableError as ex:
+            logging.error(f"Client not available.")
+        except telethon.errors.UserDeactivatedBanError as ex:
+            logging.error(f"Phone is banned. Exception {ex}")
     else:
         logging.error(f"Messages download failed.")
 

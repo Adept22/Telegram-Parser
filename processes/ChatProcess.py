@@ -1,53 +1,11 @@
 import asyncio, logging, telethon, concurrent.futures, typing
-import entities, exceptions, helpers, threads, services
+import entities, exceptions, helpers, threads
 
 if typing.TYPE_CHECKING:
     from concurrent.futures import Future
 
-async def _resolve_chat(chat: 'entities.TypeChat', chat_phone: 'entities.TypeChatPhone'):
-    async with services.ChatPhoneClient(chat_phone) as client:
-        while True:
-            try:
-                """
-                Чекаем есть ли вообще что-то по ссылке-приглашению прежде 
-                чем делать тяжелый запрос на получение сущности
-                """
-                if chat.hash:
-                    await client(telethon.functions.messages.CheckChatInviteRequest(chat.hash))
-
-                tg_chat = await client.get_entity(chat.link)
-            except telethon.errors.FloodWaitError as ex:
-                logging.warning(f"Chat resolve must wait {ex.seconds}.")
-
-                await asyncio.sleep(ex.seconds)
-
-                continue
-            except (TypeError, KeyError, ValueError, telethon.errors.RPCError) as ex:
-                raise exceptions.ChatNotAvailableError(str(ex))
-            else:
-                return tg_chat
-
-# async def _resolve_chat(chat: 'entities.TypeChat', chat_phone: 'entities.TypeChatPhone'):
-#     async with services.ChatPhoneClient(chat_phone) as client:
-#         while True:
-#             try:
-#                 tg_chat = await client.get_entity(chat.link)
-#             except telethon.errors.FloodWaitError as ex:
-#                 logging.warning(f"Chat resolve must wait {ex.seconds}.")
-
-#                 await asyncio.sleep(ex.seconds)
-
-#                 continue
-#             except (TypeError, KeyError, ValueError, telethon.errors.RPCError) as ex:
-#                 raise exceptions.ChatNotAvailableError(str(ex))
-#             else:
-#                 return tg_chat
-
-def resolve_chat(chat: 'entities.TypeChat', chat_phone: 'entities.TypeChatPhone'):
-    return asyncio.run(_resolve_chat(chat, chat_phone))
-
 async def _chat_process(chat: 'entities.TypeChat'):
-    chat_phones = helpers.get_all('telegram/chat-phone', { "chat": { "id": chat.id }})
+    chat_phones = helpers.get_all('telegram/chat-phone', {"chat": {"id": chat.id}})
     
     logging.debug(f"Received {len(chat_phones)} chat phones of chat {chat.id}.")
 
@@ -57,12 +15,12 @@ async def _chat_process(chat: 'entities.TypeChat'):
             chat, 
             entities.Phone(**chat_phone["phone"]), 
             chat_phone["isUsing"]
-        ) for chat_phone in chat_phones if chat_phone["phone"]["isBanned"] == False
+        ) for chat_phone in chat_phones if chat_phone["phone"]["isBanned"] == False and chat_phone["phone"]["isVerified"] == True
     }
-
+    
     resolve_executor = concurrent.futures.ThreadPoolExecutor()
     done, not_done = concurrent.futures.wait(
-        {resolve_executor.submit(resolve_chat, chat, chat_phones[id]): id for id in chat_phones}, 
+        {resolve_executor.submit(threads.resolve_chat_thread, chat, chat_phones[id]): id for id in chat_phones}, 
         return_when=concurrent.futures.FIRST_COMPLETED
     )
 
@@ -163,4 +121,3 @@ def chat_process(chat: 'dict'):
     asyncio.set_event_loop(asyncio.new_event_loop())
     
     asyncio.run(_chat_process(entities.Chat(**chat)))
-    

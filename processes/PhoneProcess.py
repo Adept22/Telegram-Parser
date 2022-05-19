@@ -1,4 +1,4 @@
-import asyncio, logging, telethon, telethon.sessions
+import asyncio, logging, telethon, telethon.sessions, names
 import globalvars, entities
 
 async def _phone_process(phone: 'entities.TypePhone'):
@@ -20,11 +20,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
         
     async def send_code():
         try:
-            logging.debug(f"Try to send code.")
-            
             sent = await client.send_code_request(phone=phone.number)
-            
-            logging.info(f"Code sended.")
             
             phone.code_hash = sent.phone_code_hash
         except telethon.errors.rpcerrorlist.FloodWaitError as ex:
@@ -44,53 +40,67 @@ async def _phone_process(phone: 'entities.TypePhone'):
 
     while True:
         if not await client.is_user_authorized():
-            if phone.code != None and phone.code_hash != None:
-                logging.debug(f"Try to sing in with code {phone.code}.")
-    
-                try:
-                    await client.sign_in(phone.number, phone.code, phone_code_hash=phone.code_hash)
-                except telethon.errors.RPCError as ex:
-                    logging.error(f"Cannot authentificate. Exception: {ex}")
-                    
-                    phone.isVerified = False
-                    phone.code = None
-                    phone.code_hash = None
-                    phone.save()
-                    phone.code = None
-                else:
-                    break
-            elif phone.code_hash == None:
-                try:
-                    await send_code()
-                except telethon.errors.RPCError as ex:
-                    logging.error(f"Unable to sent code. Exception: {ex}")
-                    
-                    phone.session = None
-                    phone.isBanned = True
-                    phone.isVerified = False
-                    phone.code = None
-                    phone.code_hash = None
-                    phone.save()
-                    
-                    return
-            else:
-                await asyncio.sleep(10)
+            try:
+                if phone.code != None and phone.code_hash != None:
+                    try:
+                        await client.sign_in(phone.number, phone.code, phone_code_hash=phone.code_hash)
+                    except telethon.errors.PhoneNumberUnoccupiedError:
+                        logging.warning(f"Phone first use telegram.")
 
-                phone.update()
+                        phone.firstName = names.get_first_name()
+                        phone.lastName = names.get_last_name()
+
+                        await client.sign_up(phone.code, phone.firstName, phone.lastName, phone_code_hash=phone.code_hash)
+                    except (
+                        telethon.errors.PhoneCodeEmptyError, 
+                        telethon.errors.PhoneCodeExpiredError, 
+                        telethon.errors.PhoneCodeHashEmptyError, 
+                        telethon.errors.PhoneCodeInvalidError
+                    ) as ex:
+                        logging.warning(f"Code invalid. Exception {ex}")
+
+                        phone.code = None
+                        phone.code_hash = None
+                        phone.save()
+
+                        continue
+
+                    phone.session = client.session.save()
+                    phone.isVerified = True
+                    phone.code = None
+                    phone.code_hash = None
+                            
+                    internal_id = await get_internal_id()
+                    
+                    if internal_id != None and phone.internalId != internal_id:
+                        phone.internalId = internal_id
+
+                    phone.save()
+
+                    break
+                elif phone.code_hash == None:
+                    try:
+                        await send_code()
+                    except telethon.errors.RPCError as ex:
+                        phone.session = None
+
+                        raise ex
+                else:
+                    await asyncio.sleep(10)
+
+                    phone.update()
+            except telethon.errors.RPCError as ex:
+                logging.error(f"Cannot authentificate. Exception: {ex}")
+                
+                phone.isBanned = True
+                phone.isVerified = False
+                phone.code = None
+                phone.code_hash = None
+                phone.save()
+
+                return
         else:
             break
-    
-    phone.session = client.session.save()
-    phone.isVerified = True
-    phone.code = None
-    phone.code_hash = None
-            
-    internal_id = await get_internal_id()
-    
-    if internal_id != None and phone.internalId != internal_id:
-        phone.internalId = internal_id
-
-    phone.save()
 
     logging.info(f"Authorized.")
 

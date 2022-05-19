@@ -22,6 +22,7 @@ itsdangerous==2.0.1
 Jinja2==3.0.3
 MarkupSafe==2.0.1
 msgpack==1.0.3
+names==0.3.0
 priority==2.0.0
 py-ubjson==0.16.1
 pyaes==1.6.1

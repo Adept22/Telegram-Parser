@@ -12,11 +12,6 @@ ENV PYTHONUNBUFFERED=1
 # Turns off warning unverified HTTPS request
 ENV PYTHONWARNINGS="ignore:Unverified HTTPS request"
 
-COPY docker/docker-healthcheck.sh /usr/local/bin/docker-healthcheck
-RUN chmod +x /usr/local/bin/docker-healthcheck
-
-HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["docker-healthcheck"]
-
 WORKDIR /srv/app
 
 # Install pip requirements
