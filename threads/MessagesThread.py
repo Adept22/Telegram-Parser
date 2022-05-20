@@ -27,21 +27,28 @@ async def _messages_thread(chat: 'entities.TypeChat'):
         return chat_member_role.save()
 
     async def get_message_participant(client: 'TelegramClient', peer_id, user):
-        try:
-            if isinstance(peer_id, telethon.types.PeerChannel):
-                participant: 'telethon.types.TypeChannelParticipant' = await client(
-                    telethon.tl.functions.channels.GetParticipantRequest(peer_id, user)
-                )
-                return participant.participant
-            elif isinstance(peer_id, telethon.types.PeerChat):
-                chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(peer_id))
-                participants = [p.participant for p in chat_full.participants if p.user_id == user.id] \
-                    if chat_full.participants.participants else []
-                return participants[0] if len(participants) > 0 else None
-        except telethon.errors.RPCError as ex:
-            logging.warning(f"Can't get participant data for {user.id}. Exception: {ex}.")
+        while True:
+            try:
+                if isinstance(peer_id, telethon.types.PeerChannel):
+                    participant: 'telethon.types.TypeChannelParticipant' = await client(
+                        telethon.tl.functions.channels.GetParticipantRequest(peer_id, user)
+                    )
+                    return participant.participant
+                elif isinstance(peer_id, telethon.types.PeerChat):
+                    chat_full: 'telethon.types.TypeChatFull' = await client(telethon.tl.functions.messages.GetFullChatRequest(peer_id))
+                    participants = [p.participant for p in chat_full.participants if p.user_id == user.id] \
+                        if chat_full.participants.participants else []
+                    return participants[0] if len(participants) > 0 else None
+            except telethon.errors.FloodWaitError as ex:
+                logging.warning(f"Messages request must wait {ex.seconds} seconds.")
 
-        return None
+                await asyncio.sleep(ex.seconds)
+
+                continue
+            except telethon.errors.RPCError as ex:
+                logging.warning(f"Can't get participant data for {user.id}. Exception: {ex}.")
+
+                return None
     
     def get_fwd(fwd_from: 'telethon.types.TypeMessageFwdHeader | None'):
         if fwd_from != None:
@@ -163,7 +170,7 @@ async def _messages_thread(chat: 'entities.TypeChat'):
                 try:
                     async with client.takeout(contacts=True, users=True, chats=True, megagroups=True, channels=True, files=True, max_file_size=2097152) as takeout:
                         try:
-                            async for tg_message in takeout.iter_messages(chat.internalId, 1000, max_id=max_id):
+                            async for tg_message in takeout.iter_messages(chat.internalId, 1000, max_id=max_id, wait_time=0):
                                 tg_message: 'telethon.types.TypeMessage'
 
                                 if not isinstance(tg_message, telethon.types.Message):
@@ -204,6 +211,9 @@ async def _messages_thread(chat: 'entities.TypeChat'):
             logging.error(f"Client not available.")
         except telethon.errors.UserDeactivatedBanError as ex:
             logging.error(f"Phone is banned. Exception {ex}")
+            
+            chat_phone.phone.isBanned = True
+            chat_phone.phone.save()
     else:
         logging.error(f"Messages download failed.")
 

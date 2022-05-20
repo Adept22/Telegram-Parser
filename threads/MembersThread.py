@@ -27,7 +27,7 @@ async def _members_thread(chat: 'entities.TypeChat'):
 
         return chat_member_role.save()
 
-    async def handle_member(chat_phone, client, user):
+    async def handle_member(chat_phone: 'entities.TypeChatPhone', client: 'TelegramClient', user: 'telethon.types.TypeUser') -> 'None':
         if user.is_self:
             return
 
@@ -54,55 +54,45 @@ async def _members_thread(chat: 'entities.TypeChat'):
                         async for user in event.get_users():
                             await handle_member(chat_phone, client, user)
 
-
                 client.add_event_handler(handle_event, telethon.events.chataction.ChatAction(chats=chat.internalId))
 
                 try:
-                    async with client.takeout(contacts=True, users=True, chats=True, megagroups=True, channels=True, files=True, max_file_size=2097152) as takeout:
-                        try:
-                            async for user in takeout.iter_participants(entity=chat.internalId, aggressive=True):
-                                user: 'telethon.types.TypeUser'
+                    async for user in client.iter_participants(entity=chat.internalId, aggressive=True):
+                        user: 'telethon.types.TypeUser'
 
-                                await handle_member(chat_phone, takeout, user)
-                        except telethon.errors.common.MultiError as ex:
-                            await asyncio.sleep(30)
+                        await handle_member(chat_phone, client, user)
 
-                            continue
-                        except (
-                            telethon.errors.ChatAdminRequiredError,
-                            telethon.errors.ChannelPrivateError,
-                        ) as ex:
-                            logging.critical(f"Can't download participants. Exception: {ex}")
-                        except telethon.errors.FloodWaitError as ex:
-                            logging.warning(f"Members request must wait {ex.seconds} seconds.")
+                        await asyncio.sleep(1)
+                except telethon.errors.common.MultiError as ex:
+                    await asyncio.sleep(30)
 
-                            continue
-                        except (
-                            telethon.errors.TakeoutInitDelayError, 
-                            telethon.errors.TakeoutInvalidError, 
-                            telethon.errors.TakeoutRequiredError
-                        ) as ex:
-                            raise ex
-                        except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                            logging.critical(f"Chat not available. Exception: {ex}")
-                            
-                            chat.isAvailable = False
-                            chat.save()
-                        else:
-                            logging.info(f"Participants download success.")
-                            
-                        return
-                except telethon.errors.TakeoutInitDelayError as ex:
-                    logging.warning(f"Members takeout request must wait {ex.seconds} seconds.")
+                    continue
                 except (
-                    telethon.errors.TakeoutInvalidError, 
-                    telethon.errors.TakeoutRequiredError
+                    telethon.errors.ChatAdminRequiredError,
+                    telethon.errors.ChannelPrivateError,
                 ) as ex:
-                    logging.critical(f"Takeout error. Exception {ex}")
+                    logging.critical(f"Can't download participants. Exception: {ex}")
+                except telethon.errors.FloodWaitError as ex:
+                    logging.warning(f"Members request must wait {ex.seconds} seconds.")
+
+                    continue
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                    logging.critical(f"Chat not available. Exception: {ex}")
+                    
+                    chat.isAvailable = False
+                    chat.save()
+                else:
+                    logging.info(f"Participants download success.")
+                    
+                return
         except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Client not available.")
         except telethon.errors.UserDeactivatedBanError as ex:
             logging.error(f"Phone is banned.")
+            
+            chat_phone.phone.isBanned = True
+            chat_phone.phone.save()
+            
     else:
         logging.error(f"Participants download failed.")
 

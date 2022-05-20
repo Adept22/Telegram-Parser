@@ -49,7 +49,7 @@ async def _phone_process(phone: 'entities.TypePhone'):
                     phone.isVerified = True
                     phone.code = None
                     phone.code_hash = None
-                            
+                    
                     internal_id = getattr(await client.get_me(), "id")
                     
                     if internal_id != None and phone.internalId != internal_id:
