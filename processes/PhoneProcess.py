@@ -1,4 +1,4 @@
-import asyncio, logging, telethon, telethon.sessions, names
+import asyncio, logging, telethon, telethon.sessions, names, random
 import globalvars, entities
 
 async def _phone_process(phone: 'entities.TypePhone'):
@@ -26,6 +26,8 @@ async def _phone_process(phone: 'entities.TypePhone'):
                         await client.sign_in(phone.number, phone.code, phone_code_hash=phone.code_hash)
                     except telethon.errors.PhoneNumberUnoccupiedError:
                         logging.warning(f"Phone first use telegram.")
+
+                        await asyncio.sleep(random.randint(2, 5))
 
                         phone.firstName = names.get_first_name()
                         phone.lastName = names.get_last_name()

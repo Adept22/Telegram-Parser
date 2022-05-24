@@ -7,10 +7,10 @@ if typing.TYPE_CHECKING:
 
 async def _chat_process(chat: 'entities.TypeChat'):
     join_fs: 'dict[str, Future]' = {}
-    join_executor = concurrent.futures.ThreadPoolExecutor(len(chat_phones), f"JoinChat-{chat.id}")
+    join_executor = concurrent.futures.ThreadPoolExecutor(thread_name_prefix=f"JoinChat-{chat.id}")
 
     main_fs: 'dict[str, Future]' = {}
-    main_executor = concurrent.futures.ThreadPoolExecutor(2, f"Chat-{chat.id}")
+    main_executor = concurrent.futures.ThreadPoolExecutor(thread_name_prefix=f"Chat-{chat.id}")
 
     while True:
         chat_phones = helpers.get_all('telegram/chat-phone', {"chat": {"id": chat.id}})
@@ -78,7 +78,6 @@ async def _chat_process(chat: 'entities.TypeChat'):
                     chat_phones[id].delete()
 
         chat_phones = {id: chat_phones[id] for id in chat_phones if not chat_phones[id].phone.isBanned}
-        
 
         if sum([1 for id in chat_phones if chat_phones[id].isUsing]) < 3:
             def _join(f):
@@ -123,7 +122,7 @@ async def _chat_process(chat: 'entities.TypeChat'):
             members_f.add_done_callback(_complete)
             main_fs[members_f] = 'members'
 
-        if 'messages' not in main_fs:
+        if 'messages' not in main_fs.values():
             messages_f = main_executor.submit(threads.messages_thread, chat)
             messages_f.add_done_callback(_complete)
             main_fs[messages_f] = 'messages'

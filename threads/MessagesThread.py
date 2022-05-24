@@ -167,46 +167,46 @@ async def _messages_thread(chat: 'entities.TypeChat'):
 
                 client.add_event_handler(handle_event, telethon.events.NewMessage(chats=chat.internalId, incoming=True))
 
+                # try:
+                #     async with client.takeout(contacts=True, users=True, chats=True, megagroups=True, channels=True, files=True, max_file_size=2097152) as takeout:
                 try:
-                    async with client.takeout(contacts=True, users=True, chats=True, megagroups=True, channels=True, files=True, max_file_size=2097152) as takeout:
-                        try:
-                            async for tg_message in takeout.iter_messages(chat.internalId, 1000, max_id=max_id, wait_time=0):
-                                tg_message: 'telethon.types.TypeMessage'
+                    async for tg_message in client.iter_messages(chat.internalId, 1000, max_id=max_id, wait_time=0):
+                        tg_message: 'telethon.types.TypeMessage'
 
-                                if not isinstance(tg_message, telethon.types.Message):
-                                    continue
-
-                                await handle_links(takeout, tg_message.message)
-
-                                await handle_message(chat_phone, takeout, tg_message)
-                            else:
-                                logging.info(f"Messages download success.")
-                        except telethon.errors.common.MultiError as ex:
+                        if not isinstance(tg_message, telethon.types.Message):
                             continue
-                        except telethon.errors.FloodWaitError as ex:
-                            logging.warning(f"Messages request must wait {ex.seconds} seconds.")
 
-                            continue
-                        except (
-                            telethon.errors.TakeoutInitDelayError, 
-                            telethon.errors.TakeoutInvalidError, 
-                            telethon.errors.TakeoutRequiredError
-                        ) as ex:
-                            raise ex
-                        except (KeyError, ValueError, telethon.errors.RPCError) as ex:
-                            logging.critical(f"Chat not available. Exception {ex}")
+                        await handle_links(client, tg_message.message)
 
-                            chat.isAvailable = False
-                            chat.save()
+                        await handle_message(chat_phone, client, tg_message)
+                    else:
+                        logging.info(f"Messages download success.")
+                except telethon.errors.common.MultiError as ex:
+                    continue
+                except telethon.errors.FloodWaitError as ex:
+                    logging.warning(f"Messages request must wait {ex.seconds} seconds.")
 
-                        return
-                except telethon.errors.TakeoutInitDelayError as ex:
-                    logging.warning(f"Messages takeout request must wait {ex.seconds} seconds.")
+                    continue
                 except (
+                    telethon.errors.TakeoutInitDelayError, 
                     telethon.errors.TakeoutInvalidError, 
                     telethon.errors.TakeoutRequiredError
                 ) as ex:
-                    logging.critical(f"Takeout error. Exception {ex}")
+                    raise ex
+                except (KeyError, ValueError, telethon.errors.RPCError) as ex:
+                    logging.critical(f"Chat not available. Exception {ex}")
+
+                    chat.isAvailable = False
+                    chat.save()
+
+                return
+                # except telethon.errors.TakeoutInitDelayError as ex:
+                #     logging.warning(f"Messages takeout request must wait {ex.seconds} seconds.")
+                # except (
+                #     telethon.errors.TakeoutInvalidError, 
+                #     telethon.errors.TakeoutRequiredError
+                # ) as ex:
+                #     logging.critical(f"Takeout error. Exception {ex}")
         except exceptions.ClientNotAvailableError as ex:
             logging.error(f"Client not available.")
         except telethon.errors.UserDeactivatedBanError as ex:
