@@ -3,7 +3,7 @@ from base.celeryapp import app
 
 
 @app.task
-def test(params):
+def test(params: str):
     print("Run with params: {}".format(params))
-    return
+    return True
 
