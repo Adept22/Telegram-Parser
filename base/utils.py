@@ -1,12 +1,27 @@
-import re, telethon
+import re
+import os
+import requests
+import json
+import telethon
+from telethon.sessions import StringSession
+import urllib.parse
+import base.models as models
+import base.exceptions as exceptions
 
+class Singleton(type):
+    """Metaclass for singletone pattern representation"""
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        """Returns class single instance"""
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
 
 class TelegramClient(telethon.TelegramClient):
-    import base.models as models
+    """Extended telegram client"""
 
     def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
-        from telethon.sessions import StringSession
-
         self.phone = phone
 
         super(TelegramClient, self).__init__(*args, **kwargs, connection_retries=-1, retry_delay=5,
@@ -28,36 +43,38 @@ class TelegramClient(telethon.TelegramClient):
         return await self.start()
 
 
-class ApiService:
-    def get(self, type: 'str', body: 'dict') -> 'dict | list[dict]':
-        import urllib.parse
+class ApiService(metaclass=Singleton):
+    """Service for working with API"""
+    _cache = {}
 
-        path = body['id'] + "/" if body.get('id') is not None else "?" + urllib.parse.urlencode(body)
+    def get(self, endpoint: 'str', **kwargs) -> 'dict | list[dict]':
+        """Get entity or list of entities"""
 
-        return self.send("GET", type, path, body)
+        path = kwargs['id'] + "/" if kwargs.get('id') is not None else "?" + urllib.parse.urlencode(kwargs)
 
-    def set(self, type: 'str', body: 'dict') -> 'dict':
-        method = 'PUT' if body.get('id') is not None else 'POST'
-        path = body['id'] + "/" if body.get('id') is not None else ""
+        return self.send("GET", endpoint, path, kwargs)
 
-        return self.send(method, type, path, body)
+    def set(self, endpoint: 'str', **kwargs) -> 'dict':
+        """Create or update entity"""
+        method = 'PUT' if kwargs.get('id') is not None else 'POST'
+        path = kwargs['id'] + "/" if kwargs.get('id') is not None else ""
 
-    def delete(self, type: 'str', body: 'dict') -> 'None':
-        if body.get('id') is None:
-            raise Exception('Не указан идентификатор')
+        return self.send(method, endpoint, path, kwargs)
 
-        return self.send("DELETE", type, body['id'] + "/")
+    def delete(self, endpoint: 'str', id: 'str') -> 'None':
+        """Delete entity"""
+        return self.send("DELETE", endpoint, f"{id}/")
 
-    def check_chunk(self, type: 'str', body: 'dict', filename: 'str', chunk_number: 'int',
+    def check_chunk(self, endpoint: 'str', id: 'str', filename: 'str', chunk_number: 'int',
                      chunk_size: 'int' = 1048576) -> 'bool':
-        import base.exceptions as exceptions
-
-        if body.get('id') is None:
-            raise Exception('Не указан идентификатор')
-
+        """Check if chunk was uploaded on server"""
         try:
-            self.send("GET", type, body['id'] + "/chunk/",
-                      params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size})
+            self.send(
+                "GET", 
+                endpoint, 
+                f"{id}/chunk/",
+                params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size}
+            )
         except exceptions.RequestException as ex:
             if ex.code == 404:
                 return False
@@ -66,25 +83,24 @@ class ApiService:
         else:
             return True
 
-    def chunk(self, type: 'str', body: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int', chunk_size: 'int',
+    def chunk(self, endpoint: 'str', id: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int', chunk_size: 'int',
               total_chunks: 'int', total_size: 'int') -> 'None':
-        if self.check_chunk(type, body, filename, chunk_number, chunk_size):
+        """Send chunk on server"""
+        if self.check_chunk(endpoint, id, filename, chunk_number, chunk_size):
             return
 
-        return self.send("POST", type, body['id'] + '/chunk/',
+        return self.send("POST", endpoint, f"{id}/chunk/",
                          params={"filename": filename, "chunkNumber": chunk_number, "totalChunks": total_chunks,
                                  "totalSize": total_size}, files={"chunk": chunk})
 
-    def send(self, method: 'str', type: 'str', path: 'str', body: 'dict' = None, params: 'dict' = None,
+    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, params: 'dict' = None,
              files: 'dict' = None) -> 'dict | list[dict] | None':
-        import os, requests, json
-        import base.exceptions as exceptions
-
+        """Send request to API"""
         try:
             r = requests.request(
                 method,
-                os.environ['API_URL'] + '/telegram/' + type + '/' + path,
-                headers={'Accept': 'application/json'},
+                os.environ['API_URL'] + f"/telegram/{endpoint}/{path}",
+                headers={"Accept": "application/json"},
                 json=body,
                 params=params,
                 files=files,
@@ -100,10 +116,10 @@ class ApiService:
 
             try:
                 _json = r.json()
-            except json.decoder.JSONDecodeError as ex:
+            except json.decoder.JSONDecodeError:
                 content = r.text
             else:
-                content = _json["message"]
+                content = _json.get("message", None)
 
             if r.status_code == 409:
                 raise exceptions.UniqueConstraintViolationError(content)
@@ -115,6 +131,18 @@ class ApiService:
 
         return r.json()
 
+class CacheService(object, metaclass=Singleton):
+    _cache = {}
+
+    def get_cache(self, entity: 'models.TypeEntity'):
+        if entity.id is not None:
+            if entity.id in self._cache:
+                return self._cache[entity.id]
+
+        return None
+
+    def set_cache(self, entity: 'models.TypeEntity'):
+        pass
 
 LINK_RE = re.compile(
     r'(?:@|(?:https?:\/\/)?(?:www\.)?(?:telegram\.(?:me|dog)|t\.me)\/(?:@|joinchat\/|\+)?|'

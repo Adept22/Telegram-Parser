@@ -1,77 +1,90 @@
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
+import math
+from telethon.client import downloads
 from base.utils import ApiService
+from base import exceptions
 
 T = TypeVar('T', bound='Entity')
 
 
 class Entity(Generic[T], metaclass=ABCMeta):
+    """Base class for entities"""
+
+    def __init__(self, id: 'str' = None, **kwargs):
+        self._id = id
+
+    @property
+    def id(self) -> 'str | None':
+        """Идентификатор сущности."""
+        return self._id
+
+    @id.setter
+    def id(self, new_id) -> 'None':
+        """Сеттер идентификатора сущности."""
+        self._id = new_id
+
     @property
     @abstractmethod
-    def _name(self) -> str:
-        """
-        Название сущности в пути API.
-        """
+    def endpoint(self) -> str:
+        """Название сущности в пути API."""
         raise NotImplementedError
 
     @property
     @abstractmethod
     def unique_constraint(self) -> 'dict | None':
-        """
-        Свойства для проверки существования сущности, они же отражают уникольность.
-        """
+        """Свойства для проверки существования сущности,
+        они же отражают уникольность."""
+
         raise NotImplementedError
 
     @abstractmethod
     def serialize(self) -> 'dict':
-        """
-        Сериализация сущности. Т.е. из `self` в `dict`
-        """
+        """Сериализация сущности. Т.е. из `self` в `dict`"""
+
         raise NotImplementedError
 
     @abstractmethod
-    def deserialize(self, _dict: 'dict') -> 'T':
-        """
-        Десериализация сущности. Т.е. из `dict` в `self`
-        """
+    def deserialize(self, **kwargs) -> 'T':
+        """Десериализация сущности. Т.е. из `dict` в `self`"""
+
         raise NotImplementedError
 
     @classmethod
     def find(cls, _dict) -> 'list[T]':
-        """
-        Возвращает отфильтрованный и отсортированный список сущностей
-        """
-        entities = ApiService().get(cls._name, _dict)
+        """Возвращает отфильтрованный и отсортированный список сущностей"""
+
+        entities = ApiService().get(cls.endpoint, **_dict)
         return [cls(**entity) for entity in entities]
 
     def reload(self) -> 'T':
-        """
-        Обновляет текущую сущность из API.
-        """
+        """Обновляет текущую сущность из API."""
+
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        self.deserialize(ApiService().get(self.__class__._name, {"id": self.id}))
+        entity = ApiService().get(self.__class__.endpoint, id=self.id)
+
+        self.deserialize(**entity)
 
         return self
 
     def save(self) -> 'T':
-        """
-        Создает/изменяет сущность в API.
-        """
-        import base.exceptions as exceptions
-        
+        """Создает/изменяет сущность в API."""
+
         try:
-            self.deserialize(ApiService().set(self.__class__._name, self.serialize()))
+            entity = ApiService().set(self.__class__.endpoint, self.serialize())
         except exceptions.UniqueConstraintViolationError as ex:
             if self.unique_constraint is None:
                 raise ex
-                
-            entities = ApiService().get(self.__class__._name, self.unique_constraint)
-            
+
+            entities = ApiService().get(self.__class__.endpoint, **self.unique_constraint)
+
             if len(entities) > 0:
                 self.id = entities[0]['id']
                 self.save()
+        else:
+            self.deserialize(**entity)
 
         return self
 
@@ -79,18 +92,19 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """
         Удаляет сущность из API.
         """
-        ApiService().delete(self.__class__._name, self.serialize())
+        ApiService().delete(self.__class__.endpoint, self.serialize())
 
 
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
+    """Base class for media entities"""
+
     async def upload(self, client, tg_media, file_size: 'int', extension: 'str') -> 'None':
-        import math
-        from telethon.client import downloads
+        """Uploads media on server"""
 
         if not file_size or self.id is None:
             return
 
-        media = ApiService().get(self.__class__._name, {"id": self.id})
+        media = ApiService().get(self.__class__.endpoint, id=self.id)
 
         if media.get("path") is not None:
             return
@@ -101,16 +115,20 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
 
         async for chunk in client.iter_download(file=tg_media, chunk_size=chunk_size, file_size=file_size):
             ApiService().chunk(
-                self.__class__._name, self.serialize(), str(tg_media.id) + extension,
+                self.__class__.endpoint, self.id, str(tg_media.id) + extension,
                 chunk, chunk_number, chunk_size, total_chunks, file_size
             )
             chunk_number += 1
 
 
 class Host(Entity['Host']):
-    _name = "hosts"
+    """Host entity representation"""
 
-    def __init__(self, id: 'str', public_ip: 'str', local_ip: 'str', name: 'str', *args, **kwargs):
+    endpoint = "hosts"
+
+    def __init__(self, id: 'str', public_ip: 'str', local_ip: 'str', name: 'str', **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str' = id
         self.public_ip: 'str' = public_ip
         self.local_ip: 'str' = local_ip
@@ -128,31 +146,57 @@ class Host(Entity['Host']):
             "name": self.name
         }
 
-    def deserialize(self, _dict: 'dict') -> 'Chat':
-        self.id = _dict['id']
-        self.public_ip = _dict['public_ip']
-        self.local_ip = _dict['local_ip']
-        self.name = _dict['name']
+    def deserialize(self, **kwargs) -> 'Chat':
+        self.id = kwargs['id']
+        self.public_ip = kwargs['public_ip']
+        self.local_ip = kwargs['local_ip']
+        self.name = kwargs['name']
         return self
 
 
 class Parser(Entity['Parser']):
-    _name = "parsers"
+    """Parser entity representation"""
+
+    endpoint = "parsers"
 
     NEW = 0
     IN_PROGRESS = 1
     FAILED = 2
 
-    def __init__(self, id: 'str', host: 'TypeHost | dict', status: 'int', api_id: 'str', api_hash: 'str', *args, **kwargs):
+    def __init__(self, id: 'str', host: 'TypeHost | dict', status: 'int', api_id: 'str', api_hash: 'str', **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str' = id
-        self.host: 'str' = host if isinstance(host, Host) else Host(**host)
+        self._host: 'TypeHost' = None
+        self.host: 'str' = host
         self.status: 'int' = status
         self.api_id: 'str' = api_id
         self.api_hash: 'str' = api_hash
-        
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
+
+    @property
+    def host(self) -> 'TypeHost':
+        """Host property"""
+        return self._host
+
+    @host.setter
+    def host(self, new_host) -> 'None':
+        if isinstance(new_host, str):
+            if isinstance(self._host, Host):
+                self._host.id = new_host
+            else:
+                self._host = Host(new_host)
+        elif isinstance(new_host, dict):
+            if isinstance(self._host, Host):
+                self._host.deserialize(**new_host)
+            else:
+                self._host = Host(**new_host)
+
+        if isinstance(self._host, Host):
+            self._host.reload()
 
     def serialize(self) -> 'dict':
         return {
@@ -163,33 +207,37 @@ class Parser(Entity['Parser']):
             "api_hash": self.api_hash
         }
 
-    def deserialize(self, _dict: 'dict') -> 'Chat':
-        self.id = _dict['id']
-        self.host = self.host.deserialize(_dict['host']) if self.host else Host(**_dict['host'])
-        self.status = _dict['status']
-        self.api_id = _dict['api_id']
-        self.api_hash = _dict['api_hash']
+    def deserialize(self, **kwargs) -> 'Chat':
+        self.id = kwargs['id']
+        self.host = self.host.deserialize(**kwargs['host']) if self.host else Host(**kwargs['host'])
+        self.status = kwargs['status']
+        self.api_id = kwargs['api_id']
+        self.api_hash = kwargs['api_hash']
         return self
 
 
 class Chat(Entity['Chat']):
-    _name = "chats"
+    """Chat entity representation"""
+
+    endpoint = "chats"
 
     CREATED = 0
     AVAILABLE = 1
     MONITORING = 2
     FAILED = 3
 
-    def __init__(self, link: 'str', id: 'str' = None, status: 'int' = 0, status_text: 'str' = None, internal_id: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, parser: 'TypeParser | dict' = None, *args, **kwargs):
-        self.id: 'str' = id
+    def __init__(self, link: 'str', id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.link: 'str' = link
-        self.status: 'int' = status
-        self.status_text: 'str | None' = status_text
-        self.internal_id: 'int | None' = internal_id
-        self.title: 'str | None' = title
-        self.description: 'str | None' = description
-        self.date: 'str | None' = date
-        self.parser: 'TypeParser' = parser if isinstance(parser, Parser) else Parser(**parser)
+        self.id: 'str' = id
+        self.status: 'int' = kwargs.get("status", 0)
+        self.status_text: 'str | None' = kwargs.get("status_text")
+        self.internal_id: 'int | None' = kwargs.get("internal_id")
+        self.title: 'str | None' = kwargs.get("title")
+        self.description: 'str | None' = kwargs.get("description")
+        self.date: 'str | None' = kwargs.get("date")
+        self.parser: 'TypeParser' = kwargs.get("parser")
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -208,22 +256,24 @@ class Chat(Entity['Chat']):
             "parser": self.parser
         }
 
-    def deserialize(self, _dict: 'dict') -> 'Chat':
-        self.id = _dict['id']
-        self.link = _dict['link']
-        self.status = _dict['status']
-        self.status_text = _dict.get('status_text')
-        self.internal_id = _dict.get('internal_id')
-        self.title = _dict.get('title')
-        self.description = _dict.get('description')
-        self.date = _dict.get('date')
-        self.parser = self.parser.deserialize(_dict['parser']) if self.parser else Parser(**_dict['parser'])
+    def deserialize(self, **kwargs) -> 'Chat':
+        self.id = kwargs['id']
+        self.link = kwargs['link']
+        self.status = kwargs['status']
+        self.status_text = kwargs.get('status_text')
+        self.internal_id = kwargs.get('internal_id')
+        self.title = kwargs.get('title')
+        self.description = kwargs.get('description')
+        self.date = kwargs.get('date')
+        self.parser = self.parser.deserialize(**kwargs['parser']) if self.parser else Parser(**kwargs['parser'])
 
         return self
 
 
 class Phone(Entity['Phone']):
-    _name = "phones"
+    """Phone entity representation"""
+
+    endpoint = "phones"
 
     CREATED = 0
     READY = 1
@@ -231,20 +281,19 @@ class Phone(Entity['Phone']):
     FULL = 3
     BAN = 4
 
-    def __init__(
-            self, id: 'str', number: 'str' = None, parser: 'TypeParser | dict' = None, status: 'int' = 0,
-            status_text: 'str' = None, internal_id: 'int' = None, session: 'str' = None, first_name: 'str' = None,
-            last_name: 'str' = None, code: 'str' = None, *args, **kwargs):
+    def __init__(self, id: 'str', **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str' = id
-        self.number: 'str | None' = number
-        self.status: 'bool' = status
-        self.status_text: 'str | None' = status_text
-        self.internal_id: 'int | None' = internal_id
-        self.session: 'str | None' = session
-        self.first_name: 'str | None' = first_name
-        self.last_name: 'str | None' = last_name
-        self.code: 'str | None' = code
-        self.parser = parser if isinstance(parser, Parser) or parser is None else Parser(**parser)
+        self.number: 'str | None' = kwargs.get("number")
+        self.status: 'bool' = kwargs.get("status", 0)
+        self.status_text: 'str | None' = kwargs.get("status_text")
+        self.internal_id: 'int | None' = kwargs.get("internal_id")
+        self.session: 'str | None' = kwargs.get("session")
+        self.first_name: 'str | None' = kwargs.get("first_name")
+        self.last_name: 'str | None' = kwargs.get("last_name")
+        self.code: 'str | None' = kwargs.get("code")
+        self.parser = kwargs.get("parser")
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -264,29 +313,33 @@ class Phone(Entity['Phone']):
             "parser": {"id": self.parser.id} if self.parser else None
         }
 
-    def deserialize(self, _dict: 'dict') -> 'TypePhone':
-        self.id = _dict["id"]
-        self.number = _dict["number"]
-        self.status = _dict["status"]
-        self.status_text = _dict.get("status_text")
-        self.parser = self.parser.deserialize(_dict["parser"]) if self.parser else (Parser(**_dict["parser"]) if "parser" in _dict else None)
-        self.internal_id = _dict.get("internal_id")
-        self.session = _dict.get("session")
-        self.first_name = _dict.get("first_name")
-        self.last_name = _dict.get("last_name")
-        self.code = _dict.get("code")
+    def deserialize(self, **kwargs) -> 'TypePhone':
+        self.id = kwargs["id"]
+        self.number = kwargs["number"]
+        self.status = kwargs["status"]
+        self.status_text = kwargs.get("status_text")
+        self.parser = self.parser.deserialize(**kwargs["parser"]) if self.parser else (Parser(**kwargs["parser"]) if "parser" in kwargs else None)
+        self.internal_id = kwargs.get("internal_id")
+        self.session = kwargs.get("session")
+        self.first_name = kwargs.get("first_name")
+        self.last_name = kwargs.get("last_name")
+        self.code = kwargs.get("code")
 
         return self
 
 
 class ChatPhone(Entity['ChatPhone']):
-    _name = "chats-phones"
+    """ChatPhone entity representation"""
 
-    def __init__(self, chat: 'TypeChat', phone: 'TypePhone', is_using: 'bool' = False, id: 'str' = None, *args, **kwargs):
+    endpoint = "chats-phones"
+
+    def __init__(self, chat: 'TypeChat', phone: 'TypePhone', id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.phone: 'TypePhone' = phone
-        self.is_using: 'bool' = is_using
+        self.is_using: 'bool' = kwargs.get("is_using")
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -302,30 +355,34 @@ class ChatPhone(Entity['ChatPhone']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'ChatPhone':
-        self.id = _dict.get("id")
-        # self.chat = self.chat.deserialize(_dict.get("chat"))
-        # self.phone = self.phone.deserialize(_dict.get("phone"))
-        self.is_using = _dict.get("is_using", False)
+    def deserialize(self, **kwargs) -> 'ChatPhone':
+        self.id = kwargs.get("id")
+        # self.chat = self.chat.deserialize(**kwargs.get("chat"))
+        # self.phone = self.phone.deserialize(**kwargs.get("phone"))
+        self.is_using = kwargs.get("is_using", False)
 
         return self
 
 
 class Message(Entity['Message']):
-    _name = "messages"
+    """Message entity representation"""
 
-    def __init__(self, internal_id: 'int', chat: 'TypeChat', id: 'str' = None, text: 'str' = None, member: 'TypeChatMember' = None, reply_to: 'TypeMessage' = None, is_pinned: 'bool' = False, forwarded_from_id: 'int' = None, forwarded_from_name: 'str' = None, grouped_id: 'int' = None, date: 'str' = None, *args, **kwargs):
-        self.id: 'str | None' = id
+    endpoint = "messages"
+
+    def __init__(self, internal_id: 'int', chat: 'TypeChat', id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.internal_id: 'int' = internal_id
-        self.text: 'str | None' = text
         self.chat: 'TypeChat' = chat
-        self.member: 'TypeMember | None' = member
-        self.reply_to: 'TypeMessage | None' = reply_to
-        self.is_pinned: 'bool' = is_pinned
-        self.forwarded_from_id: 'int | None' = forwarded_from_id
-        self.forwarded_from_name: 'str | None' = forwarded_from_name
-        self.grouped_id: 'int | None' = grouped_id
-        self.date: 'str | None' = date
+        self.id: 'str | None' = id
+        self.text: 'str | None' = kwargs.get("text")
+        self.member: 'TypeMember | None' = kwargs.get("member")
+        self.reply_to: 'TypeMessage | None' = kwargs.get("reply_to")
+        self.is_pinned: 'bool' = kwargs.get("is_pinned", False)
+        self.forwarded_from_id: 'int | None' = kwargs.get("forwarded_from_id")
+        self.forwarded_fromendpoint: 'str | None' = kwargs.get("forwarded_fromendpoint")
+        self.grouped_id: 'int | None' = kwargs.get("grouped_id")
+        self.date: 'str | None' = kwargs.get("date")
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -341,43 +398,45 @@ class Message(Entity['Message']):
             "reply_to": {"id": self.reply_to.id} if self.reply_to is not None and self.reply_to.id is not None else None,
             "is_pinned": self.is_pinned, 
             "forwarded_from_id": self.forwarded_from_id, 
-            "forwarded_from_name": self.forwarded_from_name, 
+            "forwarded_fromendpoint": self.forwarded_fromendpoint, 
             "grouped_id": self.grouped_id, 
             "date": self.date
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeMessage':
-        self.id = _dict.get("id")
-        self.internal_id = _dict.get("internal_id")
-        self.text = _dict.get("text")
-        self.chat = self.chat.deserialize(_dict.get("chat"))
-        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
-        self.reply_to = self.reply_to.deserialize(_dict.get("reply_to")) if self.reply_to is not None and "reply_to" in _dict else None
-        self.is_pinned = _dict.get("is_pinned")
-        self.forwarded_from_id = _dict.get("forwarded_from_id")
-        self.forwarded_from_name = _dict.get("forwarded_from_name")
-        self.grouped_id = _dict.get("grouped_id")
-        self.date = _dict.get("date")
+    def deserialize(self, **kwargs) -> 'TypeMessage':
+        self.id = kwargs.get("id")
+        self.internal_id = kwargs.get("internal_id")
+        self.text = kwargs.get("text")
+        self.chat = self.chat.deserialize(**kwargs.get("chat"))
+        self.member = self.member.deserialize(**kwargs.get("member")) if self.member is not None and "member" in kwargs else None
+        self.reply_to = self.reply_to.deserialize(**kwargs.get("reply_to")) if self.reply_to is not None and "reply_to" in kwargs else None
+        self.is_pinned = kwargs.get("is_pinned")
+        self.forwarded_from_id = kwargs.get("forwarded_from_id")
+        self.forwarded_fromendpoint = kwargs.get("forwarded_fromendpoint")
+        self.grouped_id = kwargs.get("grouped_id")
+        self.date = kwargs.get("date")
 
         return self
 
 
 class Member(Entity['Member']):
-    _name = "members"
+    """Member entity representation"""
 
-    def __init__(
-            self, internal_id: 'int', id: 'str' = None, username: 'str' = None, first_name: 'str' = None,
-            last_name: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
+    endpoint = "members"
+
+    def __init__(self, internal_id: 'int', id: 'str' = None, **kwargs) -> None:
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
-        self.username: 'str | None' = username
-        self.first_name: 'str | None' = first_name
-        self.last_name: 'str | None' = last_name
-        self.phone: 'str | None' = phone
-        self.about: 'str | None' = about
-        
+        self.username: 'str | None' = kwargs.get("username")
+        self.first_name: 'str | None' = kwargs.get("first_name")
+        self.last_name: 'str | None' = kwargs.get("last_name")
+        self.phone: 'str | None' = kwargs.get("phone")
+        self.about: 'str | None' = kwargs.get("about")
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'internal_id': self.internal_id}
@@ -395,29 +454,33 @@ class Member(Entity['Member']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeMember':
-        self.id = _dict.get("id")
-        self.internal_id = _dict.get("internal_id")
-        self.username = _dict.get("username")
-        self.first_name = _dict.get("first_name")
-        self.last_name = _dict.get("last_name")
-        self.phone = _dict.get("phone")
-        self.about = _dict.get("about")
+    def deserialize(self, **kwargs) -> 'TypeMember':
+        self.id = kwargs.get("id")
+        self.internal_id = kwargs.get("internal_id")
+        self.username = kwargs.get("username")
+        self.first_name = kwargs.get("first_name")
+        self.last_name = kwargs.get("last_name")
+        self.phone = kwargs.get("phone")
+        self.about = kwargs.get("about")
 
         return self
 
 
 class ChatMember(Entity['ChatMember']):
-    _name = "chats-members"
+    """ChatMember entity representation"""
 
-    def __init__(self, chat: 'TypeChat', member: 'TypeMember', id: 'str' = None, date: 'str' = None, is_left: 'bool' = False, roles: 'list[TypeChatMemberRole]' = [], *args, **kwargs):
+    endpoint = "chats-members"
+
+    def __init__(self, chat: 'TypeChat', member: 'TypeMember', id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
-        self.chat: 'TypeChat' = chat if isinstance(chat, Chat) else Chat(**chat)
-        self.member: 'TypeMember' = member if isinstance(member, Member) else Member(**member)
-        self.date: 'str | None' = date
-        self.is_left: 'bool' = is_left
-        self.roles: 'list[TypeChatMemberRole]' = roles
-        
+        self.chat: 'TypeChat' = chat
+        self.member: 'TypeMember' = member
+        self.date: 'str | None' = kwargs.get("date")
+        self.is_left: 'bool' = kwargs.get("is_left")
+        self.roles: 'list[TypeChatMemberRole]' = kwargs.get("roles")
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'chat': {"id": self.chat.id}, "member": {"id": self.member.id}}
@@ -434,25 +497,29 @@ class ChatMember(Entity['ChatMember']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeChatMember':
-        self.id = _dict["id"]
-        self.chat = self.chat.deserialize(_dict["chat"]) if self.chat is not None and "chat" in _dict else None
-        self.member = self.member.deserialize(_dict["member"]) if self.member is not None and "member" in _dict else None
-        self.date = _dict.get("date")
-        self.is_left = _dict.get("is_left")
+    def deserialize(self, **kwargs) -> 'TypeChatMember':
+        self.id = kwargs["id"]
+        self.chat = self.chat.deserialize(**kwargs["chat"]) if self.chat is not None and "chat" in kwargs else None
+        self.member = self.member.deserialize(**kwargs["member"]) if self.member is not None and "member" in kwargs else None
+        self.date = kwargs.get("date")
+        self.is_left = kwargs.get("is_left")
 
         return self
 
 
 class ChatMemberRole(Entity['ChatMemberRole']):
-    _name = "chats-members-roles"
+    """ChatMemberRole entity representation"""
 
-    def __init__(self, member: 'TypeChatMember', id: 'str' = None, title: 'str' = "Участник", code: 'str' = "member", *args, **kwargs):
+    endpoint = "chats-members-roles"
+
+    def __init__(self, member: 'TypeChatMember', id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.member: 'TypeChatMember' = member
-        self.title: 'str' = title
-        self.code: 'str' = code
-        
+        self.title: 'str' = kwargs.get("title", "Участник")
+        self.code: 'str' = kwargs.get("code", "member")
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'member': {"id": self.member.id}, 'title': self.title, 'code': self.code}
@@ -467,25 +534,29 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeChatMemberRole':
-        self.id = _dict["id"]
-        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
-        self.title = _dict["title"]
-        self.code = _dict["code"]
+    def deserialize(self, **kwargs) -> 'TypeChatMemberRole':
+        self.id = kwargs["id"]
+        self.member = self.member.deserialize(**kwargs.get("member")) if self.member is not None and "member" in kwargs else None
+        self.title = kwargs["title"]
+        self.code = kwargs["code"]
 
         return self
 
 
 class ChatMedia(Media['ChatMedia']):
-    _name = "chats-medias"
+    """ChatMedia entity representation"""
 
-    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id=None, path=None, date=None, *args, **kwargs):
+    endpoint = "chats-medias"
+
+    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.internal_id: 'int' = internal_id
-        self.path: 'str | None' = path
-        self.date: 'str | None' = date
-        
+        self.path: 'str | None' = kwargs.get("path")
+        self.date: 'str | None' = kwargs.get("date")
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {"internal_id": self.internal_id}
@@ -501,26 +572,30 @@ class ChatMedia(Media['ChatMedia']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeChatMedia':
-        self.id = _dict.get("id")
-        # self.chat = self.chat.deserialize(_dict.get("chat"))
-        self.internal_id = _dict.get("internal_id")
-        self.path = _dict.get("path")
-        self.date = _dict.get("date")
+    def deserialize(self, **kwargs) -> 'TypeChatMedia':
+        self.id = kwargs.get("id")
+        # self.chat = self.chat.deserialize(**kwargs.get("chat"))
+        self.internal_id = kwargs.get("internal_id")
+        self.path = kwargs.get("path")
+        self.date = kwargs.get("date")
 
         return self
 
 
 class MemberMedia(Media['MemberMedia']):
-    _name = "members-medias"
+    """MemberMedia entity representation"""
 
-    def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id=None, path=None, date=None, *args, **kwargs):
+    endpoint = "members-medias"
+
+    def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id: 'str' = None, **kwargs):
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.member: 'TypeMember | None' = member
         self.internal_id: 'int' = internal_id
-        self.path: 'str | None' = path
-        self.date: 'str | None' = date
-        
+        self.path: 'str | None' = kwargs.get("path")
+        self.date: 'str | None' = kwargs.get("date")
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'internal_id': self.internal_id}
@@ -536,27 +611,29 @@ class MemberMedia(Media['MemberMedia']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeMemberMedia':
-        self.id = _dict["id"]
-        self.internal_id = _dict["internal_id"]
-        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
-        self.path = _dict.get("path")
-        self.date = _dict.get("date")
+    def deserialize(self, **kwargs) -> 'TypeMemberMedia':
+        self.id = kwargs["id"]
+        self.internal_id = kwargs["internal_id"]
+        self.member = self.member.deserialize(**kwargs.get("member")) if self.member is not None and "member" in kwargs else None
+        self.path = kwargs.get("path")
+        self.date = kwargs.get("date")
 
         return self
 
 
 class MessageMedia(Media['MessageMedia']):
-    _name = "messages-medias"
+    """MessageMedia entity representation"""
 
-    def __init__(
-            self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, path: 'str' = None,
-            date: 'str' = None, *args, **kwargs) -> None:
+    endpoint = "messages-medias"
+
+    def __init__(self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, **kwargs) -> None:
+        super().__init__(id, **kwargs)
+
         self.id: 'str | None' = id
         self.message: 'TypeMessage' = message
         self.internal_id: 'int' = internal_id
-        self.path: 'str | None' = path
-        self.date: 'str | None' = date
+        self.path: 'str | None' = kwargs.get("path")
+        self.date: 'str | None' = kwargs.get("date")
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -573,12 +650,12 @@ class MessageMedia(Media['MessageMedia']):
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, _dict: 'dict') -> 'TypeMessageMedia':
-        self.id = _dict["id"]
-        self.internal_id = _dict["internal_id"]
-        self.message = self.message.deserialize(_dict.get("message")) if "message" in _dict else None
-        self.path = _dict.get("path")
-        self.date = _dict.get("date")
+    def deserialize(self, **kwargs) -> 'TypeMessageMedia':
+        self.id = kwargs["id"]
+        self.internal_id = kwargs["internal_id"]
+        self.message = self.message.deserialize(**kwargs.get("message")) if "message" in kwargs else None
+        self.path = kwargs.get("path")
+        self.date = kwargs.get("date")
 
         return self
 
