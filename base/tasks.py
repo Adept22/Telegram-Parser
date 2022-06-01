@@ -1,9 +1,11 @@
 from __future__ import absolute_import
 import asyncio, telethon
+
 from base.celeryapp import app
 import base.models as models
 import base.utils as utils
 import base.exceptions as exceptions
+
 
 @app.task
 def test(params: str):
@@ -12,13 +14,10 @@ def test(params: str):
 
 
 class PhoneAuthorizationTask(app.Task):
-    import base.models as models
-
     name = "PhoneAuthorizationTask"
 
     async def _run(self, phone: 'models.TypePhone'):
         import random, names, telethon, telethon.sessions
-        import base.models as models
 
         client = telethon.TelegramClient(
             connection_retries=-1,
@@ -108,7 +107,6 @@ class PhoneAuthorizationTask(app.Task):
                     phone.status = models.Phone.BAN
                     phone.status_text = str(ex)
                     phone.code = None
-
                     phone.save()
 
                     return False
@@ -126,14 +124,12 @@ class PhoneAuthorizationTask(app.Task):
         return True
 
     def run(self, phone_id):
-        from models import Phone
-        import base.exceptions as exceptions
-
+        from base.models import Phone
         try:
             phone = Phone(phone_id).reload()
         except exceptions.RequestException:
             return False
-
+        print(phone_id)
         return asyncio.run(self._run(phone))
 
 
@@ -163,7 +159,7 @@ class ChatResolveTask(app.Task):
         )
 
     async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
-        from models import Chat, Phone
+        from base.models import Chat, Phone
 
         for phone in phones:
             try:
@@ -216,7 +212,7 @@ class ChatResolveTask(app.Task):
         chat.save()
 
     def run(self, chat_id):
-        from models import Chat, Phone
+        from base.models import Chat, Phone
         import base.exceptions as exceptions
 
         try:
@@ -259,7 +255,7 @@ class JoinChatTask(app.Task):
         )
 
     async def _run(self, chat: 'models.TypeChat', phone: 'models.TypePhone'):
-        from models import Chat, Phone, ChatPhone
+        from base.models import Chat, Phone, ChatPhone
 
         while True:
             try:
@@ -336,7 +332,7 @@ class JoinChatTask(app.Task):
         return False
 
     def run(self, chat_id: 'str', phone_id: 'str'):
-        from models import Chat, Phone
+        from base.models import Chat, Phone
 
         try:
             chat = Chat(chat_id).reload()
@@ -358,7 +354,7 @@ class ParseChatTask(app.Task):
     name = "ParseChatTask"
 
     async def _set_member(self, client, user: 'telethon.types.User') -> 'models.TypeMember':
-        from models import Member
+        from base.models import Member
 
         new_member = {
             "internal_id": user.id, 
@@ -384,7 +380,7 @@ class ParseChatTask(app.Task):
         return Member(**new_member).save()
         
     def __set_chat_member(self, chat: 'models.TypeChat', member: 'models.TypeMember', participant = None) -> 'models.TypeChatMember':
-        from models import ChatMember
+        from base.models import ChatMember
 
         new_chat_member = { "chat": chat, "member": member }
 
@@ -396,7 +392,7 @@ class ParseChatTask(app.Task):
         return ChatMember(**new_chat_member).save()
     
     def __set_chat_member_role(self, chat_member: 'models.TypeChatMember', participant = None) -> 'models.TypeChatMemberRole':
-        from models import ChatMemberRole
+        from base.models import ChatMemberRole
 
         new_chat_member_role = { "member": chat_member }
 
@@ -425,7 +421,7 @@ class ParseChatTask(app.Task):
     async def _handle_links(self, client, text):
         import re
         from base.utils import LINK_RE, parse_username
-        from models import Chat
+        from base.models import Chat
 
         for link in re.finditer(LINK_RE, text):
             username, is_join_chat = parse_username(link)
@@ -465,7 +461,7 @@ class ParseChatTask(app.Task):
         return None, None
     
     async def _handle_message(self, chat: 'models.TypeChat', client, tg_message: 'telethon.types.TypeMessage'):
-        from models import Message
+        from base.models import Message
         
         fwd_from_id, fwd_from_name = self._get_fwd(tg_message.fwd_from)
         
@@ -525,7 +521,7 @@ class ParseChatTask(app.Task):
             print(f"Messages download success.")
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
-        from models import Message
+        from base.models import Message
 
         last_messages = Message.find({ "chat": { "id": chat.id }, "ordering": "-internal_id", "limit": 1 })
         max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
@@ -541,9 +537,9 @@ class ParseChatTask(app.Task):
             print(f"Messages download success.")
 
     async def _run(self, chat: 'models.TypeChat'):
-        from models import Chat, Phone, ChatPhone
+        from base.models import Chat, Phone, ChatPhone
 
-        chat_phones = ChatPhone.find({ "chat": { "id": chat.id } })
+        chat_phones = ChatPhone.find({"chat": {"id": chat.id}})
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone
@@ -583,7 +579,7 @@ class ParseChatTask(app.Task):
                 phone.save()
 
     def run(self, chat_id):
-        from models import Chat
+        from base.models import Chat
 
         try:
             chat = Chat(chat_id).reload()
@@ -600,7 +596,7 @@ class MonitoringChatTask(ParseChatTask):
     name = "MonitoringChatTask"
 
     async def _run(self, chat):
-        from models import Phone, Chat, ChatPhone
+        from base.models import Phone, Chat, ChatPhone
 
         chat_phones = ChatPhone.find({ "chat": { "id": chat.id } })
 

@@ -8,16 +8,10 @@ T = TypeVar('T', bound='Entity')
 class Entity(Generic[T], metaclass=ABCMeta):
     @property
     @abstractmethod
-    @staticmethod
-    def __name() -> str:
+    def _name(self) -> str:
         """
         Название сущности в пути API.
         """
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def id(self) -> str:
         raise NotImplementedError
 
     @property
@@ -42,12 +36,13 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @staticmethod
-    def find(_dict) -> 'list[T]':
+    @classmethod
+    def find(cls, _dict) -> 'list[T]':
         """
         Возвращает отфильтрованный и отсортированный список сущностей
         """
-        return ApiService().get(Entity.__name, _dict)
+        entities = ApiService().get(cls._name, _dict)
+        return [cls(**entity) for entity in entities]
 
     def reload(self) -> 'T':
         """
@@ -56,7 +51,9 @@ class Entity(Generic[T], metaclass=ABCMeta):
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        self.deserialize(ApiService().get(Entity.__name, {"id": self.id}))
+        self.deserialize(ApiService().get(self.__class__._name, {"id": self.id}))
+
+        return self
 
     def save(self) -> 'T':
         """
@@ -65,12 +62,12 @@ class Entity(Generic[T], metaclass=ABCMeta):
         import base.exceptions as exceptions
         
         try:
-            self.deserialize(ApiService().set(Entity.__name, self.serialize()))
+            self.deserialize(ApiService().set(self.__class__._name, self.serialize()))
         except exceptions.UniqueConstraintViolationError as ex:
             if self.unique_constraint is None:
                 raise ex
                 
-            entities = ApiService().get(Entity.__name, self.unique_constraint)
+            entities = ApiService().get(self.__class__._name, self.unique_constraint)
             
             if len(entities) > 0:
                 self.id = entities[0]['id']
@@ -82,10 +79,10 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """
         Удаляет сущность из API.
         """
-        ApiService().delete(Entity.__name, self.serialize())
+        ApiService().delete(self.__class__._name, self.serialize())
 
 
-class Media(Entity['Media'], metaclass=ABCMeta):
+class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
     async def upload(self, client, tg_media, file_size: 'int', extension: 'str') -> 'None':
         import math
         from telethon.client import downloads
@@ -93,7 +90,7 @@ class Media(Entity['Media'], metaclass=ABCMeta):
         if not file_size or self.id is None:
             return
 
-        media = ApiService().get(Media.__name, {"id": self.id})
+        media = ApiService().get(self.__class__._name, {"id": self.id})
 
         if media.get("path") is not None:
             return
@@ -104,23 +101,20 @@ class Media(Entity['Media'], metaclass=ABCMeta):
 
         async for chunk in client.iter_download(file=tg_media, chunk_size=chunk_size, file_size=file_size):
             ApiService().chunk(
-                Media.__name, self.serialize(), str(tg_media.id) + extension,
+                self.__class__._name, self.serialize(), str(tg_media.id) + extension,
                 chunk, chunk_number, chunk_size, total_chunks, file_size
             )
             chunk_number += 1
 
 
 class Host(Entity['Host']):
+    _name = "hosts"
+
     def __init__(self, id: 'str', public_ip: 'str', local_ip: 'str', name: 'str', *args, **kwargs):
         self.id: 'str' = id
         self.public_ip: 'str' = public_ip
         self.local_ip: 'str' = local_ip
         self.name: 'str' = name
-    
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "hosts"
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -143,6 +137,8 @@ class Host(Entity['Host']):
 
 
 class Parser(Entity['Parser']):
+    _name = "parsers"
+
     NEW = 0
     IN_PROGRESS = 1
     FAILED = 2
@@ -153,11 +149,6 @@ class Parser(Entity['Parser']):
         self.status: 'int' = status
         self.api_id: 'str' = api_id
         self.api_hash: 'str' = api_hash
-    
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "parsers"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -178,11 +169,12 @@ class Parser(Entity['Parser']):
         self.status = _dict['status']
         self.api_id = _dict['api_id']
         self.api_hash = _dict['api_hash']
-
         return self
 
 
 class Chat(Entity['Chat']):
+    _name = "chats"
+
     CREATED = 0
     AVAILABLE = 1
     MONITORING = 2
@@ -198,12 +190,7 @@ class Chat(Entity['Chat']):
         self.description: 'str | None' = description
         self.date: 'str | None' = date
         self.parser: 'TypeParser' = parser if isinstance(parser, Parser) else Parser(**parser)
-    
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "chats"
-        
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
@@ -236,13 +223,18 @@ class Chat(Entity['Chat']):
 
 
 class Phone(Entity['Phone']):
+    _name = "phones"
+
     CREATED = 0
     READY = 1
     FLOOD = 2
     FULL = 3
     BAN = 4
 
-    def __init__(self, id: 'str', number: 'str' = None, parser: 'TypeParser | dict' = None, status: 'int' = 0, status_text: 'str' = None, internal_id: 'int' = None, session: 'str' = None, first_name: 'str' = None, last_name: 'str' = None, code: 'str' = None, *args, **kwargs):
+    def __init__(
+            self, id: 'str', number: 'str' = None, parser: 'TypeParser | dict' = None, status: 'int' = 0,
+            status_text: 'str' = None, internal_id: 'int' = None, session: 'str' = None, first_name: 'str' = None,
+            last_name: 'str' = None, code: 'str' = None, *args, **kwargs):
         self.id: 'str' = id
         self.number: 'str | None' = number
         self.status: 'bool' = status
@@ -252,15 +244,8 @@ class Phone(Entity['Phone']):
         self.first_name: 'str | None' = first_name
         self.last_name: 'str | None' = last_name
         self.code: 'str | None' = code
-        self.parser = parser if isinstance(parser, Parser) else Parser(**parser)
-        
-        self.code_hash: 'str | None' = None
+        self.parser = parser if isinstance(parser, Parser) or parser is None else Parser(**parser)
 
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "phones"
-        
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
@@ -284,7 +269,7 @@ class Phone(Entity['Phone']):
         self.number = _dict["number"]
         self.status = _dict["status"]
         self.status_text = _dict.get("status_text")
-        self.parser = self.parser.deserialize(_dict["parser"]) if self.parser else Parser(**_dict["parser"])
+        self.parser = self.parser.deserialize(_dict["parser"]) if self.parser else (Parser(**_dict["parser"]) if "parser" in _dict else None)
         self.internal_id = _dict.get("internal_id")
         self.session = _dict.get("session")
         self.first_name = _dict.get("first_name")
@@ -295,17 +280,14 @@ class Phone(Entity['Phone']):
 
 
 class ChatPhone(Entity['ChatPhone']):
+    _name = "chats-phones"
+
     def __init__(self, chat: 'TypeChat', phone: 'TypePhone', is_using: 'bool' = False, id: 'str' = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.phone: 'TypePhone' = phone
         self.is_using: 'bool' = is_using
 
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "chats-phones"
-        
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'chat': {"id": self.chat.id}, "phone": {"id": self.phone.id}}
@@ -330,6 +312,8 @@ class ChatPhone(Entity['ChatPhone']):
 
 
 class Message(Entity['Message']):
+    _name = "messages"
+
     def __init__(self, internal_id: 'int', chat: 'TypeChat', id: 'str' = None, text: 'str' = None, member: 'TypeChatMember' = None, reply_to: 'TypeMessage' = None, is_pinned: 'bool' = False, forwarded_from_id: 'int' = None, forwarded_from_name: 'str' = None, grouped_id: 'int' = None, date: 'str' = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
@@ -342,11 +326,6 @@ class Message(Entity['Message']):
         self.forwarded_from_name: 'str | None' = forwarded_from_name
         self.grouped_id: 'int | None' = grouped_id
         self.date: 'str | None' = date
-
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "messages"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -386,6 +365,8 @@ class Message(Entity['Message']):
 
 
 class Member(Entity['Member']):
+    _name = "members"
+
     def __init__(
             self, internal_id: 'int', id: 'str' = None, username: 'str' = None, first_name: 'str' = None,
             last_name: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
@@ -396,11 +377,6 @@ class Member(Entity['Member']):
         self.last_name: 'str | None' = last_name
         self.phone: 'str | None' = phone
         self.about: 'str | None' = about
-
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "members"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -432,6 +408,8 @@ class Member(Entity['Member']):
 
 
 class ChatMember(Entity['ChatMember']):
+    _name = "chats-members"
+
     def __init__(self, chat: 'TypeChat', member: 'TypeMember', id: 'str' = None, date: 'str' = None, is_left: 'bool' = False, roles: 'list[TypeChatMemberRole]' = [], *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat if isinstance(chat, Chat) else Chat(**chat)
@@ -439,11 +417,6 @@ class ChatMember(Entity['ChatMember']):
         self.date: 'str | None' = date
         self.is_left: 'bool' = is_left
         self.roles: 'list[TypeChatMemberRole]' = roles
-
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "chats-members"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -472,16 +445,13 @@ class ChatMember(Entity['ChatMember']):
 
 
 class ChatMemberRole(Entity['ChatMemberRole']):
+    _name = "chats-members-roles"
+
     def __init__(self, member: 'TypeChatMember', id: 'str' = None, title: 'str' = "Участник", code: 'str' = "member", *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'TypeChatMember' = member
         self.title: 'str' = title
         self.code: 'str' = code
-        
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "chats-members-roles"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -507,17 +477,14 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
 
 class ChatMedia(Media['ChatMedia']):
+    _name = "chats-medias"
+
     def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id=None, path=None, date=None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = path
         self.date: 'str | None' = date
-        
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "chats-medias"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -545,17 +512,14 @@ class ChatMedia(Media['ChatMedia']):
 
 
 class MemberMedia(Media['MemberMedia']):
+    _name = "members-medias"
+
     def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id=None, path=None, date=None, *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'TypeMember | None' = member
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = path
         self.date: 'str | None' = date
-    
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "members-medias"
         
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -583,6 +547,8 @@ class MemberMedia(Media['MemberMedia']):
 
 
 class MessageMedia(Media['MessageMedia']):
+    _name = "messages-medias"
+
     def __init__(
             self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, path: 'str' = None,
             date: 'str' = None, *args, **kwargs) -> None:
@@ -591,12 +557,7 @@ class MessageMedia(Media['MessageMedia']):
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = path
         self.date: 'str | None' = date
-    
-    @property
-    @staticmethod
-    def __name() -> 'str':
-        return "messages-medias"
-        
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'internal_id': self.internal_id}
