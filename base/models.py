@@ -1,18 +1,22 @@
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
+from typing import Generic, TypeVar
 from base.utils import ApiService
 
-class Entity(ABC):
+T = TypeVar('T', bound='Entity')
+
+class Entity(Generic[T], metaclass=ABCMeta):
     @property
     @abstractmethod
-    def id(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
+        """
+        Название сущности в пути API.
+        """
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def name(self) -> 'str':
-        """
-        Название сущности в пути API.
-        """
+    def id(self) -> 'str':
         raise NotImplementedError
 
     @property
@@ -31,34 +35,41 @@ class Entity(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def deserialize(self, _dict: 'dict') -> 'TypeEntity':
+    def deserialize(self, _dict: 'dict') -> 'T':
         """
         Десериализация сущности. Т.е. из `dict` в `self`
         """
         raise NotImplementedError
 
-    def reload(self) -> 'TypeEntity':
+    @staticmethod
+    def find(_dict) -> 'list[T]':
+        """
+        Возвращает отфильтрованный и отсортированный список сущностей
+        """
+        return ApiService().get(Entity.__name, _dict)
+
+    def reload(self) -> 'T':
         """
         Обновляет текущую сущность из API.
         """
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        self.deserialize(ApiService().get(self.name, { "id": self.id }))
+        self.deserialize(ApiService().get(Entity.__name, { "id": self.id }))
 
-    def save(self) -> 'TypeEntity':
+    def save(self) -> 'T':
         """
         Создает/изменяет сущность в API.
         """
         import base.exceptions as exceptions
         
         try:
-            self.deserialize(ApiService().set(self.name, self.serialize()))
+            self.deserialize(ApiService().set(Entity.__name, self.serialize()))
         except exceptions.UniqueConstraintViolationError as ex:
             if self.unique_constraint is None:
                 raise ex
                 
-            entities = ApiService().get(self.name, self.unique_constraint)
+            entities = ApiService().get(Entity.__name, self.unique_constraint)
             
             if len(entities) > 0:
                 self.id = entities[0]['id']
@@ -71,24 +82,10 @@ class Entity(ABC):
         """
         Удаляет сущность из API.
         """
-        ApiService().delete(self.name, self.serialize())
+        ApiService().delete(Entity.__name, self.serialize())
 
 
-class Media(ABC):
-    @property
-    @abstractmethod
-    def id(self) -> 'str':
-        raise NotImplementedError
-
-    @abstractmethod
-    def serialize(self) -> 'TypeMedia':
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def name(self) -> 'str':
-        raise NotImplementedError
-
+class Media(Entity['Media'], metaclass=ABCMeta):
     async def upload(self, client, tg_media, file_size: 'int', extension: 'str') -> 'None':
         import math
         from telethon.client import downloads
@@ -96,7 +93,7 @@ class Media(ABC):
         if not file_size or self.id == None:
             return
 
-        media = ApiService().get(self.name, { "id": self.id })
+        media = ApiService().get(Media.__name, { "id": self.id })
 
         if media.get("path") != None:
             return
@@ -106,12 +103,12 @@ class Media(ABC):
         total_chunks = math.ceil(file_size / chunk_size)
 
         async for chunk in client.iter_download(file=tg_media, chunk_size=chunk_size, file_size=file_size):
-            ApiService()._chunk(self.name, self.serialize(), str(tg_media.id) + extension, chunk, chunk_number, chunk_size, total_chunks, file_size)
+            ApiService()._chunk(Media.__name, self.serialize(), str(tg_media.id) + extension, chunk, chunk_number, chunk_size, total_chunks, file_size)
 
             chunk_number += 1
 
 
-class Host(Entity):
+class Host(Entity['Host']):
     def __init__(self, id: 'str', public_ip: 'str', local_ip: 'str', name: 'str', *args, **kwargs):
         self.id: 'str' = id
         self.public_ip: 'str' = public_ip
@@ -119,7 +116,7 @@ class Host(Entity):
         self.name: 'str' = name
     
     @property
-    def name(self) -> 'str':
+    def __name() -> 'str':
         return "hosts"
         
     @property
@@ -143,7 +140,7 @@ class Host(Entity):
         return self
 
 
-class Parser(Entity):
+class Parser(Entity['Parser']):
     NEW = 0
     IN_PROGRESS = 1
     FAILED = 2
@@ -156,7 +153,8 @@ class Parser(Entity):
         self.api_hash: 'str' = api_hash
     
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "parsers"
         
     @property
@@ -182,13 +180,13 @@ class Parser(Entity):
         return self
 
 
-class Chat(Entity):
+class Chat(Entity['Chat']):
     CREATED = 0
     AVAILABLE = 1
     MONITORING = 2
     FAILED = 3
 
-    def __init__(self, id: 'str', link: 'str', status: 'int' = 0, status_text: 'str' = None, internal_id: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, parser: 'TypeParser | dict' = None, *args, **kwargs):
+    def __init__(self, link: 'str', id: 'str' = None, status: 'int' = 0, status_text: 'str' = None, internal_id: 'int' = None, title: 'str' = None, description: 'str' = None, date: 'str' = None, parser: 'TypeParser | dict' = None, *args, **kwargs):
         self.id: 'str' = id
         self.link: 'str' = link
         self.status: 'int' = status
@@ -200,7 +198,8 @@ class Chat(Entity):
         self.parser: 'TypeParser' = parser if isinstance(parser, Parser) else Parser(**parser)
     
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "chats"
         
     @property
@@ -234,7 +233,7 @@ class Chat(Entity):
         return self
 
 
-class Phone(Entity):
+class Phone(Entity['Phone']):
     CREATED = 0
     READY = 1
     FLOOD = 2
@@ -256,7 +255,8 @@ class Phone(Entity):
         self.code_hash: 'str | None' = None
 
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "phones"
         
     @property
@@ -292,7 +292,7 @@ class Phone(Entity):
         return self
 
 
-class ChatPhone(Entity):
+class ChatPhone(Entity['ChatPhone']):
     def __init__(self, chat: 'TypeChat', phone: 'TypePhone', is_using: 'bool' = False, id: 'str' = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
@@ -300,7 +300,8 @@ class ChatPhone(Entity):
         self.is_using: 'bool' = is_using
 
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "chats-phones"
         
     @property
@@ -326,7 +327,7 @@ class ChatPhone(Entity):
         return self
 
 
-class Message(Entity):
+class Message(Entity['Message']):
     def __init__(self, internal_id: 'int', chat: 'TypeChat', id: 'str' = None, text: 'str' = None, member: 'TypeChatMember' = None, reply_to: 'TypeMessage' = None, is_pinned: 'bool' = False, forwarded_from_id: 'int' = None, forwarded_from_name: 'str' = None, grouped_id: 'int' = None, date: 'str' = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
@@ -341,7 +342,8 @@ class Message(Entity):
         self.date: 'str | None' = date
 
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "messages"
         
     @property
@@ -381,7 +383,7 @@ class Message(Entity):
         return self
 
 
-class Member(Entity):
+class Member(Entity['Member']):
     def __init__(self, internal_id: 'int', id: 'str' = None, username: 'str' = None, first_name: 'str' = None, last_name: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
@@ -392,7 +394,8 @@ class Member(Entity):
         self.about: 'str | None' = about
 
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "members"
         
     @property
@@ -424,17 +427,18 @@ class Member(Entity):
         return self
 
 
-class ChatMember(Entity):
+class ChatMember(Entity['ChatMember']):
     def __init__(self, chat: 'TypeChat', member: 'TypeMember', id: 'str' = None, date: 'str' = None, is_left: 'bool' = False, roles: 'list[TypeChatMemberRole]' = [], *args, **kwargs):
         self.id: 'str | None' = id
-        self.chat: 'TypeChat' = chat
-        self.member: 'TypeMember' = member
+        self.chat: 'TypeChat' = chat if isinstance(chat, Chat) else Chat(**chat)
+        self.member: 'TypeMember' = member if isinstance(member, Member) else Member(**member)
         self.date: 'str | None' = date
         self.is_left: 'bool' = is_left
         self.roles: 'list[TypeChatMemberRole]' = roles
 
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "chats-members"
         
     @property
@@ -444,7 +448,7 @@ class ChatMember(Entity):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": { "id": self.chat.id },
+            "chat": { "id": self.chat.id } if self.chat != None and self.chat.id != None else None,
             "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
             "date": self.date,
             "is_left": self.is_left,
@@ -463,7 +467,7 @@ class ChatMember(Entity):
         return self
 
 
-class ChatMemberRole(Entity):
+class ChatMemberRole(Entity['ChatMemberRole']):
     def __init__(self, member: 'TypeChatMember', id: 'str' = None, title: 'str' = "Участник", code: 'str' = "member", *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'TypeChatMember' = member
@@ -471,7 +475,8 @@ class ChatMemberRole(Entity):
         self.code: 'str' = code
         
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "chats-members-roles"
         
     @property
@@ -497,7 +502,7 @@ class ChatMemberRole(Entity):
         return self
 
 
-class ChatMedia(Entity, Media):
+class ChatMedia(Media['ChatMedia']):
     def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id = None, path = None, date = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
@@ -506,7 +511,8 @@ class ChatMedia(Entity, Media):
         self.date: 'str | None' = date
         
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "chats-medias"
         
     @property
@@ -534,7 +540,7 @@ class ChatMedia(Entity, Media):
         return self
 
 
-class MemberMedia(Entity, Media):
+class MemberMedia(Media['MemberMedia']):
     def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id = None, path = None, date = None, *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'TypeMember | None' = member
@@ -543,7 +549,8 @@ class MemberMedia(Entity, Media):
         self.date: 'str | None' = date
     
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "members-medias"
         
     @property
@@ -571,7 +578,7 @@ class MemberMedia(Entity, Media):
         return self
 
 
-class MessageMedia(Entity, Media):
+class MessageMedia(Media['MessageMedia']):
     def __init__(self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, path: 'str' = None, date: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.message: 'TypeMessage' = message
@@ -580,7 +587,8 @@ class MessageMedia(Entity, Media):
         self.date: 'str | None' = date
     
     @property
-    def name(self) -> 'str':
+    @staticmethod
+    def __name() -> 'str':
         return "messages-medias"
         
     @property

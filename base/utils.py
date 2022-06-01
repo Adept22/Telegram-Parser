@@ -2,7 +2,8 @@ import re, telethon
 
 
 class TelegramClient(telethon.TelegramClient):
-    def __init__(self, phone, *args, **kwargs):
+    import base.models as models
+    def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
         from telethon.sessions import StringSession
 
         self.phone = phone
@@ -25,16 +26,16 @@ class TelegramClient(telethon.TelegramClient):
 
 
 class ApiService():
-    def get(self, type: 'str', body: 'dict' = None) -> 'dict | list[dict]':
+    def get(self, type: 'str', body: 'dict') -> 'dict | list[dict]':
         import urllib.parse
 
-        path = body['id'] + "/" if body and body.get('id') != None else "?" + urllib.parse.urlencode(body)
+        path = body['id'] + "/" if body.get('id') != None else "?" + urllib.parse.urlencode(body)
 
         return self.send("GET", type, path, body)
 
-    def set(self, type: 'str', body: 'dict' = None) -> 'dict':
-        method = 'PUT' if body and body.get('id') != None else 'POST'
-        path = body['id'] + "/" if body and body.get('id') != None else ""
+    def set(self, type: 'str', body: 'dict') -> 'dict':
+        method = 'PUT' if body.get('id') != None else 'POST'
+        path = body['id'] + "/" if body.get('id') != None else ""
         
         return self.send(method, type, path, body)
 
