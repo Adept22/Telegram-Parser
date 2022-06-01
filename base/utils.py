@@ -1,12 +1,13 @@
-import re
+"""Utilities for tasks"""
+
 import os
-import requests
+import re
 import json
+import urllib.parse
+import requests
 import telethon
 from telethon.sessions import StringSession
-import urllib.parse
-import base.models as models
-import base.exceptions as exceptions
+from base import models, exceptions
 
 class Singleton(type):
     """Metaclass for singletone pattern representation"""
@@ -18,30 +19,34 @@ class Singleton(type):
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
 
+
 class TelegramClient(telethon.TelegramClient):
     """Extended telegram client"""
 
     def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
         self.phone = phone
 
-        super(TelegramClient, self).__init__(*args, **kwargs, connection_retries=-1, retry_delay=5,
-                                             session=StringSession(phone.session), api_id=phone.parser.api_id,
-                                             api_hash=phone.parser.api_hash)
+        super().__init__(
+            *args,
+            **kwargs,
+            connection_retries=-1,
+            retry_delay=5,
+            session=StringSession(phone.session),
+            api_id=phone.parser.api_id,
+            api_hash=phone.parser.api_hash
+        )
 
     async def start(self):
-        from base.exceptions import UnauthorizedError
-
         if not self.is_connected():
             await self.connect()
 
-        if await self.is_user_authorized() and await self.get_me() is not None:
+        if await self.get_me() is not None:
             return self
-        else:
-            raise UnauthorizedError(f'Phone not authorized')
 
-    async def __aenter__(self):
-        return await self.start()
+        raise exceptions.UnauthorizedError('Phone not authorized')
 
+
+TypeTelegramClient = TelegramClient
 
 class ApiService(metaclass=Singleton):
     """Service for working with API"""
@@ -50,31 +55,61 @@ class ApiService(metaclass=Singleton):
     def get(self, endpoint: 'str', **kwargs) -> 'dict | list[dict]':
         """Get entity or list of entities"""
 
-        path = kwargs['id'] + "/" if kwargs.get('id') is not None else "?" + urllib.parse.urlencode(kwargs)
+        if kwargs.get('id') is not None:
+            return self._get(endpoint, kwargs['id'])
 
-        return self.send("GET", endpoint, path, kwargs)
+        return self._filter(endpoint, **kwargs)
+
+    def _get(self, endpoint: 'str', id: 'str'):
+        if id not in self._cache:
+            self._cache[id] = self.send("GET", endpoint, f"{id}/")
+
+        return self._cache[id]
+
+    def _filter(self, endpoint: 'str', **kwargs):
+        result = self.send("GET", endpoint, "?" + urllib.parse.urlencode(kwargs))
+
+        # TODO: Какое свойство с элементами?
+        for entity in result["items"]:
+            self._cache[entity["id"]] = entity
+
+        return result
 
     def set(self, endpoint: 'str', **kwargs) -> 'dict':
         """Create or update entity"""
-        method = 'PUT' if kwargs.get('id') is not None else 'POST'
-        path = kwargs['id'] + "/" if kwargs.get('id') is not None else ""
 
-        return self.send(method, endpoint, path, kwargs)
+        if kwargs.get('id') is not None:
+            return self._update(endpoint, kwargs["id"], **kwargs)
+
+        return self._create(endpoint, **kwargs)
+
+    def _create(self, endpoint: 'str', **kwargs):
+        entity = self.send("POST", endpoint, "", body=kwargs)
+
+        self._cache[entity["id"]] = entity
+
+        return self._cache[entity["id"]]
+
+    def _update(self, endpoint: 'str', id: 'str', **kwargs):
+        del kwargs["id"]
+
+        self._cache[id] = self.send("PUT", endpoint, f"{id}/", body=kwargs)
+
+        return self._cache[id]
 
     def delete(self, endpoint: 'str', id: 'str') -> 'None':
         """Delete entity"""
-        return self.send("DELETE", endpoint, f"{id}/")
+        self.send("DELETE", endpoint, f"{id}/")
+
+        del self._cache[id]
 
     def check_chunk(self, endpoint: 'str', id: 'str', filename: 'str', chunk_number: 'int',
-                     chunk_size: 'int' = 1048576) -> 'bool':
+                    chunk_size: 'int' = 1048576) -> 'bool':
         """Check if chunk was uploaded on server"""
+
         try:
-            self.send(
-                "GET", 
-                endpoint, 
-                f"{id}/chunk/",
-                params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size}
-            )
+            self.send("GET", endpoint, f"{id}/chunk/",
+                params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size})
         except exceptions.RequestException as ex:
             if ex.code == 404:
                 return False
@@ -83,9 +118,10 @@ class ApiService(metaclass=Singleton):
         else:
             return True
 
-    def chunk(self, endpoint: 'str', id: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int', chunk_size: 'int',
-              total_chunks: 'int', total_size: 'int') -> 'None':
+    def chunk(self, endpoint: 'str', id: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int', 
+              chunk_size: 'int', total_chunks: 'int', total_size: 'int') -> 'None':
         """Send chunk on server"""
+
         if self.check_chunk(endpoint, id, filename, chunk_number, chunk_size):
             return
 
@@ -93,9 +129,10 @@ class ApiService(metaclass=Singleton):
                          params={"filename": filename, "chunkNumber": chunk_number, "totalChunks": total_chunks,
                                  "totalSize": total_size}, files={"chunk": chunk})
 
-    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, params: 'dict' = None,
-             files: 'dict' = None) -> 'dict | list[dict] | None':
+    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, 
+             params: 'dict' = None,  files: 'dict' = None) -> 'dict | list[dict] | None':
         """Send request to API"""
+
         try:
             r = requests.request(
                 method,
@@ -131,18 +168,6 @@ class ApiService(metaclass=Singleton):
 
         return r.json()
 
-class CacheService(object, metaclass=Singleton):
-    _cache = {}
-
-    def get_cache(self, entity: 'models.TypeEntity'):
-        if entity.id is not None:
-            if entity.id in self._cache:
-                return self._cache[entity.id]
-
-        return None
-
-    def set_cache(self, entity: 'models.TypeEntity'):
-        pass
 
 LINK_RE = re.compile(
     r'(?:@|(?:https?:\/\/)?(?:www\.)?(?:telegram\.(?:me|dog)|t\.me)\/(?:@|joinchat\/|\+)?|'
@@ -158,6 +183,15 @@ TG_RE = re.compile(r'^tg://(?:(join)|resolve)\?(?:invite|domain)=')
 
 
 def parse_username(link: 'str') -> 'tuple[str | None, str | None]':
+    """
+    Parses the given username or channel access hash, given
+    a string, username or URL. Returns a tuple consisting of
+    both the stripped, lowercase username and whether it is
+    a joinchat/ hash (in which case is not lowercase'd).
+
+    Returns ``(None, False)`` if the ``username`` or link is not valid.
+    """
+
     link = link.strip()
 
     m = re.match(HTTP_RE, link) or re.match(TG_RE, link)
@@ -175,4 +209,3 @@ def parse_username(link: 'str') -> 'tuple[str | None, str | None]':
         return link.lower(), False
     else:
         return None, False
-

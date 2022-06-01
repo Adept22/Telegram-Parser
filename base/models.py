@@ -11,30 +11,33 @@ T = TypeVar('T', bound='Entity')
 class Entity(Generic[T], metaclass=ABCMeta):
     """Base class for entities"""
 
-    def __init__(self, id: 'str' = None, **kwargs):
+    def __init__(self, id: 'str' = None):
         self._id = id
 
     @property
     def id(self) -> 'str | None':
         """Идентификатор сущности."""
+        
         return self._id
 
     @id.setter
     def id(self, new_id) -> 'None':
         """Сеттер идентификатора сущности."""
+
         self._id = new_id
 
     @property
     @abstractmethod
     def endpoint(self) -> str:
         """Название сущности в пути API."""
+
         raise NotImplementedError
 
     @property
     @abstractmethod
     def unique_constraint(self) -> 'dict | None':
         """Свойства для проверки существования сущности,
-        они же отражают уникольность."""
+        они же отражают уникальность."""
 
         raise NotImplementedError
 
@@ -92,32 +95,35 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """
         Удаляет сущность из API.
         """
+
         ApiService().delete(self.__class__.endpoint, self.serialize())
 
 
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
     """Base class for media entities"""
 
-    async def upload(self, client, tg_media, file_size: 'int', extension: 'str') -> 'None':
+    async def upload(self, client, tg_media, size: 'int', extension: 'str') -> 'None':
         """Uploads media on server"""
 
-        if not file_size or self.id is None:
-            return
-
-        media = ApiService().get(self.__class__.endpoint, id=self.id)
-
-        if media.get("path") is not None:
-            return
+        if self.id is None:
+            raise ValueError("Entity hasn't id")
 
         chunk_number = 0
         chunk_size = downloads.MAX_CHUNK_SIZE
-        total_chunks = math.ceil(file_size / chunk_size)
+        total_chunks = math.ceil(size / chunk_size)
 
-        async for chunk in client.iter_download(file=tg_media, chunk_size=chunk_size, file_size=file_size):
+        async for chunk in client.iter_download(tg_media, chunk_size=chunk_size, file_size=size):
             ApiService().chunk(
-                self.__class__.endpoint, self.id, str(tg_media.id) + extension,
-                chunk, chunk_number, chunk_size, total_chunks, file_size
+                self.__class__.endpoint,
+                self.id,
+                str(tg_media.id) + extension,
+                chunk,
+                chunk_number,
+                chunk_size,
+                total_chunks,
+                size
             )
+
             chunk_number += 1
 
 
@@ -126,10 +132,9 @@ class Host(Entity['Host']):
 
     endpoint = "hosts"
 
-    def __init__(self, id: 'str', public_ip: 'str', local_ip: 'str', name: 'str', **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, public_ip: 'str', local_ip: 'str', name: 'str', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str' = id
         self.public_ip: 'str' = public_ip
         self.local_ip: 'str' = local_ip
         self.name: 'str' = name
@@ -163,10 +168,9 @@ class Parser(Entity['Parser']):
     IN_PROGRESS = 1
     FAILED = 2
 
-    def __init__(self, id: 'str', host: 'TypeHost | dict', status: 'int', api_id: 'str', api_hash: 'str', **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, host: 'TypeHost', status: 'int', api_id: 'str', api_hash: 'str', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str' = id
         self._host: 'TypeHost' = None
         self.host: 'str' = host
         self.status: 'int' = status
@@ -180,6 +184,7 @@ class Parser(Entity['Parser']):
     @property
     def host(self) -> 'TypeHost':
         """Host property"""
+
         return self._host
 
     @host.setter
@@ -226,11 +231,10 @@ class Chat(Entity['Chat']):
     MONITORING = 2
     FAILED = 3
 
-    def __init__(self, link: 'str', id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, link: 'str', **kwargs):
+        super().__init__(**kwargs)
 
         self.link: 'str' = link
-        self.id: 'str' = id
         self.status: 'int' = kwargs.get("status", 0)
         self.status_text: 'str | None' = kwargs.get("status_text")
         self.internal_id: 'int | None' = kwargs.get("internal_id")
@@ -281,10 +285,9 @@ class Phone(Entity['Phone']):
     FULL = 3
     BAN = 4
 
-    def __init__(self, id: 'str', **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str' = id
         self.number: 'str | None' = kwargs.get("number")
         self.status: 'bool' = kwargs.get("status", 0)
         self.status_text: 'str | None' = kwargs.get("status_text")
@@ -333,10 +336,9 @@ class ChatPhone(Entity['ChatPhone']):
 
     endpoint = "chats-phones"
 
-    def __init__(self, chat: 'TypeChat', phone: 'TypePhone', id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, chat: 'TypeChat', phone: 'TypePhone', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.phone: 'TypePhone' = phone
         self.is_using: 'bool' = kwargs.get("is_using")
@@ -369,12 +371,11 @@ class Message(Entity['Message']):
 
     endpoint = "messages"
 
-    def __init__(self, internal_id: 'int', chat: 'TypeChat', id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, internal_id: 'int', chat: 'TypeChat', **kwargs):
+        super().__init__(**kwargs)
 
         self.internal_id: 'int' = internal_id
         self.chat: 'TypeChat' = chat
-        self.id: 'str | None' = id
         self.text: 'str | None' = kwargs.get("text")
         self.member: 'TypeMember | None' = kwargs.get("member")
         self.reply_to: 'TypeMessage | None' = kwargs.get("reply_to")
@@ -426,10 +427,9 @@ class Member(Entity['Member']):
 
     endpoint = "members"
 
-    def __init__(self, internal_id: 'int', id: 'str' = None, **kwargs) -> None:
-        super().__init__(id, **kwargs)
+    def __init__(self, internal_id: 'int', **kwargs) -> None:
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
         self.username: 'str | None' = kwargs.get("username")
         self.first_name: 'str | None' = kwargs.get("first_name")
@@ -471,10 +471,9 @@ class ChatMember(Entity['ChatMember']):
 
     endpoint = "chats-members"
 
-    def __init__(self, chat: 'TypeChat', member: 'TypeMember', id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, chat: 'TypeChat', member: 'TypeMember', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.member: 'TypeMember' = member
         self.date: 'str | None' = kwargs.get("date")
@@ -512,10 +511,9 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
     endpoint = "chats-members-roles"
 
-    def __init__(self, member: 'TypeChatMember', id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, member: 'TypeChatMember', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.member: 'TypeChatMember' = member
         self.title: 'str' = kwargs.get("title", "Участник")
         self.code: 'str' = kwargs.get("code", "member")
@@ -548,10 +546,9 @@ class ChatMedia(Media['ChatMedia']):
 
     endpoint = "chats-medias"
 
-    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = kwargs.get("path")
@@ -587,10 +584,9 @@ class MemberMedia(Media['MemberMedia']):
 
     endpoint = "members-medias"
 
-    def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id: 'str' = None, **kwargs):
-        super().__init__(id, **kwargs)
+    def __init__(self, internal_id: 'int', member: 'TypeMember', **kwargs):
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.member: 'TypeMember | None' = member
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = kwargs.get("path")
@@ -626,10 +622,9 @@ class MessageMedia(Media['MessageMedia']):
 
     endpoint = "messages-medias"
 
-    def __init__(self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, **kwargs) -> None:
-        super().__init__(id, **kwargs)
+    def __init__(self, internal_id: 'int', message: 'TypeMessage', **kwargs) -> None:
+        super().__init__(**kwargs)
 
-        self.id: 'str | None' = id
         self.message: 'TypeMessage' = message
         self.internal_id: 'int' = internal_id
         self.path: 'str | None' = kwargs.get("path")
