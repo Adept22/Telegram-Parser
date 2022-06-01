@@ -4,11 +4,12 @@ from base.utils import ApiService
 
 T = TypeVar('T', bound='Entity')
 
+
 class Entity(Generic[T], metaclass=ABCMeta):
     @property
     @abstractmethod
     @staticmethod
-    def __name() -> 'str':
+    def __name() -> str:
         """
         Название сущности в пути API.
         """
@@ -16,7 +17,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def id(self) -> 'str':
+    def id(self) -> str:
         raise NotImplementedError
 
     @property
@@ -55,7 +56,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        self.deserialize(ApiService().get(Entity.__name, { "id": self.id }))
+        self.deserialize(ApiService().get(Entity.__name, {"id": self.id}))
 
     def save(self) -> 'T':
         """
@@ -73,7 +74,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
             
             if len(entities) > 0:
                 self.id = entities[0]['id']
-                
                 self.save()
 
         return self
@@ -90,21 +90,23 @@ class Media(Entity['Media'], metaclass=ABCMeta):
         import math
         from telethon.client import downloads
 
-        if not file_size or self.id == None:
+        if not file_size or self.id is None:
             return
 
-        media = ApiService().get(Media.__name, { "id": self.id })
+        media = ApiService().get(Media.__name, {"id": self.id})
 
-        if media.get("path") != None:
+        if media.get("path") is not None:
             return
 
         chunk_number = 0
-        chunk_size=downloads.MAX_CHUNK_SIZE
+        chunk_size = downloads.MAX_CHUNK_SIZE
         total_chunks = math.ceil(file_size / chunk_size)
 
         async for chunk in client.iter_download(file=tg_media, chunk_size=chunk_size, file_size=file_size):
-            ApiService()._chunk(Media.__name, self.serialize(), str(tg_media.id) + extension, chunk, chunk_number, chunk_size, total_chunks, file_size)
-
+            ApiService().chunk(
+                Media.__name, self.serialize(), str(tg_media.id) + extension,
+                chunk, chunk_number, chunk_size, total_chunks, file_size
+            )
             chunk_number += 1
 
 
@@ -116,9 +118,10 @@ class Host(Entity['Host']):
         self.name: 'str' = name
     
     @property
+    @staticmethod
     def __name() -> 'str':
         return "hosts"
-        
+
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
@@ -136,7 +139,6 @@ class Host(Entity['Host']):
         self.public_ip = _dict['public_ip']
         self.local_ip = _dict['local_ip']
         self.name = _dict['name']
-
         return self
 
 
@@ -274,7 +276,7 @@ class Phone(Entity['Phone']):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
-            "parser": { "id": self.parser.id } if self.parser else None
+            "parser": {"id": self.parser.id} if self.parser else None
         }
 
     def deserialize(self, _dict: 'dict') -> 'TypePhone':
@@ -306,13 +308,13 @@ class ChatPhone(Entity['ChatPhone']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'chat': { "id": self.chat.id }, "phone": { "id": self.phone.id } }
+        return {'chat': {"id": self.chat.id}, "phone": {"id": self.phone.id}}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": { "id": self.chat.id },
-            "phone": { "id": self.phone.id },
+            "chat": {"id": self.chat.id},
+            "phone": {"id": self.phone.id},
             "is_using": self.is_using
         }
 
@@ -348,16 +350,16 @@ class Message(Entity['Message']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'internal_id': self.internal_id, 'chat': { "id": self.chat.id } }
+        return {'internal_id': self.internal_id, 'chat': {"id": self.chat.id}}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id, 
             "internal_id": self.internal_id, 
             "text": self.text, 
-            "chat": { "id": self.chat.id },
-            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None, 
-            "reply_to": { "id": self.reply_to.id } if self.reply_to != None and self.reply_to.id != None else None, 
+            "chat": {"id": self.chat.id},
+            "member": {"id": self.member.id} if self.member is not None and self.member.id is not None else None,
+            "reply_to": {"id": self.reply_to.id} if self.reply_to is not None and self.reply_to.id is not None else None,
             "is_pinned": self.is_pinned, 
             "forwarded_from_id": self.forwarded_from_id, 
             "forwarded_from_name": self.forwarded_from_name, 
@@ -372,8 +374,8 @@ class Message(Entity['Message']):
         self.internal_id = _dict.get("internal_id")
         self.text = _dict.get("text")
         self.chat = self.chat.deserialize(_dict.get("chat"))
-        self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
-        self.reply_to = self.reply_to.deserialize(_dict.get("reply_to")) if self.reply_to != None and "reply_to" in _dict else None
+        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
+        self.reply_to = self.reply_to.deserialize(_dict.get("reply_to")) if self.reply_to is not None and "reply_to" in _dict else None
         self.is_pinned = _dict.get("is_pinned")
         self.forwarded_from_id = _dict.get("forwarded_from_id")
         self.forwarded_from_name = _dict.get("forwarded_from_name")
@@ -384,7 +386,9 @@ class Message(Entity['Message']):
 
 
 class Member(Entity['Member']):
-    def __init__(self, internal_id: 'int', id: 'str' = None, username: 'str' = None, first_name: 'str' = None, last_name: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
+    def __init__(
+            self, internal_id: 'int', id: 'str' = None, username: 'str' = None, first_name: 'str' = None,
+            last_name: 'str' = None, phone: 'str' = None, about: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.internal_id: 'int' = internal_id
         self.username: 'str | None' = username
@@ -400,7 +404,7 @@ class Member(Entity['Member']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'internal_id': self.internal_id }
+        return {'internal_id': self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -443,24 +447,24 @@ class ChatMember(Entity['ChatMember']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'chat': { "id": self.chat.id }, "member": { "id": self.member.id } }
+        return {'chat': {"id": self.chat.id}, "member": {"id": self.member.id}}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": { "id": self.chat.id } if self.chat != None and self.chat.id != None else None,
-            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
+            "chat": {"id": self.chat.id} if self.chat is not None and self.chat.id is not None else None,
+            "member": {"id": self.member.id} if self.member is not None and self.member.id is not None else None,
             "date": self.date,
             "is_left": self.is_left,
-            "roles": [{ "id": role.id } for role in self.roles if role != None and role.id != None],
+            "roles": [{"id": role.id} for role in self.roles if role is not None and role.id is not None],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, _dict: 'dict') -> 'TypeChatMember':
         self.id = _dict["id"]
-        self.chat = self.chat.deserialize(_dict["chat"]) if self.chat != None and "chat" in _dict else None
-        self.member = self.member.deserialize(_dict["member"]) if self.member != None and "member" in _dict else None
+        self.chat = self.chat.deserialize(_dict["chat"]) if self.chat is not None and "chat" in _dict else None
+        self.member = self.member.deserialize(_dict["member"]) if self.member is not None and "member" in _dict else None
         self.date = _dict.get("date")
         self.is_left = _dict.get("is_left")
 
@@ -481,12 +485,12 @@ class ChatMemberRole(Entity['ChatMemberRole']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'member': { "id": self.member.id }, 'title': self.title, 'code': self.code }
+        return {'member': {"id": self.member.id}, 'title': self.title, 'code': self.code}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
+            "member": {"id": self.member.id} if self.member is not None and self.member.id is not None else None,
             "title": self.title,
             "code": self.code
         }
@@ -495,7 +499,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
     def deserialize(self, _dict: 'dict') -> 'TypeChatMemberRole':
         self.id = _dict["id"]
-        self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
+        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
         self.title = _dict["title"]
         self.code = _dict["code"]
 
@@ -503,7 +507,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
 
 class ChatMedia(Media['ChatMedia']):
-    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id = None, path = None, date = None, *args, **kwargs):
+    def __init__(self, internal_id: 'int', chat: 'TypeChat' = None, id=None, path=None, date=None, *args, **kwargs):
         self.id: 'str | None' = id
         self.chat: 'TypeChat' = chat
         self.internal_id: 'int' = internal_id
@@ -517,12 +521,12 @@ class ChatMedia(Media['ChatMedia']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { "internal_id": self.internal_id }
+        return {"internal_id": self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": { "id": self.chat.id },
+            "chat": {"id": self.chat.id},
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -541,7 +545,7 @@ class ChatMedia(Media['ChatMedia']):
 
 
 class MemberMedia(Media['MemberMedia']):
-    def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id = None, path = None, date = None, *args, **kwargs):
+    def __init__(self, internal_id: 'int', member: 'TypeMember' = None, id=None, path=None, date=None, *args, **kwargs):
         self.id: 'str | None' = id
         self.member: 'TypeMember | None' = member
         self.internal_id: 'int' = internal_id
@@ -555,12 +559,12 @@ class MemberMedia(Media['MemberMedia']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'internal_id': self.internal_id }
+        return {'internal_id': self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": { "id": self.member.id } if self.member != None and self.member.id != None else None,
+            "member": {"id": self.member.id} if self.member is not None and self.member.id is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -571,7 +575,7 @@ class MemberMedia(Media['MemberMedia']):
     def deserialize(self, _dict: 'dict') -> 'TypeMemberMedia':
         self.id = _dict["id"]
         self.internal_id = _dict["internal_id"]
-        self.member = self.member.deserialize(_dict.get("member")) if self.member != None and "member" in _dict else None
+        self.member = self.member.deserialize(_dict.get("member")) if self.member is not None and "member" in _dict else None
         self.path = _dict.get("path")
         self.date = _dict.get("date")
 
@@ -579,7 +583,9 @@ class MemberMedia(Media['MemberMedia']):
 
 
 class MessageMedia(Media['MessageMedia']):
-    def __init__(self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, path: 'str' = None, date: 'str' = None, *args, **kwargs) -> None:
+    def __init__(
+            self, internal_id: 'int', message: 'TypeMessage' = None, id: 'str' = None, path: 'str' = None,
+            date: 'str' = None, *args, **kwargs) -> None:
         self.id: 'str | None' = id
         self.message: 'TypeMessage' = message
         self.internal_id: 'int' = internal_id
@@ -593,12 +599,12 @@ class MessageMedia(Media['MessageMedia']):
         
     @property
     def unique_constraint(self) -> 'dict | None':
-        return { 'internal_id': self.internal_id }
+        return {'internal_id': self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "message": { "id": self.message.id } if self.message != None and self.message.id != None else None,
+            "message": {"id": self.message.id} if self.message is not None and self.message.id is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
