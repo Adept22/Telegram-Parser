@@ -74,8 +74,6 @@ class ApiService(metaclass=Singleton):
         return self._cache[entity["id"]]
 
     def _update(self, endpoint: 'str', id: 'str', **kwargs):
-        del kwargs["id"]
-
         self._cache[id] = self.send("PUT", endpoint, f"{id}/", body=kwargs)
 
         return self._cache[id]
@@ -92,7 +90,7 @@ class ApiService(metaclass=Singleton):
         """Create or update entity"""
 
         if kwargs.get('id') is not None:
-            return self._update(endpoint, kwargs["id"], **kwargs)
+            return self._update(endpoint, kwargs.pop("id"), **kwargs)
 
         return self._create(endpoint, **kwargs)
 
@@ -131,7 +129,6 @@ class ApiService(metaclass=Singleton):
     def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None,
              params: 'dict' = None,  files: 'dict' = None) -> 'dict | list[dict] | None':
         """Send request to API"""
-
         try:
             r = requests.request(
                 method,
@@ -150,17 +147,17 @@ class ApiService(metaclass=Singleton):
         except requests.exceptions.RequestException as ex:
             r: 'requests.Response | None' = ex.response
 
-            try:
-                _json = r.json()
-            except json.decoder.JSONDecodeError:
-                content = r.text
-            else:
-                content = _json.get("message", None)
+            # try:
+            #     _json = r.json()
+            # except json.decoder.JSONDecodeError:
+            #     content = r.text
+            # else:
+            #     content = _json.get("message", None)
 
             if r.status_code == 409:
-                raise exceptions.UniqueConstraintViolationError(content)
+                raise exceptions.UniqueConstraintViolationError(r.text)
             else:
-                raise exceptions.RequestException(r.status_code, content)
+                raise exceptions.RequestException(r.status_code, r.text)
 
         if r.status_code == 204:
             return None
