@@ -7,7 +7,7 @@ import urllib.parse
 import requests
 import telethon
 from telethon.sessions import StringSession
-from base import models, exceptions
+from base import exceptions
 
 class Singleton(type):
     """Metaclass for singletone pattern representation"""
@@ -23,7 +23,7 @@ class Singleton(type):
 class TelegramClient(telethon.TelegramClient):
     """Extended telegram client"""
 
-    def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
+    def __init__(self, phone, *args, **kwargs):
         self.phone = phone
 
         super().__init__(
@@ -52,16 +52,8 @@ class ApiService(metaclass=Singleton):
     """Service for working with API"""
     _cache = {}
 
-    def get(self, endpoint: 'str', **kwargs) -> 'dict | list[dict]':
-        """Get entity or list of entities"""
-
-        if kwargs.get('id') is not None:
-            return self._get(endpoint, kwargs['id'])
-
-        return self._filter(endpoint, **kwargs)
-
-    def _get(self, endpoint: 'str', id: 'str'):
-        if id not in self._cache:
+    def _get(self, endpoint: 'str', id: 'str', force: 'bool' = False):
+        if id not in self._cache or force:
             self._cache[id] = self.send("GET", endpoint, f"{id}/")
 
         return self._cache[id]
@@ -69,19 +61,10 @@ class ApiService(metaclass=Singleton):
     def _filter(self, endpoint: 'str', **kwargs):
         result = self.send("GET", endpoint, "?" + urllib.parse.urlencode(kwargs))
 
-        # TODO: Какое свойство с элементами?
-        for entity in result["items"]:
+        for entity in result["results"]:
             self._cache[entity["id"]] = entity
 
         return result
-
-    def set(self, endpoint: 'str', **kwargs) -> 'dict':
-        """Create or update entity"""
-
-        if kwargs.get('id') is not None:
-            return self._update(endpoint, kwargs["id"], **kwargs)
-
-        return self._create(endpoint, **kwargs)
 
     def _create(self, endpoint: 'str', **kwargs):
         entity = self.send("POST", endpoint, "", body=kwargs)
@@ -96,6 +79,22 @@ class ApiService(metaclass=Singleton):
         self._cache[id] = self.send("PUT", endpoint, f"{id}/", body=kwargs)
 
         return self._cache[id]
+
+    def get(self, endpoint: 'str', **kwargs) -> 'dict | list[dict]':
+        """Get entity or list of entities"""
+
+        if kwargs.get('id') is not None:
+            return self._get(endpoint, kwargs['id'], kwargs.get("force", False))
+
+        return self._filter(endpoint, **kwargs)
+
+    def set(self, endpoint: 'str', **kwargs) -> 'dict':
+        """Create or update entity"""
+
+        if kwargs.get('id') is not None:
+            return self._update(endpoint, kwargs["id"], **kwargs)
+
+        return self._create(endpoint, **kwargs)
 
     def delete(self, endpoint: 'str', id: 'str') -> 'None':
         """Delete entity"""
@@ -118,7 +117,7 @@ class ApiService(metaclass=Singleton):
         else:
             return True
 
-    def chunk(self, endpoint: 'str', id: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int', 
+    def chunk(self, endpoint: 'str', id: 'dict', filename: 'str', chunk: 'bytes', chunk_number: 'int',
               chunk_size: 'int', total_chunks: 'int', total_size: 'int') -> 'None':
         """Send chunk on server"""
 
@@ -129,7 +128,7 @@ class ApiService(metaclass=Singleton):
                          params={"filename": filename, "chunkNumber": chunk_number, "totalChunks": total_chunks,
                                  "totalSize": total_size}, files={"chunk": chunk})
 
-    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, 
+    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None,
              params: 'dict' = None,  files: 'dict' = None) -> 'dict | list[dict] | None':
         """Send request to API"""
 

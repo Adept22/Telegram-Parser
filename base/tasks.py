@@ -1,27 +1,38 @@
+"""Collection of tasks representations"""
+
 from __future__ import absolute_import
-import asyncio, telethon
+from abc import abstractmethod
+import re
+import asyncio
+import telethon
+import random
+import names
+import telethon.sessions
 
 from base.celeryapp import app
-import base.models as models
-import base.utils as utils
-import base.exceptions as exceptions
+from base import models, utils, exceptions
+from base.models import Phone, Chat, ChatPhone, Message, Member, ChatMember, ChatMemberRole
 
 
-@app.task
-def test(params: str):
-    print("Run with params: {}".format(params))
-    return True
+class Task(app.Task):
+    """Base task class"""
+
+    @abstractmethod
+    def run(self, *args, **kswargs):
+        """Start the task work"""
+
+        raise NotImplementedError
 
 
-class PhoneAuthorizationTask(app.Task):
+class PhoneAuthorizationTask(Task):
+    """PhoneAuthorizationTask"""
+
     name = "PhoneAuthorizationTask"
 
     async def _run(self, phone: 'models.TypePhone'):
-        import random, names, telethon, telethon.sessions
-
         client = telethon.TelegramClient(
             connection_retries=-1,
-            retry_delay=5, 
+            retry_delay=5,
             session=telethon.sessions.StringSession(phone.session),
             api_id=phone.parser.api_id,
             api_hash=phone.parser.api_hash,
@@ -52,11 +63,16 @@ class PhoneAuthorizationTask(app.Task):
                             if phone.last_name is None:
                                 phone.last_name = names.get_last_name()
 
-                            await client.sign_up(phone.code, phone.first_name, phone.last_name, phone_code_hash=code_hash)
+                            await client.sign_up(
+                                phone.code,
+                                phone.first_name,
+                                phone.last_name,
+                                phone_code_hash=code_hash
+                            )
                         except (
-                            telethon.errors.PhoneCodeEmptyError, 
-                            telethon.errors.PhoneCodeExpiredError, 
-                            telethon.errors.PhoneCodeHashEmptyError, 
+                            telethon.errors.PhoneCodeEmptyError,
+                            telethon.errors.PhoneCodeExpiredError,
+                            telethon.errors.PhoneCodeHashEmptyError,
                             telethon.errors.PhoneCodeInvalidError
                         ) as ex:
                             print(f"Code invalid. Exception {ex}")
@@ -68,14 +84,14 @@ class PhoneAuthorizationTask(app.Task):
                             continue
 
                         me = await client.get_me()
-                        
+
                         internal_id = me.id if me else None
-                        
+
                         if internal_id is not None and phone.internal_id != internal_id:
                             phone.internal_id = internal_id
 
                         phone.session = client.session.save()
-                        phone.status = models.Phone.READY
+                        phone.status = Phone.READY
                         phone.status_text = None
                         phone.code = None
                         phone.save()
@@ -84,12 +100,12 @@ class PhoneAuthorizationTask(app.Task):
                     elif code_hash is None:
                         try:
                             sent = await client.send_code_request(phone=phone.number, force_sms=True)
-                            
+
                             code_hash = sent.phone_code_hash
                         except telethon.errors.rpcerrorlist.FloodWaitError as ex:
                             print(f"Flood exception. Sleep {ex.seconds}.")
-                            
-                            phone.status = models.Phone.FLOOD
+
+                            phone.status = Phone.FLOOD
                             phone.status_text = str(ex)
                             phone.save()
 
@@ -102,9 +118,9 @@ class PhoneAuthorizationTask(app.Task):
                         phone.reload()
                 except telethon.errors.RPCError as ex:
                     print(f"Cannot authentificate. Exception: {ex}")
-                    
+
                     phone.session = None
-                    phone.status = models.Phone.BAN
+                    phone.status = Phone.BAN
                     phone.status_text = str(ex)
                     phone.code = None
                     phone.save()
@@ -116,33 +132,34 @@ class PhoneAuthorizationTask(app.Task):
         dialogs = await client.get_dialogs(limit=0)
 
         if dialogs.total >= 500:
-            phone.status = models.Phone.FULL
+            phone.status = Phone.FULL
             phone.save()
 
-        print(f"Authorized.")
+        print("Authorized.")
 
         return True
 
     def run(self, phone_id):
-        from base.models import Phone
         try:
             phone = Phone(phone_id).reload()
         except exceptions.RequestException:
             return False
-        print(phone_id)
+
         return asyncio.run(self._run(phone))
 
 
 app.register_task(PhoneAuthorizationTask())
 
 
-class ChatResolveTask(app.Task):
+class ChatResolveTask(Task):
+    """ChatResolveTask"""
+
     name = "ChatResolveTask"
 
     async def __resolve(self, client, string):
-        from base.utils import parse_username
+        """Resolve entity from string"""
 
-        username, is_join_chat = parse_username(string)
+        username, is_join_chat = utils.parse_username(string)
 
         if is_join_chat:
             invite = await client(telethon.functions.messages.CheckChatInviteRequest(username))
@@ -154,13 +171,9 @@ class ChatResolveTask(app.Task):
         elif username:
             return await client.get_entity(username)
 
-        raise ValueError(
-            'Cannot find any entity corresponding to "{}"'.format(string)
-        )
+        raise ValueError(f"Cannot find any entity corresponding to '{string}'")
 
     async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
-        from base.models import Chat, Phone
-
         for phone in phones:
             try:
                 async with utils.TelegramClient(phone) as client:
@@ -183,7 +196,7 @@ class ChatResolveTask(app.Task):
                         break
                     else:
                         if isinstance(tg_chat, telethon.types.ChatInvite):
-                            print(f"Chat is available, but need to join.")
+                            print("Chat is available, but need to join.")
 
                             chat.status_text = "Chat is available, but need to join."
                         else:
@@ -212,15 +225,12 @@ class ChatResolveTask(app.Task):
         chat.save()
 
     def run(self, chat_id):
-        from base.models import Chat, Phone
-        import base.exceptions as exceptions
-
         try:
             chat = Chat(chat_id).reload()
         except exceptions.RequestException:
             return False
 
-        phones = Phone.find({ "status": Phone.READY, "parser": { "id": chat.parser.id } })
+        phones = Phone.find(status=Phone.READY, parser=chat.parser.alias())
 
         return asyncio.run(self._run(chat, phones))
 
@@ -228,13 +238,15 @@ class ChatResolveTask(app.Task):
 app.register_task(ChatResolveTask())
 
 
-class JoinChatTask(app.Task):
+class JoinChatTask(Task):
+    """JoinChatTask"""
+
     name = "JoinChatTask"
 
     async def __join(self, client, string: 'str'):
-        from base.utils import parse_username
+        """Join to chat by phone"""
 
-        username, is_join_chat = parse_username(string)
+        username, is_join_chat = utils.parse_username(string)
 
         if is_join_chat:
             invite = await client(telethon.functions.messages.CheckChatInviteRequest(username))
@@ -250,13 +262,9 @@ class JoinChatTask(app.Task):
 
             return updates.chats[-1]
 
-        raise ValueError(
-            'Cannot find any entity corresponding to "{}"'.format(string)
-        )
+        raise ValueError(f"Cannot find any entity corresponding to '{string}'")
 
     async def _run(self, chat: 'models.TypeChat', phone: 'models.TypePhone'):
-        from base.models import Chat, Phone, ChatPhone
-
         while True:
             try:
                 async with utils.TelegramClient(phone) as client:
@@ -324,7 +332,6 @@ class JoinChatTask(app.Task):
             ) as ex:
                 phone.status = Phone.CREATED if isinstance(ex, exceptions.UnauthorizedError) else Phone.BAN
                 phone.status_text = str(ex)
-
                 phone.save()
 
                 break
@@ -332,8 +339,6 @@ class JoinChatTask(app.Task):
         return False
 
     def run(self, chat_id: 'str', phone_id: 'str'):
-        from base.models import Chat, Phone
-
         try:
             chat = Chat(chat_id).reload()
         except exceptions.RequestException:
@@ -350,17 +355,19 @@ class JoinChatTask(app.Task):
 app.register_task(JoinChatTask())
 
 
-class ParseChatTask(app.Task):
+class ParseChatTask(Task):
+    """ParseChatTask"""
+
     name = "ParseChatTask"
 
     async def _set_member(self, client, user: 'telethon.types.User') -> 'models.TypeMember':
-        from base.models import Member
+        """Create 'Member' from telegram entity"""
 
         new_member = {
-            "internal_id": user.id, 
-            "username": user.username, 
-            "first_name": user.first_name, 
-            "last_name": user.last_name, 
+            "internal_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
             "phone": user.phone
         }
 
@@ -368,7 +375,7 @@ class ParseChatTask(app.Task):
             full_user: 'telethon.types.UserFull' = await client(
                 telethon.functions.users.GetFullUserRequest(user.id)
             )
-        except Exception:
+        except:
             pass
         else:
             new_member["username"] = full_user.user.username
@@ -378,11 +385,11 @@ class ParseChatTask(app.Task):
             new_member["about"] = full_user.about
 
         return Member(**new_member).save()
-        
-    def __set_chat_member(self, chat: 'models.TypeChat', member: 'models.TypeMember', participant = None) -> 'models.TypeChatMember':
-        from base.models import ChatMember
 
-        new_chat_member = { "chat": chat, "member": member }
+    def __set_chat_member(self, chat: 'models.TypeChat', member: 'models.TypeMember', participant=None) -> 'models.TypeChatMember':
+        """Create 'ChatMember' from telegram entity"""
+
+        new_chat_member = {"chat": chat, "member": member}
 
         if isinstance(participant, (telethon.types.ChannelParticipant, telethon.types.ChatParticipant)):
             new_chat_member["date"] = participant.date.isoformat()
@@ -390,11 +397,11 @@ class ParseChatTask(app.Task):
             new_chat_member["isLeft"] = True
 
         return ChatMember(**new_chat_member).save()
-    
-    def __set_chat_member_role(self, chat_member: 'models.TypeChatMember', participant = None) -> 'models.TypeChatMemberRole':
-        from base.models import ChatMemberRole
 
-        new_chat_member_role = { "member": chat_member }
+    def __set_chat_member_role(self, chat_member: 'models.TypeChatMember', participant=None) -> 'models.TypeChatMemberRole':
+        """Create 'ChatMemberRole' from telegram entity"""
+
+        new_chat_member_role = {"member": chat_member}
 
         if isinstance(participant, (telethon.types.ChannelParticipantAdmin, telethon.types.ChatParticipantAdmin)):
             new_chat_member_role["title"] = (participant.rank if participant.rank is not None else "Администратор")
@@ -407,8 +414,10 @@ class ParseChatTask(app.Task):
             new_chat_member_role["code"] = "member"
 
         return ChatMemberRole(**new_chat_member_role).save()
-    
+
     async def _handle_user(self, chat: 'models.TypeChat', client, user: 'telethon.types.TypeUser', participant=None):
+        """Handle telegram user"""
+
         if user.is_self:
             return None, None, None
 
@@ -417,18 +426,17 @@ class ParseChatTask(app.Task):
         chat_member_role = self.__set_chat_member_role(chat_member, participant)
 
         return member, chat_member, chat_member_role
-        
-    async def _handle_links(self, client, text):
-        import re
-        from base.utils import LINK_RE, parse_username
-        from base.models import Chat
 
-        for link in re.finditer(LINK_RE, text):
-            username, is_join_chat = parse_username(link)
+    async def _handle_links(self, client: 'utils.TelegramClient', text):
+        """Handle links from message text"""
+
+        for link in re.finditer(utils.LINK_RE, text):
+            username, is_join_chat = utils.parse_username(link)
 
             if not username:
                 continue
-            elif not is_join_chat:
+
+            if not is_join_chat:
                 try:
                     tg_entity: 'telethon.types.TypeChat | telethon.types.User' = await client.get_entity(username)
 
@@ -436,17 +444,19 @@ class ParseChatTask(app.Task):
                         member = await self._set_member(client, tg_entity)
 
                         # TODO: Как запускать?
-                        # multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, tg_entity)).start()
+                        # processes.member_media_process(chat_phone, member, tg_entity)
 
                         continue
                 except (ValueError, telethon.errors.RPCError):
                     continue
-            
+
             Chat(link=link, internal_id=tg_entity.id, title=tg_entity.title, is_available=False).save()
 
             print(f"New entity from link {link} created.")
 
     def _get_fwd(self, fwd_from):
+        """Returns thuple of forwarded from information"""
+
         if fwd_from is not None:
             fwd_from_id = None
 
@@ -455,16 +465,16 @@ class ParseChatTask(app.Task):
                     fwd_from_id = fwd_from.from_id.channel_id
                 elif isinstance(fwd_from.from_id, telethon.types.PeerUser):
                     fwd_from_id = fwd_from.from_id.user_id
-            
+
             return fwd_from_id, fwd_from.from_name if fwd_from.from_name is not None else "Неизвестно"
-            
+
         return None, None
-    
+
     async def _handle_message(self, chat: 'models.TypeChat', client, tg_message: 'telethon.types.TypeMessage'):
-        from base.models import Message
-        
+        """Handle telegram message"""
+
         fwd_from_id, fwd_from_name = self._get_fwd(tg_message.fwd_from)
-        
+
         chat_member = None
 
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
@@ -473,7 +483,7 @@ class ParseChatTask(app.Task):
             member, chat_member, chat_member_role = await self._handle_user(chat, client, user)
 
             # TODO: Как запускать?
-            # multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, user)).start()
+            # processes.member_media_process(chat_phone, member, user)
 
         reply_to = Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat).save() if tg_message.reply_to is not None else None
 
@@ -493,23 +503,26 @@ class ParseChatTask(app.Task):
                 print(str(ex))
 
         message = Message(
-            internal_id=tg_message.id, 
-            text=tg_message.message, 
+            internal_id=tg_message.id,
+            text=tg_message.message,
             chat=chat,
             member=chat_member,
-            reply_to=reply_to, 
-            is_pinned=tg_message.pinned,     
-            forwarded_from_id=fwd_from_id, 
-            forwarded_from_name=fwd_from_name, 
-            grouped_id=tg_message.grouped_id, 
-            date=tg_message.date.isoformat() 
-        ).save()
-        
+            reply_to=reply_to,
+            is_pinned=tg_message.pinned,
+            forwarded_from_id=fwd_from_id,
+            forwarded_from_name=fwd_from_name,
+            grouped_id=tg_message.grouped_id,
+            date=tg_message.date.isoformat()
+        )
+        message.save()
+
         # if tg_message.media != None:
         #     TODO: Как запускать?
         #     multiprocessing.Process(target=processes.message_media_process, args=(chat_phone, message, tg_message)).start()
 
     async def _get_members(self, chat: 'models.TypeChat', client):
+        """Iterate telegram chat members and save to API"""
+
         async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
             member, chat_member, chat_member_role = await self._handle_user(
                 chat, client, user, user.participant
@@ -518,12 +531,12 @@ class ParseChatTask(app.Task):
             # TODO: Как запускать?
             # multiprocessing.Process(target=processes.member_media_process, args=(chat_phone, member, user)).start()
         else:
-            print(f"Messages download success.")
+            print("Members download success.")
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
-        from base.models import Message
+        """Iterate telegram chat messages and save to API"""
 
-        last_messages = Message.find({ "chat": { "id": chat.id }, "ordering": "-internal_id", "limit": 1 })
+        last_messages = Message.find(chat=chat.alias(), ordering="-internal_id", limit=1)
         max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
 
         async for tg_message in client.iter_messages(chat.internal_id, 1000, max_id=max_id):
@@ -534,12 +547,10 @@ class ParseChatTask(app.Task):
 
             await self._handle_message(chat, client, tg_message)
         else:
-            print(f"Messages download success.")
+            print("Messages download success.")
 
     async def _run(self, chat: 'models.TypeChat'):
-        from base.models import Chat, Phone, ChatPhone
-
-        chat_phones = ChatPhone.find({"chat": {"id": chat.id}})
+        chat_phones = ChatPhone.find(chat=chat.alias())
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone
@@ -579,8 +590,6 @@ class ParseChatTask(app.Task):
                 phone.save()
 
     def run(self, chat_id):
-        from base.models import Chat
-
         try:
             chat = Chat(chat_id).reload()
         except exceptions.RequestException:
@@ -598,7 +607,7 @@ class MonitoringChatTask(ParseChatTask):
     async def _run(self, chat):
         from base.models import Phone, Chat, ChatPhone
 
-        chat_phones = ChatPhone.find({ "chat": { "id": chat.id } })
+        chat_phones = ChatPhone.find(chat=chat.alias())
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone
@@ -613,9 +622,9 @@ class MonitoringChatTask(ParseChatTask):
                     async def handle_new_message(event):
                         if not isinstance(event.message, telethon.types.Message):
                             return
-                            
+
                         await self._handle_links(client, event.message.message)
-                        
+
                         await self._handle_message(chat, client, event.message)
 
                     client.add_event_handler(handle_chat_action, telethon.events.chataction.ChatAction(chats=chat.internal_id))
@@ -638,4 +647,3 @@ class MonitoringChatTask(ParseChatTask):
 
 
 app.register_task(MonitoringChatTask())
-
