@@ -13,10 +13,8 @@ T = TypeVar('T', bound='Entity')
 class Entity(Generic[T], metaclass=ABCMeta):
     """Base class for entities"""
 
-    def __init__(self, id: 'str' = None, **kwargs):
-        self._id = id
-
-        self.deserialize(kwargs)
+    def __init__(self, **kwargs):
+        self.deserialize(**kwargs)
 
     def __str__(self):
         return f"<{self} object ({self.id})>"

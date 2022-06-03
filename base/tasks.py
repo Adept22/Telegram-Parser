@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 
 import logging
+import string
 from abc import abstractmethod
 import re
 import asyncio
@@ -372,6 +373,8 @@ class ParseChatTask(Task):
 
     name = "ParseChatTask"
 
+    search = "".join([str(i) for i in range(0, 9)]) + string.ascii_lowercase
+
     async def _set_member(self, client, user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
@@ -548,12 +551,54 @@ class ParseChatTask(Task):
     async def _get_members(self, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
         """Iterate telegram chat members and save to API"""
 
-        async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
-            member, chat_member, chat_member_role = await self._handle_user(
-                chat, client, user, user.participant
-            )
+        visited = set()
+        input_entity = await client.get_input_entity(chat.internal_id)
+        limit = 200
+
+        for s in self.search:
+            offset = 0
+
+            while True:
+                try:
+                    participants = await client(
+                        telethon.functions.channels.GetParticipantsRequest(
+                            channel=input_entity,
+                            filter=telethon.types.ChannelParticipantsSearch(s),
+                            offset=offset,
+                            limit=limit,
+                            hash=0
+                        )
+                    )
+                except telethon.errors.FloodWaitError as ex:
+                    print(f"{ex}")
+
+                    await asyncio.sleep(ex.seconds)
+
+                    continue
+
+                for user in participants.users:
+                    if user.id in visited:
+                        continue
+
+                    participant = next([p for p in participants.participant if user.id == p.user_id])
+
+                    await self._handle_user(chat, client, user, participant)
+
+                    visited.add(user.id)
+
+                offset += limit
+
+                if offset >= participants.count:
+                    break
         else:
             logging.info("Members download success.")
+
+        # async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
+        #     member, chat_member, chat_member_role = await self._handle_user(
+        #         chat, client, user, user.participant
+        #     )
+        # else:
+        #     logging.info("Members download success.")
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
         """Iterate telegram chat messages and save to API"""
@@ -561,7 +606,7 @@ class ParseChatTask(Task):
         last_messages = Message.find(chat=chat.alias(), ordering="-internal_id", limit=1)
         max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
 
-        async for tg_message in client.iter_messages(chat.internal_id, 1000, max_id=max_id):
+        async for tg_message in client.iter_messages(chat.internal_id, max_id=max_id):
             if not isinstance(tg_message, telethon.types.Message):
                 continue
 

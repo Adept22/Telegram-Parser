@@ -34,8 +34,8 @@ class TelegramClient(telethon.TelegramClient):
             connection_retries=-1,
             retry_delay=5,
             session=StringSession(phone.session),
-            api_id=phone.parser.api_id,
-            api_hash=phone.parser.api_hash
+            api_hash="",
+            api_id=''
         )
 
     async def start(self):
