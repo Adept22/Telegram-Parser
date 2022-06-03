@@ -2,15 +2,17 @@
 
 import os
 import re
-import json
+# import json
 import urllib.parse
 import requests
 import telethon
 from telethon.sessions import StringSession
 from base import exceptions
 
+
 class Singleton(type):
     """Metaclass for singletone pattern representation"""
+
     _instances = {}
 
     def __call__(cls, *args, **kwargs):
@@ -47,6 +49,7 @@ class TelegramClient(telethon.TelegramClient):
 
 
 TypeTelegramClient = TelegramClient
+
 
 class ApiService(metaclass=Singleton):
     """Service for working with API"""
@@ -96,6 +99,7 @@ class ApiService(metaclass=Singleton):
 
     def delete(self, endpoint: 'str', id: 'str') -> 'None':
         """Delete entity"""
+
         self.send("DELETE", endpoint, f"{id}/")
 
         del self._cache[id]
@@ -106,7 +110,7 @@ class ApiService(metaclass=Singleton):
 
         try:
             self.send("GET", endpoint, f"{id}/chunk/",
-                params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size})
+                      params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size})
         except exceptions.RequestException as ex:
             if ex.code == 404:
                 return False
@@ -126,9 +130,10 @@ class ApiService(metaclass=Singleton):
                          params={"filename": filename, "chunkNumber": chunk_number, "totalChunks": total_chunks,
                                  "totalSize": total_size}, files={"chunk": chunk})
 
-    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None,
-             params: 'dict' = None,  files: 'dict' = None) -> 'dict | list[dict] | None':
+    def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, params: 'dict' = None,
+             files: 'dict' = None) -> 'dict | list[dict] | None':
         """Send request to API"""
+
         try:
             r = requests.request(
                 method,
