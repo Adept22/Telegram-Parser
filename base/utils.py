@@ -1,13 +1,28 @@
 """Utilities for tasks"""
 
 import os
+import random
 import re
 # import json
 import urllib.parse
 import requests
 import telethon
+from opentele.tl import TelegramClient as OpenteleClient
+from opentele.api import API
 from telethon.sessions import StringSession
+from base import models
 from base import exceptions
+
+
+APIS = (
+    API.TelegramDesktop,
+    API.TelegramAndroid,
+    API.TelegramAndroidX,
+    API.TelegramIOS,
+    API.TelegramMacOS,
+    API.TelegramWeb_K,
+    API.TelegramWeb_Z
+)
 
 
 class Singleton(type):
@@ -22,20 +37,26 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class TelegramClient(telethon.TelegramClient):
+class TelegramClient(OpenteleClient):
     """Extended telegram client"""
 
-    def __init__(self, phone, *args, **kwargs):
+    def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
         self.phone = phone
+
+        if self.phone.api is None:
+            self.phone.api = APIS[random.random(0, len(APIS))].Generate().__dict__
+
+            del self.phone.api["pid"]
+
+            self.phone.save()
 
         super().__init__(
             *args,
             **kwargs,
+            **self.phone.api,
             connection_retries=-1,
             retry_delay=5,
-            session=StringSession(phone.session),
-            api_hash="",
-            api_id=''
+            session=StringSession(phone.session)
         )
 
     async def start(self):

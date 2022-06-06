@@ -33,13 +33,7 @@ class PhoneAuthorizationTask(Task):
     name = "PhoneAuthorizationTask"
 
     async def _run(self, phone: 'models.TypePhone'):
-        client = telethon.TelegramClient(
-            connection_retries=-1,
-            retry_delay=5,
-            session=telethon.sessions.StringSession(phone.session),
-            api_id=phone.parser.api_id,
-            api_hash=phone.parser.api_hash,
-        )
+        client = utils.TelegramClient(phone)
 
         if not client.is_connected():
             try:

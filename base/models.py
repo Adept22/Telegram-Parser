@@ -350,6 +350,7 @@ class Phone(Entity['Phone']):
     code: 'str' = None
     _parser: 'TypeParser' = None
     parser: 'TypeParser' = None
+    api: 'dict' = None
 
     @property
     def unique_constraint(self) -> 'dict | None':
@@ -397,6 +398,7 @@ class Phone(Entity['Phone']):
             "last_name": self.last_name,
             "code": self.code,
             "parser": self.parser.alias() if self.parser else None,
+            "api": self.api
         }
 
     def deserialize(self, **kwargs) -> 'TypePhone':
@@ -410,6 +412,7 @@ class Phone(Entity['Phone']):
         self.first_name = kwargs.get("first_name")
         self.last_name = kwargs.get("last_name")
         self.code = kwargs.get("code")
+        self.api = kwargs.get("api")
 
         return self
 
