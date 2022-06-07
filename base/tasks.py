@@ -362,7 +362,9 @@ app.register_task(JoinChatTask())
 
 
 class ParseBaseTask(Task):
-    async def _set_member(self, client, user: 'telethon.types.User') -> 'models.TypeMember':
+
+    @staticmethod
+    async def _set_member(client, user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
         new_member = {
@@ -373,18 +375,18 @@ class ParseBaseTask(Task):
             "phone": user.phone
         }
 
-        try:
-            full_user: 'telethon.types.UserFull' = await client(
-                telethon.functions.users.GetFullUserRequest(user.id)
-            )
-        except:
-            pass
-        else:
-            new_member["username"] = full_user.user.username
-            new_member["first_name"] = full_user.user.first_name
-            new_member["last_name"] = full_user.user.last_name
-            new_member["phone"] = full_user.user.phone
-            new_member["about"] = full_user.about
+        # try:
+        #     full_user: 'telethon.types.UserFull' = await client(
+        #         telethon.functions.users.GetFullUserRequest(user.id)
+        #     )
+        # except:
+        #     pass
+        # else:
+        #     new_member["username"] = full_user.user.username
+        #     new_member["first_name"] = full_user.user.first_name
+        #     new_member["last_name"] = full_user.user.last_name
+        #     new_member["phone"] = full_user.user.phone
+        #     new_member["about"] = full_user.about
 
         member = Member(**new_member).save()
 
@@ -396,7 +398,8 @@ class ParseBaseTask(Task):
 
         return member
 
-    def __set_chat_member(self, chat: 'models.TypeChat', member: 'models.TypeMember',
+    @staticmethod
+    def __set_chat_member(chat: 'models.TypeChat', member: 'models.TypeMember',
                           participant=None) -> 'models.TypeChatMember':
         """Create 'ChatMember' from telegram entity"""
 
@@ -409,7 +412,8 @@ class ParseBaseTask(Task):
 
         return ChatMember(**new_chat_member).save()
 
-    def __set_chat_member_role(self, chat_member: 'models.TypeChatMember',
+    @staticmethod
+    def __set_chat_member_role(chat_member: 'models.TypeChatMember',
                                participant=None) -> 'models.TypeChatMemberRole':
         """Create 'ChatMemberRole' from telegram entity"""
 
@@ -427,19 +431,21 @@ class ParseBaseTask(Task):
 
         return ChatMemberRole(**new_chat_member_role).save()
 
-    async def _handle_user(self, chat: 'models.TypeChat', client, user: 'telethon.types.TypeUser', participant=None):
+    @classmethod
+    async def _handle_user(cls, chat: 'models.TypeChat', client, user: 'telethon.types.TypeUser', participant=None):
         """Handle telegram user"""
 
         if user.is_self:
             return None, None, None
 
-        member = await self._set_member(client, user)
-        chat_member = self.__set_chat_member(chat, member, participant)
-        chat_member_role = self.__set_chat_member_role(chat_member, participant)
+        member = await cls._set_member(client, user)
+        chat_member = cls.__set_chat_member(chat, member, participant)
+        chat_member_role = cls.__set_chat_member_role(chat_member, participant)
 
         return member, chat_member, chat_member_role
 
-    async def _handle_links(self, client: 'utils.TelegramClient', text):
+    @classmethod
+    async def _handle_links(cls, client: 'utils.TelegramClient', text):
         """Handle links from message text"""
 
         for link in re.finditer(utils.LINK_RE, text):
@@ -453,7 +459,7 @@ class ParseBaseTask(Task):
                     tg_entity: 'telethon.types.TypeChat | telethon.types.User' = await client.get_entity(username)
 
                     if isinstance(tg_entity, telethon.types.User):
-                        member = await self._set_member(client, tg_entity)
+                        member = await cls._set_member(client, tg_entity)
 
                         # TODO: Как запускать?
                         # processes.member_media_process(chat_phone, member, tg_entity)
@@ -466,7 +472,8 @@ class ParseBaseTask(Task):
 
             logging.info(f"New entity from link {link} created.")
 
-    def _get_fwd(self, fwd_from):
+    @staticmethod
+    def _get_fwd(fwd_from):
         """Returns thuple of forwarded from information"""
 
         if fwd_from is not None:
@@ -482,10 +489,11 @@ class ParseBaseTask(Task):
 
         return None, None
 
-    async def _handle_message(self, chat: 'models.TypeChat', client, tg_message: 'telethon.types.TypeMessage'):
+    @classmethod
+    async def _handle_message(cls, chat: 'models.TypeChat', client, tg_message: 'telethon.types.TypeMessage'):
         """Handle telegram message"""
 
-        fwd_from_id, fwd_from_name = self._get_fwd(tg_message.fwd_from)
+        fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
 
         chat_member = None
         reply_to = None
@@ -493,7 +501,7 @@ class ParseBaseTask(Task):
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
-            member, chat_member, chat_member_role = await self._handle_user(chat, client, user)
+            member, chat_member, chat_member_role = await cls._handle_user(chat, client, user)
 
         if tg_message.reply_to is not None:
             reply_to = Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat)
@@ -510,7 +518,7 @@ class ParseBaseTask(Task):
                 for reply in replies.messages:
                     reply: 'telethon.types.TypeMessage'
 
-                    await self._handle_message(chat, client, reply)
+                    await cls._handle_message(chat, client, reply)
             except Exception as ex:
                 logging.exception(ex)
 
@@ -537,15 +545,16 @@ class ParseBaseTask(Task):
 
 
 class ParseMembersTask(ParseBaseTask):
-    """ParseChatTask"""
+    """ParseMembersTask"""
 
-    name = "ParseChatTask"
+    name = "ParseMembersTask"
 
-    async def _get_members(self, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
+    @classmethod
+    async def _get_members(cls, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
         """Iterate telegram chat members and save to API"""
 
         async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
-            member, chat_member, chat_member_role = await self._handle_user(
+            member, chat_member, chat_member_role = await cls._handle_user(
                 chat, client, user, user.participant
             )
         else:
@@ -607,9 +616,9 @@ app.register_task(ParseMembersTask())
 
 
 class ParseMessagesTask(ParseBaseTask):
-    """ParseChatTask"""
+    """ParseMessagesTask"""
 
-    name = "ParseChatTask"
+    name = "ParseMessagesTask"
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
         """Iterate telegram chat messages and save to API"""

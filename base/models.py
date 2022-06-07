@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
-import math
+import math, sys
 from telethon.client import downloads
 from base.utils import ApiService
 
@@ -146,9 +146,6 @@ class RelationProperty(object):
     __value = None
 
     def __init__(self, name, cls: 'TypeEntity', default=None):
-        if isinstance(cls, str):
-            cls = globals()[cls]
-
         self.__name = name
         self.__cls = cls
         self.__value = default

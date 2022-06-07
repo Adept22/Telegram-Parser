@@ -37,70 +37,6 @@ APIS = [
 ]
 
 
-class __ParticipantsIter(_ParticipantsIter):
-    async def _load_next_chunk(self):
-        if not self.requests:
-            return True
-
-        # Only care about the limit for the first request
-        # (small amount of people, won't be aggressive).
-        #
-        # Most people won't care about getting exactly 12,345
-        # members so it doesn't really matter not to be 100%
-        # precise with being out of the offset/limit here.
-        self.requests[0].limit = min(
-            self.limit - self.requests[0].offset, _MAX_PARTICIPANTS_CHUNK_SIZE)
-
-        if self.requests[0].offset > self.limit:
-            return True
-
-        if self.total is None:
-            f = self.requests[0].filter
-            if len(self.requests) > 1 or (
-                not isinstance(f, types.ChannelParticipantsRecent)
-                and (not isinstance(f, types.ChannelParticipantsSearch) or f.q)
-            ):
-                # Only do an additional getParticipants here to get the total
-                # if there's a filter which would reduce the real total number.
-                # getParticipants is cheaper than getFull.
-                self.total = (await self.client(functions.channels.GetParticipantsRequest(
-                    channel=self.requests[0].channel,
-                    filter=types.ChannelParticipantsRecent(),
-                    offset=0,
-                    limit=1,
-                    hash=0
-                ))).count
-
-        results = [await self.client(request) for request in self.requests]
-
-        for i in reversed(range(len(self.requests))):
-            participants = results[i]
-            if self.total is None:
-                # Will only get here if there was one request with a filter that matched all users.
-                self.total = participants.count
-            if not participants.users:
-                self.requests.pop(i)
-                continue
-
-            self.requests[i].offset += len(participants.participants)
-            users = {user.id: user for user in participants.users}
-            for participant in participants.participants:
-
-                if isinstance(participant, types.ChannelParticipantBanned):
-                    if not isinstance(participant.peer, types.PeerUser):
-                        # May have the entire channel banned. See #3105.
-                        continue
-                    user_id = participant.peer.user_id
-                else:
-                    user_id = participant.user_id
-
-                user = users[user_id]
-                if not self.filter_entity(user) or user.id in self.seen:
-                    continue
-                self.seen.add(user_id)
-                user = users[user_id]
-                user.participant = participant
-                self.buffer.append(user)
 
 
 class TelegramClient(OpenteleClient):
@@ -125,6 +61,71 @@ class TelegramClient(OpenteleClient):
             api=APIData(**self.phone.api)
         )
 
+    class __ParticipantsIter(_ParticipantsIter):
+        async def _load_next_chunk(self):
+            if not self.requests:
+                return True
+
+            # Only care about the limit for the first request
+            # (small amount of people, won't be aggressive).
+            #
+            # Most people won't care about getting exactly 12,345
+            # members so it doesn't really matter not to be 100%
+            # precise with being out of the offset/limit here.
+            self.requests[0].limit = min(
+                self.limit - self.requests[0].offset, _MAX_PARTICIPANTS_CHUNK_SIZE)
+
+            if self.requests[0].offset > self.limit:
+                return True
+
+            if self.total is None:
+                f = self.requests[0].filter
+                if len(self.requests) > 1 or (
+                        not isinstance(f, types.ChannelParticipantsRecent)
+                        and (not isinstance(f, types.ChannelParticipantsSearch) or f.q)
+                ):
+                    # Only do an additional getParticipants here to get the total
+                    # if there's a filter which would reduce the real total number.
+                    # getParticipants is cheaper than getFull.
+                    self.total = (await self.client(functions.channels.GetParticipantsRequest(
+                        channel=self.requests[0].channel,
+                        filter=types.ChannelParticipantsRecent(),
+                        offset=0,
+                        limit=1,
+                        hash=0
+                    ))).count
+
+            results = [await self.client(request) for request in self.requests]
+
+            for i in reversed(range(len(self.requests))):
+                participants = results[i]
+                if self.total is None:
+                    # Will only get here if there was one request with a filter that matched all users.
+                    self.total = participants.count
+                if not participants.users:
+                    self.requests.pop(i)
+                    continue
+
+                self.requests[i].offset += len(participants.participants)
+                users = {user.id: user for user in participants.users}
+                for participant in participants.participants:
+
+                    if isinstance(participant, types.ChannelParticipantBanned):
+                        if not isinstance(participant.peer, types.PeerUser):
+                            # May have the entire channel banned. See #3105.
+                            continue
+                        user_id = participant.peer.user_id
+                    else:
+                        user_id = participant.user_id
+
+                    user = users[user_id]
+                    if not self.filter_entity(user) or user.id in self.seen:
+                        continue
+                    self.seen.add(user_id)
+                    user = users[user_id]
+                    user.participant = participant
+                    self.buffer.append(user)
+
     def iter_participants(
             self: 'TelegramClient',
             entity: 'hints.EntityLike',
@@ -133,7 +134,7 @@ class TelegramClient(OpenteleClient):
             search: str = '',
             filter: 'types.TypeChannelParticipantsFilter' = None,
             aggressive: bool = False) -> _ParticipantsIter:
-        return __ParticipantsIter(
+        return self.__ParticipantsIter(
             self,
             limit,
             entity=entity,
