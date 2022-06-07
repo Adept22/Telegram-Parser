@@ -3,7 +3,6 @@
 from __future__ import absolute_import
 
 import logging
-import string
 from abc import abstractmethod
 import re
 import asyncio
@@ -228,7 +227,7 @@ class ChatResolveTask(Task):
             return f"{ex}"
 
         try:
-            phones = Phone.find(status=Phone.READY, parser=chat.parser.alias())
+            phones = Phone.find(status=Phone.READY, parser=chat.parser.id)
         except exceptions.RequestException as ex:
             return f"{ex}"
 
@@ -362,13 +361,7 @@ class JoinChatTask(Task):
 app.register_task(JoinChatTask())
 
 
-class ParseChatTask(Task):
-    """ParseChatTask"""
-
-    name = "ParseChatTask"
-
-    search = "".join([str(i) for i in range(0, 9)]) + string.ascii_lowercase
-
+class ParseBaseTask(Task):
     async def _set_member(self, client, user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
@@ -542,62 +535,86 @@ class ParseChatTask(Task):
         #       args=(chat_phone, message, tg_message)
         #   ).start()
 
+
+class ParseMembersTask(ParseBaseTask):
+    """ParseChatTask"""
+
+    name = "ParseChatTask"
+
     async def _get_members(self, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
         """Iterate telegram chat members and save to API"""
 
-        visited = set()
-        input_entity = await client.get_input_entity(chat.internal_id)
-        limit = 200
-
-        for s in self.search:
-            offset = 0
-
-            while True:
-                try:
-                    participants = await client(
-                        telethon.functions.channels.GetParticipantsRequest(
-                            channel=input_entity,
-                            filter=telethon.types.ChannelParticipantsSearch(s),
-                            offset=offset,
-                            limit=limit,
-                            hash=0
-                        )
-                    )
-                except telethon.errors.FloodWaitError as ex:
-                    print(f"{ex}")
-
-                    await asyncio.sleep(ex.seconds)
-
-                    continue
-
-                for user in participants.users:
-                    if user.id in visited:
-                        continue
-
-                    participant = next((p for p in participants.participants if user.id == p.user_id))
-
-                    await self._handle_user(chat, client, user, participant)
-
-                    visited.add(user.id)
-
-                offset += limit
-
-                if offset >= participants.count:
-                    break
+        async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
+            member, chat_member, chat_member_role = await self._handle_user(
+                chat, client, user, user.participant
+            )
         else:
             logging.info("Members download success.")
 
-        # async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
-        #     member, chat_member, chat_member_role = await self._handle_user(
-        #         chat, client, user, user.participant
-        #     )
-        # else:
-        #     logging.info("Members download success.")
+    async def _run(self, chat: 'models.TypeChat'):
+        chat_phones = ChatPhone.find(chat=chat.id, is_using=True)
+
+        for chat_phone in chat_phones:
+            phone = chat_phone.phone
+
+            try:
+                async with utils.TelegramClient(phone) as client:
+                    try:
+                        await self._get_members(chat, client)
+                    except telethon.errors.FloodWaitError as ex:
+                        logging.warning(f"Messages request must wait {ex.seconds} seconds.")
+
+                        phone.status = Phone.FLOOD
+                        phone.status_text = str(ex)
+                        phone.save()
+
+                        await asyncio.sleep(ex.seconds)
+
+                        continue
+                    except (ValueError, telethon.errors.RPCError) as ex:
+                        logging.error(f"Chat not available. Exception: {ex}")
+
+                        chat.status = Chat.FAILED
+                        chat.status_text = str(ex)
+                        chat.save()
+
+                        return f"{ex}"
+                    else:
+                        return True
+            except (
+                exceptions.UnauthorizedError,
+                telethon.errors.UserDeactivatedBanError
+            ) as ex:
+                chat_phone.is_using = False
+                chat_phone.save()
+
+                phone.status = Phone.CREATED if isinstance(ex, exceptions.UnauthorizedError) else Phone.BAN
+                phone.status_text = str(ex)
+                phone.save()
+
+        return False
+
+    def run(self, chat_id):
+        try:
+            chat = Chat(id=chat_id).reload()
+        except exceptions.RequestException as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat))
+
+
+app.register_task(ParseMembersTask())
+
+
+class ParseMessagesTask(ParseBaseTask):
+    """ParseChatTask"""
+
+    name = "ParseChatTask"
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
         """Iterate telegram chat messages and save to API"""
 
-        last_messages = Message.find(chat=chat.alias(), ordering="-internal_id", limit=1)
+        last_messages = Message.find(chat=chat.id, ordering="-internal_id", limit=1)
         max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
 
         async for tg_message in client.iter_messages(chat.internal_id, max_id=max_id):
@@ -611,7 +628,7 @@ class ParseChatTask(Task):
             logging.info("Messages download success.")
 
     async def _run(self, chat: 'models.TypeChat'):
-        chat_phones = ChatPhone.find(chat=chat.alias(), is_using=True)
+        chat_phones = ChatPhone.find(chat=chat.id, is_using=True)
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone
@@ -619,8 +636,6 @@ class ParseChatTask(Task):
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        await self._get_members(chat, client)
-
                         await self._get_messages(chat, client)
                     except telethon.errors.FloodWaitError as ex:
                         logging.warning(f"Messages request must wait {ex.seconds} seconds.")
@@ -664,14 +679,14 @@ class ParseChatTask(Task):
         return asyncio.run(self._run(chat))
 
 
-app.register_task(ParseChatTask())
+app.register_task(ParseMessagesTask())
 
 
-class MonitoringChatTask(ParseChatTask):
+class MonitoringChatTask(ParseBaseTask):
     name = "MonitoringChatTask"
 
     async def _run(self, chat):
-        chat_phones = ChatPhone.find(chat=chat.alias(), is_using=True)
+        chat_phones = ChatPhone.find(chat=chat.id, is_using=True)
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone

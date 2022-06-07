@@ -5,7 +5,6 @@ from typing import Generic, TypeVar
 import math
 from telethon.client import downloads
 from base.utils import ApiService
-from base import exceptions
 
 T = TypeVar('T', bound='Entity')
 
@@ -81,6 +80,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """Возвращает отфильтрованный и отсортированный список сущностей"""
 
         entities = ApiService().get(cls.endpoint, **kwargs)
+
         return [cls(**entity) for entity in entities["results"]]
 
     def reload(self) -> 'T':
@@ -98,19 +98,9 @@ class Entity(Generic[T], metaclass=ABCMeta):
     def save(self) -> 'T':
         """Создает/изменяет сущность в API."""
 
-        try:
-            entity = ApiService().set(self.__class__.endpoint, **self.serialize())
-        except exceptions.UniqueConstraintViolationError as ex:
-            if self.unique_constraint is None:
-                raise ex
+        entity = ApiService().set(self.__class__.endpoint, **self.serialize())
 
-            entities = ApiService().get(self.__class__.endpoint, **self.unique_constraint)
-
-            if len(entities) > 0:
-                self.id = entities['results'][0]['id']
-                self.save()
-        else:
-            self.deserialize(**entity)
+        self.deserialize(**entity)
 
         return self
 
@@ -119,7 +109,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         Удаляет сущность из API.
         """
 
-        ApiService().delete(self.__class__.endpoint, self.serialize())
+        ApiService().delete(self.__class__.endpoint, self.id)
 
 
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):

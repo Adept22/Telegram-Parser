@@ -16,6 +16,3 @@ class RequestException(Exception):
 
     def __reduce__(self):
         return self.__class__, (self.msg, self.code)
-
-
-class UniqueConstraintViolationError(Exception): ...
