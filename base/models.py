@@ -43,7 +43,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def endpoint(self) -> str:
+    def __endpoint__(self) -> str:
         """Название сущности в пути API."""
 
         raise NotImplementedError
@@ -79,7 +79,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
     def find(cls, **kwargs) -> 'list[T]':
         """Возвращает отфильтрованный и отсортированный список сущностей"""
 
-        entities = ApiService().get(cls.endpoint, **kwargs)
+        entities = ApiService().get(cls.__endpoint__, **kwargs)
 
         return [cls(**entity) for entity in entities["results"]]
 
@@ -89,7 +89,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        entity = ApiService().get(self.__class__.endpoint, id=self.id, force=True)
+        entity = ApiService().get(self.__class__.__endpoint__, id=self.id, force=True)
 
         self.deserialize(**entity)
 
@@ -98,7 +98,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
     def save(self) -> 'T':
         """Создает/изменяет сущность в API."""
 
-        entity = ApiService().set(self.__class__.endpoint, **self.serialize())
+        entity = ApiService().set(self.__class__.__endpoint__, **self.serialize())
 
         self.deserialize(**entity)
 
@@ -109,7 +109,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         Удаляет сущность из API.
         """
 
-        ApiService().delete(self.__class__.endpoint, self.id)
+        ApiService().delete(self.__class__.__endpoint__, self.id)
 
 
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
@@ -127,7 +127,7 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
 
         async for chunk in client.iter_download(tg_media, chunk_size=chunk_size, file_size=size):
             ApiService().chunk(
-                self.__class__.endpoint,
+                self.__class__.__endpoint__,
                 self.id,
                 str(tg_media.id) + extension,
                 chunk,
@@ -140,10 +140,52 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
             chunk_number += 1
 
 
+class RelationProperty(object):
+    __name = None
+    __cls = None
+    __value = None
+
+    def __init__(self, name, cls: 'TypeEntity', default=None):
+        if isinstance(cls, str):
+            cls = globals()[cls]
+
+        self.__name = name
+        self.__cls = cls
+        self.__value = default
+
+    def __get__(self, instance, owner=None):
+        if self.__value is None:
+            return Entity()
+
+        self.__value.reload()
+
+        return self.__value
+
+    def __set__(self, instance, value):
+        if isinstance(value, self.__cls):
+            self.__value = value
+        elif isinstance(value, str):
+            value = self.__cls(id=value)
+
+            if self.__value != value:
+                self.__value = value
+        elif isinstance(value, dict):
+            if isinstance(self.__value, self.__cls):
+                self.__value.deserialize(**value)
+            else:
+                self.__value = self.__cls(**value)
+        elif value is None:
+            self.__value = None
+        else:
+            raise TypeError(
+                f"Can't cast {type(value)} to '{self.__cls.__name__}' object in property {self.__name} of {instance}."
+            )
+
+
 class Host(Entity['Host']):
     """Host entity representation"""
 
-    endpoint = "hosts"
+    __endpoint__ = "hosts"
 
     public_ip: 'str' = None
     local_ip: 'str' = None
@@ -173,14 +215,13 @@ class Host(Entity['Host']):
 class Parser(Entity['Parser']):
     """Parser entity representation"""
 
-    endpoint = "parsers"
+    __endpoint__ = "parsers"
 
     NEW = 0
     IN_PROGRESS = 1
     FAILED = 2
 
-    _host: 'TypeHost' = None
-    host: 'TypeHost' = None
+    host: 'TypeHost' = RelationProperty("host", Host)
     status: 'int' = NEW
     api_id: 'str' = None
     api_hash: 'str' = None
@@ -189,40 +230,10 @@ class Parser(Entity['Parser']):
     def unique_constraint(self) -> 'dict | None':
         return None
 
-    @property
-    def host(self) -> 'TypeHost':
-        """Host property"""
-
-        return self._host
-
-    @host.setter
-    def host(self, new_value) -> 'None':
-        if isinstance(new_value, Host):
-            self._host = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._host, Host):
-                self._host.id = new_value
-            else:
-                self._host = Host(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._host, Host):
-                self._host.deserialize(**new_value)
-            else:
-                self._host = Host(**new_value)
-        elif new_value is None:
-            self._host = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Host' object of property 'host' in {self}."
-            )
-
-        if isinstance(self._host, Host):
-            self._host.reload()
-
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
-            "host": self.host.alias() if isinstance(self.host, Host) else None,
+            "host": self.host.alias(),
             "status": self.status,
             "api_id": self.api_id,
             "api_hash": self.api_hash
@@ -241,7 +252,7 @@ class Parser(Entity['Parser']):
 class Chat(Entity['Chat']):
     """Chat entity representation"""
 
-    endpoint = "chats"
+    __endpoint__ = "chats"
 
     CREATED = 0
     AVAILABLE = 1
@@ -255,42 +266,11 @@ class Chat(Entity['Chat']):
     title: 'str' = None
     description: 'str' = None
     date: 'str' = None
-    _parser: 'TypeParser' = None
-    parser: 'TypeParser' = None
+    parser: 'TypeHost' = RelationProperty("parser", Parser)
 
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
-
-    @property
-    def parser(self) -> 'TypeParser':
-        """Parser property"""
-
-        return self._parser
-
-    @parser.setter
-    def parser(self, new_value) -> 'None':
-        if isinstance(new_value, Parser):
-            self._parser = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._parser, Parser):
-                self._parser.id = new_value
-            else:
-                self._parser = Parser(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._parser, Parser):
-                self._parser.deserialize(**new_value)
-            else:
-                self._parser = Parser(**new_value)
-        elif new_value is None:
-            self._parser = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Parser' object of property 'parser' in {self}."
-            )
-
-        if isinstance(self._parser, Parser):
-            self._parser.reload()
 
     def serialize(self) -> 'dict':
         return {
@@ -302,7 +282,7 @@ class Chat(Entity['Chat']):
             "title": self.title,
             "description": self.description,
             "date": self.date,
-            "parser": self.parser.alias() if isinstance(self.parser, Parser) else None,
+            "parser": self.parser.alias(),
         }
 
     def deserialize(self, **kwargs) -> 'Chat':
@@ -319,10 +299,45 @@ class Chat(Entity['Chat']):
         return self
 
 
+class ChatMedia(Media['ChatMedia']):
+    """ChatMedia entity representation"""
+
+    __endpoint__ = "chats-medias"
+
+    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    internal_id: 'int' = None
+    path: 'str' = None
+    date: 'str' = None
+
+    @property
+    def unique_constraint(self) -> 'dict | None':
+        return {"internal_id": self.internal_id}
+
+    def serialize(self) -> 'dict':
+        _dict = {
+            "id": self.id,
+            "chat": self.chat.alias(),
+            "internal_id": self.internal_id,
+            "path": self.path,
+            "date": self.date,
+        }
+
+        return dict((k, v) for k, v in _dict.items() if v is not None)
+
+    def deserialize(self, **kwargs) -> 'TypeChatMedia':
+        self.id = kwargs.get("id")
+        self.chat = kwargs.get("chat")
+        self.internal_id = kwargs.get("internal_id")
+        self.path = kwargs.get("path")
+        self.date = kwargs.get("date")
+
+        return self
+
+
 class Phone(Entity['Phone']):
     """Phone entity representation"""
 
-    endpoint = "phones"
+    __endpoint__ = "phones"
 
     CREATED = 0
     READY = 1
@@ -338,43 +353,12 @@ class Phone(Entity['Phone']):
     first_name: 'str' = None
     last_name: 'str' = None
     code: 'str' = None
-    _parser: 'TypeParser' = None
-    parser: 'TypeParser' = None
+    parser: 'TypeParser' = RelationProperty("parser", Parser)
     api: 'dict' = None
 
     @property
     def unique_constraint(self) -> 'dict | None':
         return None
-
-    @property
-    def parser(self) -> 'TypeParser':
-        """Parser property"""
-
-        return self._parser
-
-    @parser.setter
-    def parser(self, new_value) -> 'None':
-        if isinstance(new_value, Parser):
-            self._parser = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._parser, Parser):
-                self._parser.id = new_value
-            else:
-                self._parser = Parser(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._parser, Parser):
-                self._parser.deserialize(**new_value)
-            else:
-                self._parser = Parser(**new_value)
-        elif new_value is None:
-            self._parser = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Parser' object of property 'parser' in {self}."
-            )
-
-        if isinstance(self._parser, Parser):
-            self._parser.reload()
 
     def serialize(self) -> 'dict':
         return {
@@ -387,7 +371,7 @@ class Phone(Entity['Phone']):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
-            "parser": self.parser.alias() if self.parser else None,
+            "parser": self.parser.alias(),
             "api": self.api
         }
 
@@ -410,77 +394,15 @@ class Phone(Entity['Phone']):
 class ChatPhone(Entity['ChatPhone']):
     """ChatPhone entity representation"""
 
-    endpoint = "chats-phones"
+    __endpoint__ = "chats-phones"
 
-    _chat: 'TypeChat' = None
-    chat: 'TypeChat' = None
-    _phone: 'TypePhone' = None
-    phone: 'TypePhone' = None
+    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    phone: 'TypePhone' = RelationProperty("phone", Phone)
     is_using: 'bool' = False
 
     @property
     def unique_constraint(self) -> 'dict | None':
         return {"chat": self.chat.id, "phone": self.phone.id}
-
-    @property
-    def chat(self) -> 'TypeChat':
-        """Chat property"""
-
-        return self._chat
-
-    @chat.setter
-    def chat(self, new_value) -> 'None':
-        if isinstance(new_value, Chat):
-            self._chat = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._chat, Chat):
-                self._chat.id = new_value
-            else:
-                self._chat = Chat(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._chat, Chat):
-                self._chat.deserialize(**new_value)
-            else:
-                self._chat = Chat(**new_value)
-        elif new_value is None:
-            self._chat = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Chat' object of property 'chat' in {self}."
-            )
-
-        if isinstance(self._chat, Chat):
-            self._chat.reload()
-
-    @property
-    def phone(self) -> 'TypePhone':
-        """Phone property"""
-
-        return self._phone
-
-    @phone.setter
-    def phone(self, new_value) -> 'None':
-        if isinstance(new_value, Phone):
-            self._phone = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._phone, Phone):
-                self._phone.id = new_value
-            else:
-                self._phone = Phone(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._phone, Phone):
-                self._phone.deserialize(**new_value)
-            else:
-                self._phone = Phone(**new_value)
-        elif new_value is None:
-            self._phone = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Phone' object of property 'phone' in {self}."
-            )
-
-        if isinstance(self._phone, Phone):
-            self._phone.reload()
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -501,154 +423,10 @@ class ChatPhone(Entity['ChatPhone']):
         return self
 
 
-class Message(Entity['Message']):
-    """Message entity representation"""
-
-    endpoint = "messages"
-
-    internal_id: 'int' = None
-    _chat: 'TypeChat' = None
-    chat: 'TypeChat' = None
-    text: 'str' = None
-    _member: 'TypeMember' = None
-    member: 'TypeMember' = None
-    _reply_to: 'TypeMessage' = None
-    reply_to: 'TypeMessage' = None
-    is_pinned: 'bool' = False
-    forwarded_from_id: 'int' = None
-    forwarded_fromendpoint: 'str' = None
-    grouped_id: 'int' = None
-    date: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id, 'chat': self.chat.id}
-
-    @property
-    def member(self) -> 'TypeMember':
-        """Member property"""
-
-        return self._member
-
-    @property
-    def chat(self) -> 'TypeChat':
-        """Chat property"""
-
-        return self._chat
-
-    @chat.setter
-    def chat(self, new_value) -> 'None':
-        if isinstance(new_value, Chat):
-            self._chat = new_value
-        if isinstance(new_value, str):
-            if isinstance(self._chat, Chat):
-                self._chat.id = new_value
-            else:
-                self._chat = Chat(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._chat, Chat):
-                self._chat.deserialize(**new_value)
-            else:
-                self._chat = Chat(**new_value)
-        elif new_value is None:
-            self._chat = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Chat' object of property 'chat' in {self}."
-            )
-
-        if isinstance(self._chat, Chat):
-            self._chat.reload()
-
-    @member.setter
-    def member(self, new_value) -> 'None':
-        if isinstance(new_value, ChatMember):
-            self._member = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._member, ChatMember):
-                self._member.id = new_value
-            else:
-                self._member = ChatMember(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._member, ChatMember):
-                self._member.deserialize(**new_value)
-            else:
-                self._member = ChatMember(**new_value)
-        elif new_value is None:
-            self._member = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'ChatMember' object of property 'member' in {self}."
-            )
-
-        if isinstance(self._member, ChatMember):
-            self._member.reload()
-
-    @property
-    def reply_to(self) -> 'TypeMessage':
-        """Message property"""
-
-        return self._reply_to
-
-    @reply_to.setter
-    def reply_to(self, new_value_to) -> 'None':
-        if isinstance(new_value_to, Message):
-            self._reply_to = new_value_to
-        elif isinstance(new_value_to, str):
-            if isinstance(self._reply_to, Message):
-                self._reply_to.id = new_value_to
-            else:
-                self._reply_to = Message(id=new_value_to)
-        elif isinstance(new_value_to, dict):
-            if isinstance(self._reply_to, Message):
-                self._reply_to.deserialize(**new_value_to)
-            else:
-                self._reply_to = Message(**new_value_to)
-        elif new_value_to is None:
-            self._reply_to = None
-        else:
-            raise TypeError(f"Can't cast {type(new_value_to)} to 'Message' object of property 'reply_to' in {self}.")
-
-        if isinstance(self._reply_to, Message):
-            self._reply_to.reload()
-
-    def serialize(self) -> 'dict':
-        _dict = {
-            "id": self.id,
-            "internal_id": self.internal_id,
-            "text": self.text,
-            "chat": self.chat.alias() if isinstance(self.chat, Chat) is not None else None,
-            "member": self.member.alias() if isinstance(self.member, ChatMember) is not None else None,
-            "reply_to": self.reply_to.alias() if isinstance(self.reply_to, Message) is not None else None,
-            "is_pinned": self.is_pinned,
-            "forwarded_from_id": self.forwarded_from_id,
-            "forwarded_fromendpoint": self.forwarded_fromendpoint,
-            "grouped_id": self.grouped_id,
-            "date": self.date
-        }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
-
-    def deserialize(self, **kwargs) -> 'TypeMessage':
-        self.id = kwargs.get("id")
-        self.internal_id = kwargs.get("internal_id")
-        self.text = kwargs.get("text")
-        self.chat = kwargs.get("chat")
-        self.member = kwargs.get("member")
-        self.reply_to = kwargs.get("reply_to")
-        self.is_pinned = kwargs.get("is_pinned")
-        self.forwarded_from_id = kwargs.get("forwarded_from_id")
-        self.forwarded_fromendpoint = kwargs.get("forwarded_fromendpoint")
-        self.grouped_id = kwargs.get("grouped_id")
-        self.date = kwargs.get("date")
-
-        return self
-
-
 class Member(Entity['Member']):
     """Member entity representation"""
 
-    endpoint = "members"
+    __endpoint__ = "members"
 
     internal_id: 'int' = None
     username: 'str' = None
@@ -686,15 +464,48 @@ class Member(Entity['Member']):
         return self
 
 
+class MemberMedia(Media['MemberMedia']):
+    """MemberMedia entity representation"""
+
+    __endpoint__ = "members-medias"
+
+    member: 'TypeMember' = RelationProperty("member", Member)
+    internal_id: 'int' = None
+    path: 'str' = None
+    date: 'str' = None
+
+    @property
+    def unique_constraint(self) -> 'dict | None':
+        return {'internal_id': self.internal_id}
+
+    def serialize(self) -> 'dict':
+        _dict = {
+            "id": self.id,
+            "member": self.member.alias(),
+            "internal_id": self.internal_id,
+            "path": self.path,
+            "date": self.date,
+        }
+
+        return dict((k, v) for k, v in _dict.items() if v is not None)
+
+    def deserialize(self, **kwargs) -> 'TypeMemberMedia':
+        self.id = kwargs.get("id")
+        self.internal_id = kwargs.get("internal_id")
+        self.member = kwargs.get("member")
+        self.path = kwargs.get("path")
+        self.date = kwargs.get("date")
+
+        return self
+
+
 class ChatMember(Entity['ChatMember']):
     """ChatMember entity representation"""
 
-    endpoint = "chats-members"
+    __endpoint__ = "chats-members"
 
-    _chat: 'TypeChat' = None
-    chat: 'TypeChat' = None
-    _member: 'TypeMember' = None
-    member: 'TypeMember' = None
+    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    member: 'TypeMember' = RelationProperty("member", Member)
     date: 'str' = None
     is_left: 'bool' = False
     _roles: 'list[TypeChatMemberRole]' = []
@@ -703,66 +514,6 @@ class ChatMember(Entity['ChatMember']):
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'chat': self.chat.id, "member": self.member.id}
-
-    @property
-    def chat(self) -> 'TypeChat':
-        """Chat property"""
-
-        return self._chat
-
-    @chat.setter
-    def chat(self, new_value) -> 'None':
-        if isinstance(new_value, Chat):
-            self._chat = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._chat, Chat):
-                self._chat.id = new_value
-            else:
-                self._chat = Chat(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._chat, Chat):
-                self._chat.deserialize(**new_value)
-            else:
-                self._chat = Chat(**new_value)
-        elif new_value is None:
-            self._chat = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Chat' object of property 'chat' in {self}."
-            )
-
-        if isinstance(self._chat, Chat):
-            self._chat.reload()
-
-    @property
-    def member(self) -> 'TypeMember':
-        """Member property"""
-
-        return self._member
-
-    @member.setter
-    def member(self, new_value) -> 'None':
-        if isinstance(new_value, Member):
-            self._member = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._member, Member):
-                self._member.id = new_value
-            else:
-                self._member = Member(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._member, Member):
-                self._member.deserialize(**new_value)
-            else:
-                self._member = Member(**new_value)
-        elif new_value is None:
-            self._member = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Member' object of property 'member' in {self}."
-            )
-
-        if isinstance(self._member, Member):
-            self._member.reload()
 
     @property
     def roles(self) -> 'list[TypeChatMemberRole]':
@@ -792,8 +543,8 @@ class ChatMember(Entity['ChatMember']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.alias() if isinstance(self.chat, Chat) is not None else None,
-            "member": self.member.alias() if isinstance(self.member, Member) is not None else None,
+            "chat": self.chat.alias(),
+            "member": self.member.alias(),
             "date": self.date,
             "is_left": self.is_left,
             "roles": [role.alias() for role in self.roles if isinstance(role, ChatMemberRole)],
@@ -815,10 +566,9 @@ class ChatMember(Entity['ChatMember']):
 class ChatMemberRole(Entity['ChatMemberRole']):
     """ChatMemberRole entity representation"""
 
-    endpoint = "chats-members-roles"
+    __endpoint__ = "chats-members-roles"
 
-    _member: 'TypeChatMember' = None
-    member: 'TypeChatMember' = None
+    member: 'TypeMember' = RelationProperty("member", ChatMember)
     title: 'str' = "Участник"
     code: 'str' = "member"
 
@@ -826,40 +576,10 @@ class ChatMemberRole(Entity['ChatMemberRole']):
     def unique_constraint(self) -> 'dict | None':
         return {'member': self.member.id, 'title': self.title, 'code': self.code}
 
-    @property
-    def member(self) -> 'TypeChatMember':
-        """ChatMember property"""
-
-        return self._member
-
-    @member.setter
-    def member(self, new_value) -> 'None':
-        if isinstance(new_value, ChatMember):
-            self._member = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._member, ChatMember):
-                self._member.id = new_value
-            else:
-                self._member = ChatMember(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._member, ChatMember):
-                self._member.deserialize(**new_value)
-            else:
-                self._member = ChatMember(**new_value)
-        elif new_value is None:
-            self._member = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'ChatMember' object of property 'member' in {self}."
-            )
-
-        if isinstance(self._member, ChatMember):
-            self._member.reload()
-
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": self.member.alias() if isinstance(self.member, ChatMember) is not None else None,
+            "member": self.member.alias(),
             "title": self.title,
             "code": self.code
         }
@@ -875,133 +595,54 @@ class ChatMemberRole(Entity['ChatMemberRole']):
         return self
 
 
-class ChatMedia(Media['ChatMedia']):
-    """ChatMedia entity representation"""
+class Message(Entity['Message']):
+    """Message entity representation"""
 
-    endpoint = "chats-medias"
+    __endpoint__ = "messages"
 
-    _chat: 'TypeChat' = None
-    chat: 'TypeChat' = None
     internal_id: 'int' = None
-    path: 'str' = None
+    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    text: 'str' = None
+    member: 'TypeMember' = RelationProperty("member", ChatMember)
+    reply_to: 'TypeMember' = RelationProperty("reply_to", 'Message')
+    is_pinned: 'bool' = False
+    forwarded_from_id: 'int' = None
+    forwarded_from__endpoint__: 'str' = None
+    grouped_id: 'int' = None
     date: 'str' = None
 
     @property
     def unique_constraint(self) -> 'dict | None':
-        return {"internal_id": self.internal_id}
-
-    @property
-    def chat(self) -> 'TypeChat':
-        """Chat property"""
-
-        return self._chat
-
-    @chat.setter
-    def chat(self, new_value) -> 'None':
-        if isinstance(new_value, Chat):
-            self._chat = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._chat, Chat):
-                self._chat.id = new_value
-            else:
-                self._chat = Chat(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._chat, Chat):
-                self._chat.deserialize(**new_value)
-            else:
-                self._chat = Chat(**new_value)
-        elif new_value is None:
-            self._chat = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Chat' object of property 'chat' in {self}."
-            )
-
-        if isinstance(self._chat, Chat):
-            self._chat.reload()
+        return {'internal_id': self.internal_id, 'chat': self.chat.id}
 
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.alias() if isinstance(self.chat, Chat) else None,
             "internal_id": self.internal_id,
-            "path": self.path,
-            "date": self.date,
+            "text": self.text,
+            "chat": self.chat.alias(),
+            "member": self.member.alias(),
+            "reply_to": self.reply_to.alias(),
+            "is_pinned": self.is_pinned,
+            "forwarded_from_id": self.forwarded_from_id,
+            "forwarded_from__endpoint__": self.forwarded_from__endpoint__,
+            "grouped_id": self.grouped_id,
+            "date": self.date
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
 
-    def deserialize(self, **kwargs) -> 'TypeChatMedia':
+    def deserialize(self, **kwargs) -> 'TypeMessage':
         self.id = kwargs.get("id")
+        self.internal_id = kwargs.get("internal_id")
+        self.text = kwargs.get("text")
         self.chat = kwargs.get("chat")
-        self.internal_id = kwargs.get("internal_id")
-        self.path = kwargs.get("path")
-        self.date = kwargs.get("date")
-
-        return self
-
-
-class MemberMedia(Media['MemberMedia']):
-    """MemberMedia entity representation"""
-
-    endpoint = "members-medias"
-
-    _member: 'TypeMember' = None
-    member: 'TypeMember' = None
-    internal_id: 'int' = None
-    path: 'str' = None
-    date: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id}
-
-    @property
-    def member(self) -> 'TypeMember':
-        """Member property"""
-
-        return self._member
-
-    @member.setter
-    def member(self, new_value) -> 'None':
-        if isinstance(new_value, Member):
-            self._member = new_value
-        elif isinstance(new_value, str):
-            if isinstance(self._member, Member):
-                self._member.id = new_value
-            else:
-                self._member = Member(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._member, Member):
-                self._member.deserialize(**new_value)
-            else:
-                self._member = Member(**new_value)
-        elif new_value is None:
-            self._member = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Member' object of property 'member' in {self}."
-            )
-
-        if isinstance(self._member, Member):
-            self._member.reload()
-
-    def serialize(self) -> 'dict':
-        _dict = {
-            "id": self.id,
-            "member": self.member.alias() if isinstance(self.member, Member) is not None else None,
-            "internal_id": self.internal_id,
-            "path": self.path,
-            "date": self.date,
-        }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
-
-    def deserialize(self, **kwargs) -> 'TypeMemberMedia':
-        self.id = kwargs.get("id")
-        self.internal_id = kwargs.get("internal_id")
         self.member = kwargs.get("member")
-        self.path = kwargs.get("path")
+        self.reply_to = kwargs.get("reply_to")
+        self.is_pinned = kwargs.get("is_pinned")
+        self.forwarded_from_id = kwargs.get("forwarded_from_id")
+        self.forwarded_from__endpoint__ = kwargs.get("forwarded_from__endpoint__")
+        self.grouped_id = kwargs.get("grouped_id")
         self.date = kwargs.get("date")
 
         return self
@@ -1010,10 +651,9 @@ class MemberMedia(Media['MemberMedia']):
 class MessageMedia(Media['MessageMedia']):
     """MessageMedia entity representation"""
 
-    endpoint = "messages-medias"
+    __endpoint__ = "messages-medias"
 
-    _message: 'TypeMessage' = None
-    message: 'TypeMessage' = None
+    message: 'TypeMessage' = RelationProperty("message", Message)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
@@ -1021,36 +661,6 @@ class MessageMedia(Media['MessageMedia']):
     @property
     def unique_constraint(self) -> 'dict | None':
         return {'internal_id': self.internal_id}
-
-    @property
-    def message(self) -> 'TypeMessage':
-        """Message property"""
-
-        return self._message
-
-    @message.setter
-    def message(self, new_value) -> 'None':
-        if isinstance(new_value, Message):
-            self._message = new_value
-        if isinstance(new_value, str):
-            if isinstance(self._message, Message):
-                self._message.id = new_value
-            else:
-                self._message = Message(id=new_value)
-        elif isinstance(new_value, dict):
-            if isinstance(self._message, Message):
-                self._message.deserialize(**new_value)
-            else:
-                self._message = Message(**new_value)
-        elif new_value is None:
-            self._message = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(new_value)} to 'Message' object of property 'message' in {self}."
-            )
-
-        if isinstance(self._message, Message):
-            self._message.reload()
 
     def serialize(self) -> 'dict':
         _dict = {
