@@ -574,7 +574,7 @@ class ParseChatTask(Task):
                     if user.id in visited:
                         continue
 
-                    participant = next([p for p in participants.participant if user.id == p.user_id])
+                    participant = next((p for p in participants.participants if user.id == p.user_id))
 
                     await self._handle_user(chat, client, user, participant)
 

@@ -107,7 +107,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
             entities = ApiService().get(self.__class__.endpoint, **self.unique_constraint)
 
             if len(entities) > 0:
-                self.id = entities[0]['id']
+                self.id = entities['results'][0]['id']
                 self.save()
         else:
             self.deserialize(**entity)
@@ -430,7 +430,7 @@ class ChatPhone(Entity['ChatPhone']):
 
     @property
     def unique_constraint(self) -> 'dict | None':
-        return {"chat": self.chat.alias(), "phone": self.phone.alias()}
+        return {"chat": self.chat.id, "phone": self.phone.id}
 
     @property
     def chat(self) -> 'TypeChat':
@@ -532,7 +532,7 @@ class Message(Entity['Message']):
 
     @property
     def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id, 'chat': self.chat.alias()}
+        return {'internal_id': self.internal_id, 'chat': self.chat.id}
 
     @property
     def member(self) -> 'TypeMember':
@@ -712,7 +712,7 @@ class ChatMember(Entity['ChatMember']):
 
     @property
     def unique_constraint(self) -> 'dict | None':
-        return {'chat': self.chat.alias(), "member": self.member.alias()}
+        return {'chat': self.chat.id, "member": self.member.id}
 
     @property
     def chat(self) -> 'TypeChat':
@@ -834,7 +834,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
     @property
     def unique_constraint(self) -> 'dict | None':
-        return {'member': self.member.alias(), 'title': self.title, 'code': self.code}
+        return {'member': self.member.id, 'title': self.title, 'code': self.code}
 
     @property
     def member(self) -> 'TypeChatMember':

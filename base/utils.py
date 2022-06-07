@@ -8,21 +8,19 @@ import urllib.parse
 import requests
 import telethon
 from opentele.tl import TelegramClient as OpenteleClient
-from opentele.api import API
+from opentele.api import API, APIData
 from telethon.sessions import StringSession
 from base import models
 from base import exceptions
 
 
-APIS = (
+APIS = [
     API.TelegramDesktop,
     API.TelegramAndroid,
     API.TelegramAndroidX,
     API.TelegramIOS,
     API.TelegramMacOS,
-    API.TelegramWeb_K,
-    API.TelegramWeb_Z
-)
+]
 
 
 class Singleton(type):
@@ -44,7 +42,7 @@ class TelegramClient(OpenteleClient):
         self.phone = phone
 
         if self.phone.api is None:
-            self.phone.api = APIS[random.random(0, len(APIS))].Generate().__dict__
+            self.phone.api = APIS[random.randint(0, len(APIS) - 1)].Generate().__dict__
 
             del self.phone.api["pid"]
 
@@ -53,10 +51,10 @@ class TelegramClient(OpenteleClient):
         super().__init__(
             *args,
             **kwargs,
-            **self.phone.api,
             connection_retries=-1,
             retry_delay=5,
-            session=StringSession(phone.session)
+            session=StringSession(phone.session),
+            api=APIData(**self.phone.api)
         )
 
     async def start(self):
