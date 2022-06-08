@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
-import math, sys
+import math
 from telethon.client import downloads
 from base.utils import ApiService
 
@@ -45,14 +45,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
     @abstractmethod
     def __endpoint__(self) -> str:
         """Название сущности в пути API."""
-
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def unique_constraint(self) -> 'dict | None':
-        """Свойства для проверки существования сущности,
-        они же отражают уникальность."""
 
         raise NotImplementedError
 
@@ -188,10 +180,6 @@ class Host(Entity['Host']):
     local_ip: 'str' = None
     name: 'str' = None
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return None
-
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
@@ -222,10 +210,6 @@ class Parser(Entity['Parser']):
     status: 'int' = NEW
     api_id: 'str' = None
     api_hash: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return None
 
     def serialize(self) -> 'dict':
         return {
@@ -265,10 +249,6 @@ class Chat(Entity['Chat']):
     date: 'str' = None
     parser: 'TypeHost' = RelationProperty("parser", Parser)
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return None
-
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
@@ -305,10 +285,6 @@ class ChatMedia(Media['ChatMedia']):
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {"internal_id": self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -353,10 +329,6 @@ class Phone(Entity['Phone']):
     parser: 'TypeParser' = RelationProperty("parser", Parser)
     api: 'dict' = None
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return None
-
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
@@ -397,10 +369,6 @@ class ChatPhone(Entity['ChatPhone']):
     phone: 'TypePhone' = RelationProperty("phone", Phone)
     is_using: 'bool' = False
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {"chat": self.chat.id, "phone": self.phone.id}
-
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
@@ -431,10 +399,6 @@ class Member(Entity['Member']):
     last_name: 'str' = None
     phone: 'str' = None
     about: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -471,10 +435,6 @@ class MemberMedia(Media['MemberMedia']):
     path: 'str' = None
     date: 'str' = None
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id}
-
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
@@ -507,10 +467,6 @@ class ChatMember(Entity['ChatMember']):
     is_left: 'bool' = False
     _roles: 'list[TypeChatMemberRole]' = []
     roles: 'list[TypeChatMemberRole]' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'chat': self.chat.id, "member": self.member.id}
 
     @property
     def roles(self) -> 'list[TypeChatMemberRole]':
@@ -569,10 +525,6 @@ class ChatMemberRole(Entity['ChatMemberRole']):
     title: 'str' = "Участник"
     code: 'str' = "member"
 
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'member': self.member.id, 'title': self.title, 'code': self.code}
-
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
@@ -607,10 +559,6 @@ class Message(Entity['Message']):
     forwarded_from__endpoint__: 'str' = None
     grouped_id: 'int' = None
     date: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id, 'chat': self.chat.id}
 
     def serialize(self) -> 'dict':
         _dict = {
@@ -654,10 +602,6 @@ class MessageMedia(Media['MessageMedia']):
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
-
-    @property
-    def unique_constraint(self) -> 'dict | None':
-        return {'internal_id': self.internal_id}
 
     def serialize(self) -> 'dict':
         _dict = {
