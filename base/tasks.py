@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 
 import logging
+import string
 from abc import abstractmethod
 import re
 import asyncio
@@ -550,10 +551,13 @@ class ParseMembersTask(ParseBaseTask):
     name = "ParseMembersTask"
 
     @classmethod
-    async def _get_members(cls, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
+    async def _get_members(cls, chat: 'models.TypeChat', client: 'utils.TelegramClient'):
         """Iterate telegram chat members and save to API"""
 
-        async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
+        # search = string.digits + string.ascii_lowercase + string.punctuation + ' ♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+        search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+
+        async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
             member, chat_member, chat_member_role = await cls._handle_user(
                 chat, client, user, user.participant
             )
