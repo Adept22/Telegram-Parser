@@ -450,7 +450,7 @@ class ParseBaseTask(Task):
         """Handle links from message text"""
 
         for link in re.finditer(utils.LINK_RE, text):
-            username, is_join_chat = utils.parse_username(link)
+            username, is_join_chat = utils.parse_username(link.group())
 
             if not username:
                 continue
@@ -628,7 +628,7 @@ class ParseMessagesTask(ParseBaseTask):
         """Iterate telegram chat messages and save to API"""
 
         last_messages = Message.find(chat=chat.id, ordering="-internal_id", limit=1)
-        max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
+        max_id = last_messages[0].internal_id if last_messages else 0
 
         async for tg_message in client.iter_messages(chat.internal_id, max_id=max_id):
             if not isinstance(tg_message, telethon.types.Message):
