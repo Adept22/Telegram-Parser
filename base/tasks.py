@@ -1,7 +1,5 @@
 """Collection of task representations"""
-
 from __future__ import absolute_import
-
 import logging
 import string
 from abc import abstractmethod
@@ -11,7 +9,6 @@ import telethon
 import random
 import names
 import telethon.sessions
-
 from base.celeryapp import app
 from base import models, utils, exceptions
 from base.models import Phone, Chat, ChatPhone, Message, Member, ChatMember, ChatMemberRole
@@ -474,7 +471,9 @@ class ParseBaseTask(Task):
         """Handle links from message text"""
 
         for link in re.finditer(utils.LINK_RE, text):
-            username, is_join_chat = utils.parse_username(link.group())
+            link = link.group()
+
+            username, is_join_chat = utils.parse_username(link)
 
             if not username:
                 continue
