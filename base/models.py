@@ -43,7 +43,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def __endpoint__(self) -> str:
+    def _endpoint(self) -> str:
         """Название сущности в пути API."""
 
         raise NotImplementedError
@@ -64,7 +64,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
     def find(cls, **kwargs) -> 'list[T]':
         """Возвращает отфильтрованный и отсортированный список сущностей"""
 
-        entities = ApiService().get(cls.__endpoint__, **kwargs)
+        entities = ApiService().get(cls._endpoint, **kwargs)
 
         return [cls(**entity) for entity in entities["results"]]
 
@@ -74,7 +74,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         if not self.id:
             raise ValueError("Entity hasn't id")
 
-        entity = ApiService().get(self.__class__.__endpoint__, id=self.id, force=True)
+        entity = ApiService().get(self.__class__._endpoint, id=self.id, force=True)
 
         self.deserialize(**entity)
 
@@ -83,7 +83,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
     def save(self) -> 'T':
         """Создает/изменяет сущность в API."""
 
-        entity = ApiService().set(self.__class__.__endpoint__, **self.serialize())
+        entity = ApiService().set(self.__class__._endpoint, **self.serialize())
 
         self.deserialize(**entity)
 
@@ -94,7 +94,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
         Удаляет сущность из API.
         """
 
-        ApiService().delete(self.__class__.__endpoint__, self.id)
+        ApiService().delete(self.__class__._endpoint, self.id)
 
 
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
@@ -112,7 +112,7 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
 
         async for chunk in client.iter_download(tg_media, chunk_size=chunk_size, file_size=size):
             ApiService().chunk(
-                self.__class__.__endpoint__,
+                self.__class__._endpoint,
                 self.id,
                 str(tg_media.id) + extension,
                 chunk,
@@ -127,13 +127,19 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
 
 class RelationProperty(property):
     __prop = None
-    __rel = None
     __value = None
 
     def __init__(self, name, rel: 'TypeEntity | str', default=None):
         self.__prop = name
-        self.__rel = rel
+        self.___rel = rel
         self.__value = default
+
+    @property
+    def __rel(self):
+        if isinstance(self.___rel, str):
+            return getattr(sys.modules[__name__], self.___rel)
+
+        return self.___rel
 
     def __get__(self, instance, owner=None):
         if self.__value is not None:
@@ -142,9 +148,6 @@ class RelationProperty(property):
         return self.__value
 
     def __set__(self, instance, value):
-        if isinstance(self.__rel, str):
-            self.__rel = getattr(sys.modules[__name__], self.__rel)
-
         if isinstance(value, self.__rel):
             self.__value = value
         elif isinstance(value, str):
@@ -169,7 +172,7 @@ class RelationProperty(property):
 class Host(Entity['Host']):
     """Host entity representation"""
 
-    __endpoint__ = "hosts"
+    _endpoint = "hosts"
 
     public_ip: 'str' = None
     local_ip: 'str' = None
@@ -195,7 +198,7 @@ class Host(Entity['Host']):
 class Parser(Entity['Parser']):
     """Parser entity representation"""
 
-    __endpoint__ = "parsers"
+    _endpoint = "parsers"
 
     NEW = 0
     IN_PROGRESS = 1
@@ -228,7 +231,7 @@ class Parser(Entity['Parser']):
 class Chat(Entity['Chat']):
     """Chat entity representation"""
 
-    __endpoint__ = "chats"
+    _endpoint = "chats"
 
     CREATED = 0
     AVAILABLE = 1
@@ -274,7 +277,7 @@ class Chat(Entity['Chat']):
 class ChatMedia(Media['ChatMedia']):
     """ChatMedia entity representation"""
 
-    __endpoint__ = "chats-medias"
+    _endpoint = "chats-medias"
 
     chat: 'TypeChat' = RelationProperty("chat", Chat)
     internal_id: 'int' = None
@@ -305,7 +308,7 @@ class ChatMedia(Media['ChatMedia']):
 class Phone(Entity['Phone']):
     """Phone entity representation"""
 
-    __endpoint__ = "phones"
+    _endpoint = "phones"
 
     CREATED = 0
     READY = 1
@@ -358,7 +361,7 @@ class Phone(Entity['Phone']):
 class ChatPhone(Entity['ChatPhone']):
     """ChatPhone entity representation"""
 
-    __endpoint__ = "chats-phones"
+    _endpoint = "chats-phones"
 
     chat: 'TypeChat' = RelationProperty("chat", Chat)
     phone: 'TypePhone' = RelationProperty("phone", Phone)
@@ -386,7 +389,7 @@ class ChatPhone(Entity['ChatPhone']):
 class Member(Entity['Member']):
     """Member entity representation"""
 
-    __endpoint__ = "members"
+    _endpoint = "members"
 
     internal_id: 'int' = None
     username: 'str' = None
@@ -423,7 +426,7 @@ class Member(Entity['Member']):
 class MemberMedia(Media['MemberMedia']):
     """MemberMedia entity representation"""
 
-    __endpoint__ = "members-medias"
+    _endpoint = "members-medias"
 
     member: 'TypeMember' = RelationProperty("member", Member)
     internal_id: 'int' = None
@@ -454,7 +457,7 @@ class MemberMedia(Media['MemberMedia']):
 class ChatMember(Entity['ChatMember']):
     """ChatMember entity representation"""
 
-    __endpoint__ = "chats-members"
+    _endpoint = "chats-members"
 
     chat: 'TypeChat' = RelationProperty("chat", Chat)
     member: 'TypeMember' = RelationProperty("member", Member)
@@ -514,7 +517,7 @@ class ChatMember(Entity['ChatMember']):
 class ChatMemberRole(Entity['ChatMemberRole']):
     """ChatMemberRole entity representation"""
 
-    __endpoint__ = "chats-members-roles"
+    _endpoint = "chats-members-roles"
 
     member: 'TypeMember' = RelationProperty("member", ChatMember)
     title: 'str' = "Участник"
@@ -542,7 +545,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 class Message(Entity['Message']):
     """Message entity representation"""
 
-    __endpoint__ = "messages"
+    _endpoint = "messages"
 
     internal_id: 'int' = None
     chat: 'TypeChat' = RelationProperty("chat", Chat)
@@ -551,7 +554,7 @@ class Message(Entity['Message']):
     reply_to: 'TypeMessage' = RelationProperty("reply_to", 'Message')
     is_pinned: 'bool' = False
     forwarded_from_id: 'int' = None
-    forwarded_from__endpoint__: 'str' = None
+    forwarded_from_endpoint: 'str' = None
     grouped_id: 'int' = None
     date: 'str' = None
 
@@ -565,7 +568,7 @@ class Message(Entity['Message']):
             "reply_to": self.reply_to.id if self.reply_to is not None else None,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
-            "forwarded_from__endpoint__": self.forwarded_from__endpoint__,
+            "forwarded_from_endpoint": self.forwarded_from_endpoint,
             "grouped_id": self.grouped_id,
             "date": self.date
         }
@@ -581,7 +584,7 @@ class Message(Entity['Message']):
         self.reply_to = kwargs.get("reply_to")
         self.is_pinned = kwargs.get("is_pinned")
         self.forwarded_from_id = kwargs.get("forwarded_from_id")
-        self.forwarded_from__endpoint__ = kwargs.get("forwarded_from__endpoint__")
+        self.forwarded_from_endpoint = kwargs.get("forwarded_from_endpoint")
         self.grouped_id = kwargs.get("grouped_id")
         self.date = kwargs.get("date")
 
@@ -591,7 +594,7 @@ class Message(Entity['Message']):
 class MessageMedia(Media['MessageMedia']):
     """MessageMedia entity representation"""
 
-    __endpoint__ = "messages-medias"
+    _endpoint = "messages-medias"
 
     message: 'TypeMessage' = RelationProperty("message", Message)
     internal_id: 'int' = None
