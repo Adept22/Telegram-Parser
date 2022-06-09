@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 
 import logging
+import string
 from abc import abstractmethod
 import re
 import asyncio
@@ -449,7 +450,7 @@ class ParseBaseTask(Task):
         """Handle links from message text"""
 
         for link in re.finditer(utils.LINK_RE, text):
-            username, is_join_chat = utils.parse_username(link)
+            username, is_join_chat = utils.parse_username(link.group())
 
             if not username:
                 continue
@@ -550,10 +551,13 @@ class ParseMembersTask(ParseBaseTask):
     name = "ParseMembersTask"
 
     @classmethod
-    async def _get_members(cls, chat: 'models.TypeChat', client: 'telethon.TelegramClient'):
+    async def _get_members(cls, chat: 'models.TypeChat', client: 'utils.TelegramClient'):
         """Iterate telegram chat members and save to API"""
 
-        async for user in client.iter_participants(entity=chat.internal_id, aggressive=True):
+        # search = string.digits + string.ascii_lowercase + string.punctuation + ' ♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+        search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+
+        async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
             member, chat_member, chat_member_role = await cls._handle_user(
                 chat, client, user, user.participant
             )
@@ -624,7 +628,7 @@ class ParseMessagesTask(ParseBaseTask):
         """Iterate telegram chat messages and save to API"""
 
         last_messages = Message.find(chat=chat.id, ordering="-internal_id", limit=1)
-        max_id = last_messages[0].internal_id if last_messages.get(0) is not None else 0
+        max_id = last_messages[0].internal_id if last_messages else 0
 
         async for tg_message in client.iter_messages(chat.internal_id, max_id=max_id):
             if not isinstance(tg_message, telethon.types.Message):
