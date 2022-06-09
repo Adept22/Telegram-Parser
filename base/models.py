@@ -1,5 +1,5 @@
 """Collection of entity representations"""
-
+import sys
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
 import math
@@ -12,8 +12,6 @@ T = TypeVar('T', bound='Entity')
 class Entity(Generic[T], metaclass=ABCMeta):
     """Base class for entities"""
 
-    models = []
-
     def __init__(self, **kwargs):
         self.deserialize(**kwargs)
 
@@ -22,7 +20,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 
     def __eq__(self, other):
         if not isinstance(other, Entity):
-            raise NotImplementedError
+            return False
 
         my_id = self.id
 
@@ -30,12 +28,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
             return self is other
 
         return my_id == other.id
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
-        while cls.__name__ in cls.models:
-            cls.models[cls.models.index(cls.__name__)] = cls
 
     @property
     def id(self) -> 'str | None':
@@ -133,45 +125,44 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
             chunk_number += 1
 
 
-class RelationProperty(object):
-    __name__ = None
-    __rel__ = None
-    __value__ = None
+class RelationProperty(property):
+    __prop = None
+    __rel = None
+    __value = None
 
     def __init__(self, name, rel: 'TypeEntity | str', default=None):
-        self.__name__ = name
-
-        if isinstance(rel, str):
-            rel = Entity.models[Entity.models.index(rel)]
-
-        self.__rel__ = rel
-        self.__value__ = default
+        self.__prop = name
+        self.__rel = rel
+        self.__value = default
 
     def __get__(self, instance, owner=None):
-        if self.__value__ is not None:
-            self.__value__.reload()
+        if self.__value is not None:
+            self.__value.reload()
 
-        return self.__value__
+        return self.__value
 
     def __set__(self, instance, value):
-        if isinstance(value, self.__rel__):
-            self.__value__ = value
-        elif isinstance(value, str):
-            value = self.__rel__(id=value)
+        if isinstance(self.__rel, str):
+            self.__rel = getattr(sys.modules[__name__], self.__rel)
 
-            if self.__value__ != value:
-                self.__value__ = value
+        if isinstance(value, self.__rel):
+            self.__value = value
+        elif isinstance(value, str):
+            value = self.__rel(id=value)
+
+            if self.__value != value:
+                self.__value = value
         elif isinstance(value, dict):
-            if isinstance(self.__value__, self.__rel__):
-                self.__value__.deserialize(**value)
+            if isinstance(self.__value, self.__rel):
+                self.__value.deserialize(**value)
             else:
-                self.__value__ = self.__rel__(**value)
+                self.__value = self.__rel(**value)
         elif value is None:
-            self.__value__ = None
+            self.__value = None
         else:
             raise TypeError(
-                f"Can't cast {type(value)} to '{self.__rel__.__name__}'"
-                f" object in property {self.__name__} of {instance}."
+                f"Can't cast {type(value)} to '{self.__rel.__prop}'"
+                f" object in property {self.__prop} of {instance}."
             )
 
 
@@ -218,7 +209,7 @@ class Parser(Entity['Parser']):
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
-            "host": {"id": self.host.id} if self.host is not None else None,
+            "host": self.host.id if self.host is not None else None,
             "status": self.status,
             "api_id": self.api_id,
             "api_hash": self.api_hash
@@ -263,7 +254,7 @@ class Chat(Entity['Chat']):
             "title": self.title,
             "description": self.description,
             "date": self.date,
-            "parser": {"id": self.parser.id} if self.parser is not None else None
+            "parser": self.parser.id if self.parser is not None else None
         }
 
     def deserialize(self, **kwargs) -> 'Chat':
@@ -293,7 +284,7 @@ class ChatMedia(Media['ChatMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": {"id": self.chat.id} if self.chat is not None else None,
+            "chat": self.chat.id if self.chat is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -344,7 +335,7 @@ class Phone(Entity['Phone']):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
-            "parser": {"id": self.parser.id} if self.parser is not None else None,
+            "parser": self.parser.id if self.parser is not None else None,
             "api": self.api
         }
 
@@ -376,8 +367,8 @@ class ChatPhone(Entity['ChatPhone']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": {"id": self.chat.id} if self.chat is not None else None,
-            "phone": {"id": self.phone.id} if self.phone is not None else None,
+            "chat": self.chat.id if self.chat is not None else None,
+            "phone": self.phone.id if self.phone is not None else None,
             "is_using": self.is_using
         }
 
@@ -442,7 +433,7 @@ class MemberMedia(Media['MemberMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": {"id": self.member.id} if self.member is not None else None,
+            "member": self.member.id if self.member is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -500,11 +491,11 @@ class ChatMember(Entity['ChatMember']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": {"id": self.chat.id} if self.chat is not None else None,
-            "member": {"id": self.member.id} if self.member is not None else None,
+            "chat": self.chat.id if self.chat is not None else None,
+            "member": self.member.id if self.member is not None else None,
             "date": self.date,
             "is_left": self.is_left,
-            "roles": [{"id": role.id} for role in self.roles if isinstance(role, ChatMemberRole)],
+            "roles": [role.id for role in self.roles if isinstance(role, ChatMemberRole)],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
@@ -532,7 +523,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": {"id": self.member.id} if self.member is not None else None,
+            "member": self.member.id if self.member is not None else None,
             "title": self.title,
             "code": self.code
         }
@@ -569,9 +560,9 @@ class Message(Entity['Message']):
             "id": self.id,
             "internal_id": self.internal_id,
             "text": self.text,
-            "chat": {"id": self.chat.id} if self.chat is not None else None,
-            "member": {"id": self.member.id} if self.member is not None else None,
-            "reply_to": {"id": self.reply_to.id} if self.reply_to is not None else None,
+            "chat": self.chat.id if self.chat is not None else None,
+            "member": self.member.id if self.member is not None else None,
+            "reply_to": self.reply_to.id if self.reply_to is not None else None,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
             "forwarded_from__endpoint__": self.forwarded_from__endpoint__,
@@ -610,7 +601,7 @@ class MessageMedia(Media['MessageMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "message": {"id": self.message.id} if self.message is not None else None,
+            "message": self.message.id if self.message is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,

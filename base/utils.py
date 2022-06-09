@@ -37,8 +37,6 @@ APIS = [
 ]
 
 
-
-
 class TelegramClient(OpenteleClient):
     """Extended telegram client"""
 
@@ -264,10 +262,7 @@ class ApiService(metaclass=Singleton):
             # else:
             #     content = _json.get("message", None)
 
-            if r.status_code == 409:
-                raise exceptions.UniqueConstraintViolationError(r.text)
-            else:
-                raise exceptions.RequestException(r.status_code, r.text)
+            raise exceptions.RequestException(r.status_code, r.text)
 
         if r.status_code == 204:
             return None

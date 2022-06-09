@@ -221,6 +221,30 @@ class ChatResolveTask(Task):
 
         return False
 
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        super(ChatResolveTask, self).on_timeout(exc, task_id, args, kwargs, einfo)
+        # exc (Exception) - The exception raised by the task.
+        # args (Tuple) - Original arguments for the task that failed.
+        # kwargs (Dict) - Original keyword arguments for the task that failed.
+        print('FAILURE! task_id: {0!r} Exception: {1!r}'.format(task_id, exc))
+        # logger.warning(
+        #     'Failure detected for task %s',
+        #     self.task.name
+        # )
+
+    def on_success(self, retval, task_id, args, kwargs):
+        super(ChatResolveTask, self).on_success(retval, task_id, args, kwargs)
+        print("SUCCESS! task_id: {} return value: {}".format(task_id, retval))
+
+    def on_timeout(self, soft, timeout):
+        super(ChatResolveTask, self).on_timeout(soft, timeout)
+        if not soft:
+            print("TIMEOUT!")
+        #    logger.warning(
+        #        'A hard timeout was enforced for task %s',
+        #        self.task.name
+        #    )
+
     def run(self, chat_id):
         try:
             chat = Chat(id=chat_id).reload()
