@@ -12,6 +12,8 @@ T = TypeVar('T', bound='Entity')
 class Entity(Generic[T], metaclass=ABCMeta):
     """Base class for entities"""
 
+    models = []
+
     def __init__(self, **kwargs):
         self.deserialize(**kwargs)
 
@@ -28,6 +30,12 @@ class Entity(Generic[T], metaclass=ABCMeta):
             return self is other
 
         return my_id == other.id
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        while cls.__name__ in cls.models:
+            cls.models[cls.models.index(cls.__name__)] = cls
 
     @property
     def id(self) -> 'str | None':
@@ -59,13 +67,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """Десериализация сущности. Т.е. из `dict` в `self`"""
 
         raise NotImplementedError
-
-    def alias(self) -> 'dict':
-        """Сериализация ссылки на сущность"""
-        if self.id is None:
-            return None
-
-        return {"id": self.id}
 
     @classmethod
     def find(cls, **kwargs) -> 'list[T]':
@@ -133,41 +134,44 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
 
 
 class RelationProperty(object):
-    __name = None
-    __cls = None
-    __value = None
+    __name__ = None
+    __rel__ = None
+    __value__ = None
 
-    def __init__(self, name, cls: 'TypeEntity', default=None):
-        self.__name = name
-        self.__cls = cls
-        self.__value = default
+    def __init__(self, name, rel: 'TypeEntity | str', default=None):
+        self.__name__ = name
+
+        if isinstance(rel, str):
+            rel = Entity.models[Entity.models.index(rel)]
+
+        self.__rel__ = rel
+        self.__value__ = default
 
     def __get__(self, instance, owner=None):
-        if self.__value is None:
-            return Entity()
+        if self.__value__ is not None:
+            self.__value__.reload()
 
-        self.__value.reload()
-
-        return self.__value
+        return self.__value__
 
     def __set__(self, instance, value):
-        if isinstance(value, self.__cls):
-            self.__value = value
+        if isinstance(value, self.__rel__):
+            self.__value__ = value
         elif isinstance(value, str):
-            value = self.__cls(id=value)
+            value = self.__rel__(id=value)
 
-            if self.__value != value:
-                self.__value = value
+            if self.__value__ != value:
+                self.__value__ = value
         elif isinstance(value, dict):
-            if isinstance(self.__value, self.__cls):
-                self.__value.deserialize(**value)
+            if isinstance(self.__value__, self.__rel__):
+                self.__value__.deserialize(**value)
             else:
-                self.__value = self.__cls(**value)
+                self.__value__ = self.__rel__(**value)
         elif value is None:
-            self.__value = None
+            self.__value__ = None
         else:
             raise TypeError(
-                f"Can't cast {type(value)} to '{self.__cls.__name__}' object in property {self.__name} of {instance}."
+                f"Can't cast {type(value)} to '{self.__rel__.__name__}'"
+                f" object in property {self.__name__} of {instance}."
             )
 
 
@@ -214,7 +218,7 @@ class Parser(Entity['Parser']):
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
-            "host": self.host.alias(),
+            "host": {"id": self.host.id} if self.host is not None else None,
             "status": self.status,
             "api_id": self.api_id,
             "api_hash": self.api_hash
@@ -259,7 +263,7 @@ class Chat(Entity['Chat']):
             "title": self.title,
             "description": self.description,
             "date": self.date,
-            "parser": self.parser.alias(),
+            "parser": {"id": self.parser.id} if self.parser is not None else None
         }
 
     def deserialize(self, **kwargs) -> 'Chat':
@@ -289,7 +293,7 @@ class ChatMedia(Media['ChatMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.alias(),
+            "chat": {"id": self.chat.id} if self.chat is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -340,7 +344,7 @@ class Phone(Entity['Phone']):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
-            "parser": self.parser.alias(),
+            "parser": {"id": self.parser.id} if self.parser is not None else None,
             "api": self.api
         }
 
@@ -372,8 +376,8 @@ class ChatPhone(Entity['ChatPhone']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.alias(),
-            "phone": self.phone.alias(),
+            "chat": {"id": self.chat.id} if self.chat is not None else None,
+            "phone": {"id": self.phone.id} if self.phone is not None else None,
             "is_using": self.is_using
         }
 
@@ -438,7 +442,7 @@ class MemberMedia(Media['MemberMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": self.member.alias(),
+            "member": {"id": self.member.id} if self.member is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
@@ -496,11 +500,11 @@ class ChatMember(Entity['ChatMember']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "chat": self.chat.alias(),
-            "member": self.member.alias(),
+            "chat": {"id": self.chat.id} if self.chat is not None else None,
+            "member": {"id": self.member.id} if self.member is not None else None,
             "date": self.date,
             "is_left": self.is_left,
-            "roles": [role.alias() for role in self.roles if isinstance(role, ChatMemberRole)],
+            "roles": [{"id": role.id} for role in self.roles if isinstance(role, ChatMemberRole)],
         }
 
         return dict((k, v) for k, v in _dict.items() if v is not None)
@@ -528,7 +532,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "member": self.member.alias(),
+            "member": {"id": self.member.id} if self.member is not None else None,
             "title": self.title,
             "code": self.code
         }
@@ -553,7 +557,7 @@ class Message(Entity['Message']):
     chat: 'TypeChat' = RelationProperty("chat", Chat)
     text: 'str' = None
     member: 'TypeMember' = RelationProperty("member", ChatMember)
-    reply_to: 'TypeMember' = RelationProperty("reply_to", 'Message')
+    reply_to: 'TypeMessage' = RelationProperty("reply_to", 'Message')
     is_pinned: 'bool' = False
     forwarded_from_id: 'int' = None
     forwarded_from__endpoint__: 'str' = None
@@ -565,9 +569,9 @@ class Message(Entity['Message']):
             "id": self.id,
             "internal_id": self.internal_id,
             "text": self.text,
-            "chat": self.chat.alias(),
-            "member": self.member.alias(),
-            "reply_to": self.reply_to.alias(),
+            "chat": {"id": self.chat.id} if self.chat is not None else None,
+            "member": {"id": self.member.id} if self.member is not None else None,
+            "reply_to": {"id": self.reply_to.id} if self.reply_to is not None else None,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
             "forwarded_from__endpoint__": self.forwarded_from__endpoint__,
@@ -606,7 +610,7 @@ class MessageMedia(Media['MessageMedia']):
     def serialize(self) -> 'dict':
         _dict = {
             "id": self.id,
-            "message": self.message.alias() if self.message is not None else None,
+            "message": {"id": self.message.id} if self.message is not None else None,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
