@@ -204,7 +204,6 @@ class ChatResolveTask(Task):
                             chat.title = tg_chat.title
 
                         chat.status = Chat.AVAILABLE
-                        phone.status_text = None
                         chat.save()
 
                         return True
@@ -523,7 +522,7 @@ class ParseBaseTask(Task):
         reply_to = None
 
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
-            user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
+            user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.input_sender or tg_message.from_id)
 
             member, chat_member, chat_member_role = await cls._handle_user(chat, client, user)
 

@@ -1,5 +1,4 @@
 """Utilities for tasks"""
-
 import os
 import random
 import re
