@@ -141,13 +141,22 @@ class TelegramClient(OpenteleClient):
         )
 
     async def start(self):
-        if not self.is_connected():
-            await self.connect()
+        try:
+            if not self.is_connected():
+                await self.connect()
 
-        if await self.get_me() is not None:
-            return self
+            if await self.get_me() is not None:
+                return self
+        except telethon.errors.UserDeactivatedBanError as ex:
+            self.phone.status = models.Phone.BAN
+            self.phone.status_text = str(ex)
+        else:
+            self.phone.status = models.Phone.CREATED
+            self.phone.status_text = "Unauthorized"
 
-        raise exceptions.UnauthorizedError('Phone not authorized')
+        self.phone.save()
+
+        raise exceptions.UnauthorizedError(self.phone.status_text)
 
 
 TypeTelegramClient = TelegramClient
