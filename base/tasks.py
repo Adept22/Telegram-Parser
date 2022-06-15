@@ -31,6 +31,7 @@ class PhoneAuthorizationTask(Task):
     """PhoneAuthorizationTask"""
 
     name = "PhoneAuthorizationTask"
+    queue = "high_prio"
 
     async def _run(self, phone: 'models.TypePhone'):
         client = utils.TelegramClient(phone)
@@ -139,7 +140,6 @@ class PhoneAuthorizationTask(Task):
             phone = models.Phone(id=phone_id).reload()
         except exceptions.RequestException as ex:
             return f"{ex}"
-
         return asyncio.run(self._run(phone))
 
 
@@ -150,6 +150,7 @@ class ChatResolveTask(Task):
     """ChatResolveTask"""
 
     name = "ChatResolveTask"
+    queue = "high_prio"
 
     async def __resolve(self, client, string):
         """Resolve entity from string"""
@@ -262,6 +263,7 @@ class JoinChatTask(Task):
     """JoinChatTask"""
 
     name = "JoinChatTask"
+    queue = "high_prio"
 
     async def __join(self, client, string: 'str'):
         """Join to chat by phone"""
@@ -561,6 +563,7 @@ class ParseMembersTask(ParseBaseTask):
     """ParseMembersTask"""
 
     name = "ParseMembersTask"
+    queue = "high_prio"
 
     @classmethod
     async def _get_members(cls, chat: 'models.TypeChat', client: 'utils.TelegramClient'):
@@ -632,6 +635,7 @@ class ParseMessagesTask(ParseBaseTask):
     """ParseMessagesTask"""
 
     name = "ParseMessagesTask"
+    queue = "low_prio"
 
     async def _get_messages(self, chat: 'models.TypeChat', client):
         """Iterate telegram chat messages and save to API"""
@@ -703,6 +707,7 @@ app.register_task(ParseMessagesTask())
 
 class MonitoringChatTask(ParseBaseTask):
     name = "MonitoringChatTask"
+    queue = "high_prio"
 
     async def _run(self, chat: 'models.TypeChat'):
         chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
