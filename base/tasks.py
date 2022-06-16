@@ -9,7 +9,6 @@ import random
 import names
 import telethon.sessions
 from celery.utils.log import get_task_logger
-
 from base.celeryapp import app
 from base import models, utils, exceptions
 
@@ -205,9 +204,10 @@ class ChatResolveTask(Task):
                             if chat.internal_id != internal_id:
                                 chat.internal_id = internal_id
 
-                            chat.total_messages = await client.get_messages(limit=0).total
+                            messages = await client.get_messages(tg_chat, limit=0)
+                            chat.total_messages = messages.total
 
-                        chat.total_members = tg_chat.participants_count
+                        # chat.total_members = tg_chat.participants_count
 
                         if chat.title != tg_chat.title:
                             chat.title = tg_chat.title
@@ -350,9 +350,11 @@ class JoinChatTask(Task):
 
                         chat.save()
 
-                        tg_message = await client.get_messages(limit=1)[0]
+                        messages = await client.get_messages(tg_chat, limit=1)
 
-                        if tg_message:
+                        if messages:
+                            tg_message = messages[0]
+
                             message = models.Message(
                                 internal_id=tg_message.id,
                                 text=tg_message.message,
@@ -911,7 +913,7 @@ class MessageMediaTask(Task):
                 if isinstance(tg_message_media, telethon.types.MessageMediaPhoto):
                     entity = telethon.types.Photo(**tg_message_media.photo)
                     _size = next(
-                        ((size.type, size.size) for size in entity.sizes if size['_'] == 'PhotoSize')),
+                        ((size.type, size.size) for size in entity.sizes if size['_'] == 'PhotoSize'),
                         ('', None)
                     )
                     size = _size[1]
