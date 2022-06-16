@@ -245,6 +245,8 @@ class Chat(Entity['Chat']):
     title: 'str' = None
     description: 'str' = None
     date: 'str' = None
+    total_members: 'int' = None
+    total_messages: 'int' = None
     parser: 'TypeHost' = RelationProperty("parser", Parser)
 
     def serialize(self) -> 'dict':
@@ -257,6 +259,8 @@ class Chat(Entity['Chat']):
             "title": self.title,
             "description": self.description,
             "date": self.date,
+            "total_members": self.total_members,
+            "total_messages": self.total_messages,
             "parser": self.parser.id if self.parser is not None else None
         }
 
@@ -269,6 +273,8 @@ class Chat(Entity['Chat']):
         self.title = kwargs.get('title')
         self.description = kwargs.get('description')
         self.date = kwargs.get('date')
+        self.total_members = kwargs.get('total_members')
+        self.total_messages = kwargs.get('total_messages')
         self.parser = kwargs.get('parser')
 
         return self

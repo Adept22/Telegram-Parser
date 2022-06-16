@@ -1,4 +1,5 @@
 """Collection of task representations"""
+import importlib
 import string
 from abc import abstractmethod
 import re
@@ -7,7 +8,6 @@ import telethon
 import random
 import names
 import telethon.sessions
-from telethon.tl.types import PhotoSize
 from celery.utils.log import get_task_logger
 
 from base.celeryapp import app
@@ -173,6 +173,7 @@ class ChatResolveTask(Task):
         for phone in phones:
             try:
                 async with utils.TelegramClient(phone) as client:
+                    client: 'utils.TypeTelegramClient'
                     try:
                         tg_chat = await self.__resolve(client, chat.link)
                     except telethon.errors.FloodWaitError as ex:
@@ -203,6 +204,10 @@ class ChatResolveTask(Task):
 
                             if chat.internal_id != internal_id:
                                 chat.internal_id = internal_id
+
+                            chat.total_messages = await client.get_messages(limit=0).total
+
+                        chat.total_members = tg_chat.participants_count
 
                         if chat.title != tg_chat.title:
                             chat.title = tg_chat.title
@@ -333,23 +338,27 @@ class JoinChatTask(Task):
 
                         return f"{ex}"
                     else:
-                        if chat.status not in [models.Chat.AVAILABLE, models.Chat.MONITORING]:
-                            chat.status = models.Chat.MONITORING
-                            chat.status_text = None
-                            chat.save()
-
-                        if tg_chat:
-                            internal_id = telethon.utils.get_peer_id(tg_chat)
-
-                            if chat.internal_id != internal_id:
-                                chat.internal_id = internal_id
-
-                            if chat.title != tg_chat.title:
-                                chat.title = tg_chat.title
-
-                            chat.save()
-
                         models.ChatPhone(chat=chat, phone=phone, is_using=True).save()
+
+                        internal_id = telethon.utils.get_peer_id(tg_chat)
+
+                        if chat.internal_id != internal_id:
+                            chat.internal_id = internal_id
+
+                        if chat.title != tg_chat.title:
+                            chat.title = tg_chat.title
+
+                        chat.save()
+
+                        tg_message = await client.get_messages(limit=1)[0]
+
+                        if tg_message:
+                            message = models.Message(
+                                internal_id=tg_message.id,
+                                text=tg_message.message,
+                                chat=chat,
+                                date=tg_message.date.isoformat()
+                            ).save()
 
                         return True
             except exceptions.UnauthorizedError as ex:
@@ -379,39 +388,31 @@ app.register_task(JoinChatTask())
 class ParseBaseTask(Task):
 
     @staticmethod
-    async def _set_member(client, user: 'telethon.types.User') -> 'models.TypeMember':
+    async def _set_member(client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
         new_member = {
-            "internal_id": user.id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "phone": user.phone
+            "internal_id": tg_user.id,
+            "username": tg_user.username,
+            "first_name": tg_user.first_name,
+            "last_name": tg_user.last_name,
+            "phone": tg_user.phone
         }
 
-        # try:
-        #     full_user: 'telethon.types.UserFull' = await client(
-        #         telethon.functions.users.GetFullUserRequest(user.id)
-        #     )
-        # except:
-        #     pass
-        # else:
-        #     new_member["username"] = full_user.user.username
-        #     new_member["first_name"] = full_user.user.first_name
-        #     new_member["last_name"] = full_user.user.last_name
-        #     new_member["phone"] = full_user.user.phone
-        #     new_member["about"] = full_user.about
+        try:
+            full_user: 'telethon.types.UserFull' = await client(
+                telethon.functions.users.GetFullUserRequest(tg_user.id)
+            )
+        except:
+            pass
+        else:
+            new_member["username"] = full_user.user.username
+            new_member["first_name"] = full_user.user.first_name
+            new_member["last_name"] = full_user.user.last_name
+            new_member["phone"] = full_user.user.phone
+            new_member["about"] = full_user.about
 
-        member = models.Member(**new_member).save()
-
-        # TODO: Как запускать?
-        # multiprocessing.Process(
-        #     target=processes.member_media_process,
-        #     args=(chat_phone, member, user)
-        # ).start()
-
-        return member
+        return models.Member(**new_member).save()
 
     @staticmethod
     def __set_chat_member(chat: 'models.TypeChat', member: 'models.TypeMember',
@@ -447,13 +448,17 @@ class ParseBaseTask(Task):
         return models.ChatMemberRole(**new_chat_member_role).save()
 
     @classmethod
-    async def _handle_user(cls, chat: 'models.TypeChat', client, user: 'telethon.types.TypeUser', participant=None):
+    async def _handle_user(cls, chat: 'models.TypeChat', client: 'utils.TypeTelegramClient',
+                           tg_user: 'telethon.types.TypeUser', participant=None):
         """Handle telegram user"""
 
-        if user.is_self:
+        if tg_user.is_self:
             return None, None, None
 
-        member = await cls._set_member(client, user)
+        member = await cls._set_member(client, tg_user)
+
+        app.send_task("MemberMediaTask", (chat.id, client.phone.id, member.id, tg_user.to_dict()))
+
         chat_member = cls.__set_chat_member(chat, member, participant)
         chat_member_role = cls.__set_chat_member_role(chat_member, participant)
 
@@ -551,12 +556,8 @@ class ParseBaseTask(Task):
         )
         message.save()
 
-        # if tg_message.media != None:
-        #   TODO: Как запускать?
-        #   multiprocessing.Process(
-        #       target=processes.message_media_process,
-        #       args=(chat_phone, message, tg_message)
-        #   ).start()
+        if tg_message.media is not None:
+            app.send_task("MessageMediaTask", (chat.id, client.phone.id, member.id, tg_message.media.to_dict()))
 
 
 class ParseMembersTask(ParseBaseTask):
@@ -573,9 +574,7 @@ class ParseMembersTask(ParseBaseTask):
         search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
 
         async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
-            member, chat_member, chat_member_role = await cls._handle_user(
-                chat, client, user, user.participant
-            )
+            await cls._handle_user(chat, client, user, user.participant)
         else:
             logger.info("Members download success.")
 
@@ -772,8 +771,10 @@ app.register_task(MonitoringChatTask())
 class ChatMediaTask(Task):
     name = "ChatMediaTask"
 
-    async def _run(self, chat: 'models.TypeChat', user):
+    async def _run(self, chat: 'models.TypeChat'):
         chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
+
+        peer = telethon.utils.resolve_id(chat.internal_id)
 
         for chat_phone in chat_phones:
             phone = chat_phone.phone
@@ -781,7 +782,7 @@ class ChatMediaTask(Task):
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        async for photo in client.iter_profile_photos(user):
+                        async for photo in client.iter_profile_photos(peer):
                             photo: 'telethon.types.TypePhoto'
 
                             media = models.ChatMedia(
@@ -819,13 +820,13 @@ class ChatMediaTask(Task):
 
         return False
 
-    def run(self, chat_id, tg_user):
+    def run(self, chat_id):
         try:
             chat = models.Chat(id=chat_id).reload()
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat, telethon.types.User(**tg_user)))
+        return asyncio.run(self._run(chat))
 
 
 app.register_task(ChatMediaTask())
@@ -834,56 +835,54 @@ app.register_task(ChatMediaTask())
 class MemberMediaTask(Task):
     name = "MemberMediaTask"
 
-    async def _run(self, chat: 'models.TypeChat', member: 'models.TypeMember', user):
-        chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
-
-        for chat_phone in chat_phones:
-            phone = chat_phone.phone
-
-            try:
-                async with utils.TelegramClient(phone) as client:
-                    try:
-                        async for photo in client.iter_profile_photos(user):
-                            photo: 'telethon.types.TypePhoto'
-
-                            media = models.MemberMedia(
-                                internalId=photo.id,
-                                member=member,
-                                date=photo.date.isoformat()
-                            ).save()
-
-                            size = next(
-                                ((size.type, size.size) for size in photo.sizes if isinstance(size, PhotoSize)),
-                                ('', None)
-                            )
-                            tg_media = telethon.types.InputPhotoFileLocation(
-                                id=photo.id,
-                                access_hash=photo.access_hash,
-                                file_reference=photo.file_reference,
-                                thumb_size=size[0]
-                            )
-                            extension = telethon.utils.get_extension(photo)
-
-                            await media.upload(client, tg_media, size[1], extension)
-
-                            return True
-                    except (ValueError, telethon.errors.RPCError) as ex:
-                        logger.error(f"Can't get member {member.id} media. Exception {ex}")
-
-                        return f"{ex}"
-            except exceptions.UnauthorizedError as ex:
-                logger.critical(f"{ex}")
-
-                chat_phone.is_using = False
-                chat_phone.save()
-
-                return f"{ex}"
-
-        return False
-
-    def run(self, chat_phone_id, member_id, tg_user):
+    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember', user):
         try:
-            chat_phone = models.ChatPhone(id=chat_phone_id).reload()
+            async with utils.TelegramClient(chat_phone.phone) as client:
+                try:
+                    async for photo in client.iter_profile_photos(user):
+                        photo: 'telethon.types.TypePhoto'
+
+                        media = models.MemberMedia(
+                            internalId=photo.id,
+                            member=member,
+                            date=photo.date.isoformat()
+                        ).save()
+
+                        size = next(
+                            ((size.type, size.size) for size in photo.sizes if isinstance(size, PhotoSize)),
+                            ('', None)
+                        )
+                        tg_media = telethon.types.InputPhotoFileLocation(
+                            id=photo.id,
+                            access_hash=photo.access_hash,
+                            file_reference=photo.file_reference,
+                            thumb_size=size[0]
+                        )
+                        extension = telethon.utils.get_extension(photo)
+
+                        await media.upload(client, tg_media, size[1], extension)
+                    else:
+                        return True
+                except (ValueError, telethon.errors.RPCError) as ex:
+                    logger.error(f"Can't get member {member.id} media. Exception {ex}")
+
+                    return f"{ex}"
+        except exceptions.UnauthorizedError as ex:
+            logger.critical(f"{ex}")
+
+            chat_phone.is_using = False
+            chat_phone.save()
+
+            return f"{ex}"
+
+    def run(self, chat_id, phone_id, member_id, tg_user):
+        try:
+            chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id)
+
+            if not len(chat_phones):
+                return "Chat phone not found."
+
+            chat_phone = chat_phones[0]
         except exceptions.RequestException as ex:
             return f"{ex}"
 
@@ -905,16 +904,14 @@ class MessageMediaTask(Task):
         self,
         chat_phone: 'models.TypeChatPhone',
         message: 'models.TypeMessage',
-        tg_message: 'telethon.types.TypeMessage'
+        tg_message_media: 'telethon.types.TypeMessage'
     ):
-        phone = chat_phone.phone
-
         try:
-            async with utils.TelegramClient(phone) as client:
-                if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
-                    entity = tg_message.photo
+            async with utils.TelegramClient(chat_phone.phone) as client:
+                if isinstance(tg_message_media, telethon.types.MessageMediaPhoto):
+                    entity = telethon.types.Photo(**tg_message_media.photo)
                     _size = next(
-                        ((size.type, size.size) for size in entity.sizes if isinstance(size, PhotoSize)),
+                        ((size.type, size.size) for size in entity.sizes if size['_'] == 'PhotoSize')),
                         ('', None)
                     )
                     size = _size[1]
@@ -926,8 +923,8 @@ class MessageMediaTask(Task):
                         file_reference=entity.file_reference,
                         thumb_size=_size[0]
                     )
-                elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
-                    entity = tg_message.document
+                elif isinstance(tg_message_media, telethon.types.MessageMediaDocument):
+                    entity = telethon.types.Document(**tg_message_media.document)
                     size = entity.size
                     extension = telethon.utils.get_extension(entity)
                     date = entity.date.isoformat()
@@ -961,11 +958,14 @@ class MessageMediaTask(Task):
 
             return f"{ex}"
 
-        return False
-
-    def run(self, chat_phone_id, message_id, tg_message):
+    def run(self, chat_id, phone_id, message_id, tg_message_media):
         try:
-            chat_phone = models.ChatPhone(id=chat_phone_id).reload()
+            chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id)
+
+            if not len(chat_phones):
+                return "Chat phone not found."
+
+            chat_phone = chat_phones[0]
         except exceptions.RequestException as ex:
             return f"{ex}"
 
@@ -974,4 +974,11 @@ class MessageMediaTask(Task):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat_phone, message, telethon.types.Message(**tg_message)))
+        try:
+            module = importlib.import_module('telethon.types')
+
+            _cls = getattr(module, tg_message_media["_"])
+        except Exception as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat_phone, message, _cls(**tg_message_media)))
