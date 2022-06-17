@@ -221,7 +221,7 @@ class ApiService(metaclass=Singleton):
 
         try:
             self.send("GET", endpoint, f"{id}/chunk/",
-                      params={"filename": filename, "chunkNumber": chunk_number, "chunkSize": chunk_size})
+                      params={"filename": filename, "chunk_number": chunk_number, "chunk_size": chunk_size})
         except exceptions.RequestException as ex:
             if ex.code == 404:
                 return False
@@ -238,8 +238,8 @@ class ApiService(metaclass=Singleton):
             return
 
         return self.send("POST", endpoint, f"{id}/chunk/",
-                         params={"filename": filename, "chunkNumber": chunk_number, "totalChunks": total_chunks,
-                                 "totalSize": total_size}, files={"chunk": chunk})
+                         params={"filename": filename, "chunk_number": chunk_number, "total_chunks": total_chunks,
+                                 "chunk_size": chunk_size, "total_size": total_size}, files={"chunk": chunk})
 
     def send(self, method: 'str', endpoint: 'str', path: 'str', body: 'dict' = None, params: 'dict' = None,
              files: 'dict' = None) -> 'dict | list[dict] | None':

@@ -8,6 +8,7 @@ import telethon
 import random
 import names
 import telethon.sessions
+from telethon.tl.types import PhotoSize
 from celery.utils.log import get_task_logger
 from base.celeryapp import app
 from base import models, utils, exceptions
@@ -192,7 +193,15 @@ class ChatResolveTask(Task):
 
                         return f"{ex}"
                     else:
-                        if isinstance(tg_chat, telethon.types.ChatInvite):
+                        if isinstance(tg_chat, telethon.types.User):
+                            logger.warning("User link.")
+
+                            chat.status = models.Chat.FAILED
+                            chat.status_text = "User link."
+                            chat.save()
+
+                            return False
+                        elif isinstance(tg_chat, telethon.types.ChatInvite):
                             logger.warning("Chat is available, but need to join.")
 
                             chat.status_text = "Chat is available, but need to join."
@@ -207,7 +216,7 @@ class ChatResolveTask(Task):
                             messages = await client.get_messages(tg_chat, limit=0)
                             chat.total_messages = messages.total
 
-                        # chat.total_members = tg_chat.participants_count
+                        chat.total_members = tg_chat.participants_count or 0
 
                         if chat.title != tg_chat.title:
                             chat.title = tg_chat.title
@@ -222,30 +231,6 @@ class ChatResolveTask(Task):
                 return f"{ex}"
 
         return False
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        super(ChatResolveTask, self).on_timeout(exc, task_id, args, kwargs, einfo)
-        # exc (Exception) - The exception raised by the task.
-        # args (Tuple) - Original arguments for the task that failed.
-        # kwargs (Dict) - Original keyword arguments for the task that failed.
-        print('FAILURE! task_id: {0!r} Exception: {1!r}'.format(task_id, exc))
-        # logger.warning(
-        #     'Failure detected for task %s',
-        #     self.task.name
-        # )
-
-    def on_success(self, retval, task_id, args, kwargs):
-        super(ChatResolveTask, self).on_success(retval, task_id, args, kwargs)
-        print("SUCCESS! task_id: {} return value: {}".format(task_id, retval))
-
-    def on_timeout(self, soft, timeout):
-        super(ChatResolveTask, self).on_timeout(soft, timeout)
-        if not soft:
-            print("TIMEOUT!")
-        #    logger.warning(
-        #        'A hard timeout was enforced for task %s',
-        #        self.task.name
-        #    )
 
     def run(self, chat_id):
         try:
@@ -350,12 +335,12 @@ class JoinChatTask(Task):
 
                         chat.save()
 
-                        messages = await client.get_messages(tg_chat, limit=1)
+                        await asyncio.sleep(random.randint(2, 5))
 
-                        if messages:
-                            tg_message = messages[0]
+                        messages = await client.get_messages(tg_chat, limit=3)
 
-                            message = models.Message(
+                        for tg_message in messages:
+                            models.Message(
                                 internal_id=tg_message.id,
                                 text=tg_message.message,
                                 chat=chat,
@@ -459,7 +444,7 @@ class ParseBaseTask(Task):
 
         member = await cls._set_member(client, tg_user)
 
-        app.send_task("MemberMediaTask", (chat.id, client.phone.id, member.id, tg_user.to_dict()))
+        app.send_task("MemberMediaTask", args=[chat.id, client.phone.id, member.id, tg_user.access_hash], queue='low_prio')
 
         chat_member = cls.__set_chat_member(chat, member, participant)
         chat_member_role = cls.__set_chat_member_role(chat_member, participant)
@@ -788,7 +773,7 @@ class ChatMediaTask(Task):
                             photo: 'telethon.types.TypePhoto'
 
                             media = models.ChatMedia(
-                                internalId=photo.id,
+                                internal_id=photo.id,
                                 chat=chat,
                                 date=photo.date.isoformat()
                             ).save()
@@ -837,38 +822,45 @@ app.register_task(ChatMediaTask())
 class MemberMediaTask(Task):
     name = "MemberMediaTask"
 
-    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember', user):
+    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember', access_hash):
         try:
             async with utils.TelegramClient(chat_phone.phone) as client:
-                try:
-                    async for photo in client.iter_profile_photos(user):
-                        photo: 'telethon.types.TypePhoto'
+                while True:
+                    try:
+                        async for photo in client.iter_profile_photos(telethon.types.User(id=member.internal_id, access_hash=access_hash)):
+                            photo: 'telethon.types.TypePhoto'
 
-                        media = models.MemberMedia(
-                            internalId=photo.id,
-                            member=member,
-                            date=photo.date.isoformat()
-                        ).save()
+                            media = models.MemberMedia(
+                                internal_id=photo.id,
+                                member=member,
+                                date=photo.date.isoformat()
+                            ).save()
 
-                        size = next(
-                            ((size.type, size.size) for size in photo.sizes if isinstance(size, PhotoSize)),
-                            ('', None)
-                        )
-                        tg_media = telethon.types.InputPhotoFileLocation(
-                            id=photo.id,
-                            access_hash=photo.access_hash,
-                            file_reference=photo.file_reference,
-                            thumb_size=size[0]
-                        )
-                        extension = telethon.utils.get_extension(photo)
+                            size = next(
+                                ((size.type, size.size) for size in photo.sizes if isinstance(size, PhotoSize)),
+                                ('', None)
+                            )
+                            tg_media = telethon.types.InputPhotoFileLocation(
+                                id=photo.id,
+                                access_hash=photo.access_hash,
+                                file_reference=photo.file_reference,
+                                thumb_size=size[0]
+                            )
+                            extension = telethon.utils.get_extension(photo)
 
-                        await media.upload(client, tg_media, size[1], extension)
-                    else:
-                        return True
-                except (ValueError, telethon.errors.RPCError) as ex:
-                    logger.error(f"Can't get member {member.id} media. Exception {ex}")
+                            await media.upload(client, tg_media, size[1], extension)
+                        else:
+                            return True
+                    except telethon.errors.FloodWaitError as ex:
+                        logger.error(f"Can't get member {member.id} media. Exception {ex}")
 
-                    return f"{ex}"
+                        await asyncio.sleep(ex.seconds)
+
+                        continue
+                    except (ValueError, telethon.errors.RPCError) as ex:
+                        logger.error(f"Can't get member {member.id} media. Exception {type(ex)} {ex}")
+
+                        return f"{ex}"
         except exceptions.UnauthorizedError as ex:
             logger.critical(f"{ex}")
 
@@ -876,24 +868,25 @@ class MemberMediaTask(Task):
             chat_phone.save()
 
             return f"{ex}"
+        return False
 
-    def run(self, chat_id, phone_id, member_id, tg_user):
+    def run(self, chat_id, phone_id, member_id, access_hash):
         try:
             chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id)
 
             if not len(chat_phones):
-                return "Chat phone not found."
-
-            chat_phone = chat_phones[0]
+                return "Chat phones not found."
         except exceptions.RequestException as ex:
             return f"{ex}"
+        else:
+            chat_phone = chat_phones[0]
 
         try:
             member = models.Member(id=member_id).reload()
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat_phone, member, telethon.types.User(**tg_user)))
+        return asyncio.run(self._run(chat_phone, member, access_hash))
 
 
 app.register_task(MemberMediaTask())
@@ -947,7 +940,7 @@ class MessageMediaTask(Task):
                 # elif isinstance(tg_message.media, telethon.types.MessageMediaContact):
                 #     pass
 
-                media = models.MessageMedia(internalId=entity.id, message=message, date=date).save()
+                media = models.MessageMedia(internal_id=entity.id, message=message, date=date).save()
 
                 await media.upload(client, entity, size, extension)
 
