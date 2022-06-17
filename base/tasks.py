@@ -228,7 +228,7 @@ class ChatResolveTask(Task):
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
-                return f"{ex}"
+                continue
 
         return False
 
@@ -601,7 +601,7 @@ class ParseMembersTask(ParseBaseTask):
                 chat_phone.is_using = False
                 chat_phone.save()
 
-                return f"{ex}"
+                continue
 
         return False
 
@@ -675,7 +675,7 @@ class ParseMessagesTask(ParseBaseTask):
                 chat_phone.is_using = False
                 chat_phone.save()
 
-                return f"{ex}"
+                continue
 
         return False
 
@@ -739,7 +739,7 @@ class MonitoringChatTask(ParseBaseTask):
                 chat_phone.is_using = False
                 chat_phone.save()
 
-                return f"{ex}"
+                continue
 
         return False
 
@@ -758,16 +758,12 @@ app.register_task(MonitoringChatTask())
 class ChatMediaTask(Task):
     name = "ChatMediaTask"
 
-    async def _run(self, chat: 'models.TypeChat'):
-        chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
-
-        peer = telethon.utils.resolve_id(chat.internal_id)
+    async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
+        id, peer = telethon.utils.resolve_id(chat.internal_id)
 
         for chat_phone in chat_phones:
-            phone = chat_phone.phone
-
             try:
-                async with utils.TelegramClient(phone) as client:
+                async with utils.TelegramClient(chat_phone.phone) as client:
                     try:
                         async for photo in client.iter_profile_photos(peer):
                             photo: 'telethon.types.TypePhoto'
@@ -803,7 +799,7 @@ class ChatMediaTask(Task):
                 chat_phone.is_using = False
                 chat_phone.save()
 
-                return f"{ex}"
+                continue
 
         return False
 
@@ -813,7 +809,15 @@ class ChatMediaTask(Task):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat))
+        try:
+            chat_phones = models.ChatPhone.find(chat=chat_id, is_using=True)
+
+            if not len(chat_phones):
+                return "Chat phones not found."
+        except exceptions.RequestException as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat, chat_phones))
 
 
 app.register_task(ChatMediaTask())
@@ -872,7 +876,7 @@ class MemberMediaTask(Task):
 
     def run(self, chat_id, phone_id, member_id, access_hash):
         try:
-            chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id)
+            chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id, is_using=True)
 
             if not len(chat_phones):
                 return "Chat phones not found."
