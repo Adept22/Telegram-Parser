@@ -445,7 +445,7 @@ class ParseBaseTask(Task):
 
         app.send_task(
             "MemberMediaTask",
-            args=[chat.id, client.phone.id, member.id, tg_user.access_hash],
+            args=[chat.id, client.phone.id, member.id, {"id": tg_user.id, "access_hash": tg_user.access_hash}],
             queue='low_prio'
         )
 
@@ -549,34 +549,46 @@ class ParseBaseTask(Task):
         if tg_message.media is not None:
             app.send_task("MessageMediaTask", (chat.id, client.phone.id, member.id, tg_message.media.to_dict()))
 
-    def before_start(self, task_id, args, kwargs):
+    @staticmethod
+    def before_start(task_id, args, kwargs):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+            logger.error(f"Error occurred while getting current task from API. Exception: {ex}")
+
+            return
 
         chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
         chat_task.status_text = None
+        chat_task.started_at = datetime.datetime.now().isoformat()
         chat_task.save()
 
-    def on_success(self, retval, task_id, args, kwargs):
+    @staticmethod
+    def on_success(retval, task_id, args, kwargs):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+            logger.error(f"Error occurred while getting current task from API. Exception: {ex}")
 
-        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+            return
+
+        chat_task.status = models.ChatTask.SUCCESED_STATUS
         chat_task.status_text = None
+        chat_task.ended_at = datetime.datetime.now().isoformat()
         chat_task.save()
 
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
+    @staticmethod
+    def on_failure(exc, task_id, args, kwargs, einfo):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+            logger.error(f"Error occurred while getting current task from API. Exception: {ex}")
 
-        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+            return
+
+        chat_task.status = models.ChatTask.FAILED_STATUS
         chat_task.status_text = str(exc)
+        chat_task.ended_at = datetime.datetime.now().isoformat()
         chat_task.save()
 
 
@@ -858,12 +870,12 @@ class MemberMediaTask(Task):
     queue = "low_prio"
 
     async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember',
-                   user: 'telethon.types.TypeUser'):
+                   tg_user: 'telethon.types.TypeUser'):
         try:
             async with utils.TelegramClient(chat_phone.phone) as client:
                 while True:
                     try:
-                        async for photo in client.iter_profile_photos(user):
+                        async for photo in client.iter_profile_photos(tg_user):
                             photo: 'telethon.types.TypePhoto'
 
                             media = models.MemberMedia(
@@ -888,7 +900,7 @@ class MemberMediaTask(Task):
                         else:
                             return True
                     except telethon.errors.FloodWaitError as ex:
-                        logger.error(f"Can't get member {member.id} media. Exception {ex}")
+                        logger.warning(f"Member media download must wait. Exception {ex}")
 
                         await asyncio.sleep(ex.seconds)
 
@@ -906,7 +918,7 @@ class MemberMediaTask(Task):
             return f"{ex}"
         return False
 
-    def run(self, chat_id, phone_id, member_id, access_hash):
+    def run(self, chat_id, phone_id, member_id, tg_user):
         try:
             chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id, is_using=True)
 
@@ -922,9 +934,9 @@ class MemberMediaTask(Task):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        user = telethon.types.User(id=member.internal_id, access_hash=access_hash)
+        tg_user = telethon.types.User(**tg_user)
 
-        return asyncio.run(self._run(chat_phone, member, user))
+        return asyncio.run(self._run(chat_phone, member, tg_user))
 
 
 app.register_task(MemberMediaTask())
