@@ -280,6 +280,52 @@ class Chat(Entity['Chat']):
         return self
 
 
+class ChatTask(Entity['ChatTask']):
+    """ChatTask entity representation"""
+
+    _endpoint = "chats-tasks"
+
+    MEMBERS_TYPE = 0
+    MESSAGES_TYPE = 1
+    MONITORING_TYPE = 2
+
+    CREATED_STATUS = 0
+    IN_PROGRESS_STATUS = 1
+    SUCCESED_STATUS = 2
+    FAILED_STATUS = 3
+
+    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    type: 'int' = None
+    status: 'int' = CREATED_STATUS
+    status_text: 'str' = None
+    started_at: 'str' = None
+    ended_at: 'str' = None
+
+    def serialize(self) -> 'dict':
+        _dict = {
+            "id": self.id,
+            "chat": self.chat.id if self.chat is not None else None,
+            "type": self.type,
+            "status": self.status,
+            "status_text": self.status_text,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
+
+        return dict((k, v) for k, v in _dict.items() if v is not None)
+
+    def deserialize(self, **kwargs) -> 'TypeChatTask':
+        self.id = kwargs.get("id")
+        self.chat = kwargs.get("chat")
+        self.type = kwargs.get("type")
+        self.status = kwargs.get("status")
+        self.status_text = kwargs.get("status_text")
+        self.started_at = kwargs.get("started_at")
+        self.ended_at = kwargs.get("ended_at")
+
+        return self
+
+
 class ChatMedia(Media['ChatMedia']):
     """ChatMedia entity representation"""
 
@@ -633,13 +679,13 @@ TypeMedia = Media
 TypeHost = Host
 TypeParser = Parser
 TypeChat = Chat
-TypePhone = Phone
-TypeParser = Parser
-TypeMessageMedia = MessageMedia
-TypeMessage = Message
-TypeMemberMedia = MemberMedia
-TypeMember = Member
-TypeChatMemberRole = ChatMemberRole
-TypeChatMember = ChatMember
+TypeChatTask = ChatTask
 TypeChatMedia = ChatMedia
+TypePhone = Phone
 TypeChatPhone = ChatPhone
+TypeMember = Member
+TypeMemberMedia = MemberMedia
+TypeChatMember = ChatMember
+TypeChatMemberRole = ChatMemberRole
+TypeMessage = Message
+TypeMessageMedia = MessageMedia

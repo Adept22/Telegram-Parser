@@ -373,7 +373,6 @@ app.register_task(JoinChatTask())
 
 
 class ParseBaseTask(Task):
-
     @staticmethod
     async def _set_member(client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
@@ -444,7 +443,11 @@ class ParseBaseTask(Task):
 
         member = await cls._set_member(client, tg_user)
 
-        app.send_task("MemberMediaTask", args=[chat.id, client.phone.id, member.id, tg_user.access_hash], queue='low_prio')
+        app.send_task(
+            "MemberMediaTask",
+            args=[chat.id, client.phone.id, member.id, tg_user.access_hash],
+            queue='low_prio'
+        )
 
         chat_member = cls.__set_chat_member(chat, member, participant)
         chat_member_role = cls.__set_chat_member_role(chat_member, participant)
@@ -546,10 +549,38 @@ class ParseBaseTask(Task):
         if tg_message.media is not None:
             app.send_task("MessageMediaTask", (chat.id, client.phone.id, member.id, tg_message.media.to_dict()))
 
+    def before_start(self, task_id, args, kwargs):
+        try:
+            chat_task = models.ChatTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+
+        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+        chat_task.status_text = None
+        chat_task.save()
+
+    def on_success(self, retval, task_id, args, kwargs):
+        try:
+            chat_task = models.ChatTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+
+        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+        chat_task.status_text = None
+        chat_task.save()
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        try:
+            chat_task = models.ChatTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            logger.error(f"Error occured while getting curent task from API. Exception: {ex}")
+
+        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+        chat_task.status_text = str(exc)
+        chat_task.save()
+
 
 class ParseMembersTask(ParseBaseTask):
-    """ParseMembersTask"""
-
     name = "ParseMembersTask"
     queue = "high_prio"
 
@@ -618,8 +649,6 @@ app.register_task(ParseMembersTask())
 
 
 class ParseMessagesTask(ParseBaseTask):
-    """ParseMessagesTask"""
-
     name = "ParseMessagesTask"
     queue = "low_prio"
 
@@ -757,6 +786,7 @@ app.register_task(MonitoringChatTask())
 
 class ChatMediaTask(Task):
     name = "ChatMediaTask"
+    queue = "low_prio"
 
     async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         id, peer = telethon.utils.resolve_id(chat.internal_id)
@@ -825,13 +855,15 @@ app.register_task(ChatMediaTask())
 
 class MemberMediaTask(Task):
     name = "MemberMediaTask"
+    queue = "low_prio"
 
-    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember', access_hash):
+    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember',
+                   user: 'telethon.types.TypeUser'):
         try:
             async with utils.TelegramClient(chat_phone.phone) as client:
                 while True:
                     try:
-                        async for photo in client.iter_profile_photos(telethon.types.User(id=member.internal_id, access_hash=access_hash)):
+                        async for photo in client.iter_profile_photos(user):
                             photo: 'telethon.types.TypePhoto'
 
                             media = models.MemberMedia(
@@ -890,7 +922,9 @@ class MemberMediaTask(Task):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat_phone, member, access_hash))
+        user = telethon.types.User(id=member.internal_id, access_hash=access_hash)
+
+        return asyncio.run(self._run(chat_phone, member, user))
 
 
 app.register_task(MemberMediaTask())
@@ -898,6 +932,7 @@ app.register_task(MemberMediaTask())
 
 class MessageMediaTask(Task):
     name = "MessageMediaTask"
+    queue = "low_prio"
 
     async def _run(
         self,
