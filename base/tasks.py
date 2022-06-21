@@ -100,13 +100,13 @@ class ParseBaseTask(Task):
         chat_member = cls.__set_chat_member(chat, member, participant)
         chat_member_role = cls.__set_chat_member_role(chat_member, participant)
 
-        s = Signature(
+        res = app.send_task(
             "MemberMediaTask",
             args=[chat.id, client.phone.id, member.id, {"id": tg_user.id, "access_hash": tg_user.access_hash}],
             queue='low_prio'
         )
 
-        return member, s, chat_member, chat_member_role
+        return member, res, chat_member, chat_member_role
 
     @classmethod
     async def _handle_links(cls, client: 'utils.TelegramClient', text):
@@ -597,13 +597,9 @@ class JoinChatTask(Task):
                         models.ChatPhone(chat=chat, phone=phone, is_using=True).save()
 
                         internal_id = telethon.utils.get_peer_id(tg_chat)
+                        chat.internal_id = internal_id
 
-                        if chat.internal_id != internal_id:
-                            chat.internal_id = internal_id
-
-                        if chat.title != tg_chat.title:
-                            chat.title = tg_chat.title
-
+                        chat.title = tg_chat.title
                         chat.save()
 
                         await asyncio.sleep(random.randint(2, 5))
@@ -801,7 +797,7 @@ class ParseMembersTask(ParseBaseTask):
     queue = "high_prio"
 
     @classmethod
-    async def _get_members(cls, chat: 'models.TypeChat', client: 'utils.TelegramClient'):
+    async def _get_members(cls, client: 'utils.TelegramClient', chat: 'models.TypeChat'):
         """Iterate telegram chat members and save to API"""
 
         # search = string.digits + string.ascii_lowercase + string.punctuation + ' ♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
@@ -817,7 +813,8 @@ class ParseMembersTask(ParseBaseTask):
         else:
             logger.info("Members data download success.")
 
-            celery.chord(ms)().get()
+            res = celery.group(*ms)()
+            res.collect()
 
     async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
@@ -826,7 +823,7 @@ class ParseMembersTask(ParseBaseTask):
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        await self._get_members(chat, client)
+                        await self._get_members(client, chat)
                     except telethon.errors.FloodWaitError as ex:
                         logger.warning(f"Messages request must wait {ex.seconds} seconds.")
 
