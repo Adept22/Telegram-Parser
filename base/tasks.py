@@ -3,10 +3,13 @@ import string
 from abc import abstractmethod
 import re
 import asyncio
+
+import celery
 import telethon
 import random
 import names
 import telethon.sessions
+from celery.canvas import Signature
 from telethon.tl.types import PhotoSize
 from celery.utils.log import get_task_logger
 from base.celeryapp import app
@@ -91,20 +94,19 @@ class ParseBaseTask(Task):
         """Handle telegram user"""
 
         if tg_user.is_self:
-            return None, None, None
+            return None, None, None, None
 
         member = await cls._set_member(client, tg_user)
+        chat_member = cls.__set_chat_member(chat, member, participant)
+        chat_member_role = cls.__set_chat_member_role(chat_member, participant)
 
-        app.send_task(
+        s = Signature(
             "MemberMediaTask",
             args=[chat.id, client.phone.id, member.id, {"id": tg_user.id, "access_hash": tg_user.access_hash}],
             queue='low_prio'
         )
 
-        chat_member = cls.__set_chat_member(chat, member, participant)
-        chat_member_role = cls.__set_chat_member_role(chat_member, participant)
-
-        return member, chat_member, chat_member_role
+        return member, s, chat_member, chat_member_role
 
     @classmethod
     async def _handle_links(cls, client: 'utils.TelegramClient', text):
@@ -163,7 +165,10 @@ class ParseBaseTask(Task):
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
-            member, chat_member, chat_member_role = await cls._handle_user(chat, client, user)
+            member = await cls._handle_user(chat, client, user)
+
+            if member[1] is not None:
+                member[1]()
 
         if tg_message.reply_to is not None:
             reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat)
@@ -188,7 +193,7 @@ class ParseBaseTask(Task):
             internal_id=tg_message.id,
             text=tg_message.message,
             chat=chat,
-            member=chat_member,
+            member=member[2],
             reply_to=reply_to,
             is_pinned=tg_message.pinned,
             forwarded_from_id=fwd_from_id,
@@ -309,10 +314,10 @@ class PhoneAuthorizationTask(Task):
                         except telethon.errors.PhoneNumberUnoccupiedError:
                             await asyncio.sleep(random.randint(2, 5))
 
-                            if phone.first_name is None:
+                            if phone.first_name is None or phone.first_name == '':
                                 phone.first_name = names.get_first_name()
 
-                            if phone.last_name is None:
+                            if phone.last_name is None or phone.last_name == '':
                                 phone.last_name = names.get_last_name()
 
                             await client.sign_up(
@@ -351,7 +356,7 @@ class PhoneAuthorizationTask(Task):
                         break
                     elif code_hash is None:
                         try:
-                            sent = await client.send_code_request(phone=phone.number, force_sms=True)
+                            sent = await client.send_code_request(phone=phone.number)
 
                             code_hash = sent.phone_code_hash
                         except telethon.errors.rpcerrorlist.FloodWaitError as ex:
@@ -368,6 +373,12 @@ class PhoneAuthorizationTask(Task):
                         await asyncio.sleep(10)
 
                         phone.reload()
+                except telethon.errors.FloodWaitError as ex:
+                    logger.warning(f"Phone authorization must wait {ex.seconds}. Exception {ex}.")
+
+                    await asyncio.sleep(ex.seconds)
+
+                    continue
                 except telethon.errors.RPCError as ex:
                     logger.error(f"Cannot authentificate. Exception: {ex}")
 
@@ -381,11 +392,11 @@ class PhoneAuthorizationTask(Task):
             else:
                 break
 
-        dialogs = await client.get_dialogs(limit=0)
-
-        if dialogs.total >= 500:
-            phone.status = models.Phone.FULL
-            phone.save()
+        # dialogs = await client.get_dialogs(limit=0)
+        #
+        # if dialogs.total >= 500:
+        #     phone.status = models.Phone.FULL
+        #     phone.save()
 
         return True
 
@@ -403,6 +414,21 @@ app.register_task(PhoneAuthorizationTask())
 class ChatResolveTask(Task):
     name = "ChatResolveTask"
     queue = "high_prio"
+
+    @staticmethod
+    async def __get_avatar(client, chat, photo):
+        if photo is None or isinstance(photo, telethon.types.PhotoEmpty):
+            return
+
+        if isinstance(photo, telethon.types.ChatPhoto):
+            return
+
+        media = models.ChatMedia(internal_id=photo.id, chat=chat, date=photo.date.isoformat()).save()
+
+        info = telethon.utils._get_file_info(photo)
+        extension = telethon.utils.get_extension(photo)
+
+        await media.upload(client, info.location, info.size, extension)
 
     async def __resolve(self, client, string):
         """Resolve entity from string"""
@@ -452,30 +478,24 @@ class ChatResolveTask(Task):
                             chat.save()
 
                             return False
-                        elif isinstance(tg_chat, telethon.types.ChatInvite):
+
+                        if isinstance(tg_chat, telethon.types.ChatInvite):
                             logger.warning("Chat is available, but need to join.")
 
                             chat.status_text = "Chat is available, but need to join."
                         else:
+                            chat.internal_id = telethon.utils.get_peer_id(tg_chat)
                             chat.status_text = None
-
-                            internal_id = telethon.utils.get_peer_id(tg_chat)
-
-                            if chat.internal_id != internal_id:
-                                chat.internal_id = internal_id
 
                             messages = await client.get_messages(tg_chat, limit=0)
                             chat.total_messages = messages.total
 
-                            app.send_task("ChatMediaTask", args=[chat.id], queue='low_prio')
-
+                        chat.title = tg_chat.title
                         chat.total_members = tg_chat.participants_count or 0
-
-                        if chat.title != tg_chat.title:
-                            chat.title = tg_chat.title
-
                         chat.status = models.Chat.AVAILABLE
                         chat.save()
+
+                        # await self.__get_avatar(client, chat, tg_chat.photo)
 
                         return True
             except exceptions.UnauthorizedError as ex:
@@ -648,7 +668,7 @@ class ChatMediaTask(Task):
                                     ((size.type, size.size) for size in photo.sizes if isinstance(size, PhotoSize)),
                                     ('', None)
                                 )
-                                tg_media = telethon.types.InputPhotoFileLocation(
+                                loc = telethon.types.InputPhotoFileLocation(
                                     id=photo.id,
                                     access_hash=photo.access_hash,
                                     file_reference=photo.file_reference,
@@ -656,7 +676,7 @@ class ChatMediaTask(Task):
                                 )
                                 extension = telethon.utils.get_extension(photo)
 
-                                await media.upload(client, tg_media, size[1], extension)
+                                await media.upload(client, loc, size[1], extension)
                             else:
                                 return True
                         except telethon.errors.FloodWaitError as ex:
@@ -787,14 +807,19 @@ class ParseMembersTask(ParseBaseTask):
         # search = string.digits + string.ascii_lowercase + string.punctuation + ' ♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
         search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
 
+        ms = []
+
         async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
-            await cls._handle_user(chat, client, user, user.participant)
+            member = await cls._handle_user(chat, client, user, user.participant)
+
+            if member[1] is not None:
+                ms.append(member[1])
         else:
-            logger.info("Members download success.")
+            logger.info("Members data download success.")
 
-    async def _run(self, chat: 'models.TypeChat'):
-        chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
+            celery.chord(ms)().get()
 
+    async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
             phone = chat_phone.phone
 
@@ -838,7 +863,15 @@ class ParseMembersTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat))
+        try:
+            chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
+
+            if not len(chat_phones):
+                return "Chat phones not found."
+        except exceptions.RequestException as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat, chat_phones))
 
 
 app.register_task(ParseMembersTask())
@@ -864,9 +897,7 @@ class ParseMessagesTask(ParseBaseTask):
         else:
             logger.info("Messages download success.")
 
-    async def _run(self, chat: 'models.TypeChat'):
-        chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
-
+    async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
             phone = chat_phone.phone
 
@@ -910,7 +941,15 @@ class ParseMessagesTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat))
+        try:
+            chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
+
+            if not len(chat_phones):
+                return "Chat phones not found."
+        except exceptions.RequestException as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat, chat_phones))
 
 
 app.register_task(ParseMessagesTask())
@@ -920,9 +959,7 @@ class MonitoringChatTask(ParseBaseTask):
     name = "MonitoringChatTask"
     queue = "high_prio"
 
-    async def _run(self, chat: 'models.TypeChat'):
-        chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
-
+    async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
             phone = chat_phone.phone
 
@@ -931,7 +968,9 @@ class MonitoringChatTask(ParseBaseTask):
                     async def handle_chat_action(event):
                         if event.user_added or event.user_joined or event.user_left or event.user_kicked:
                             async for user in event.get_users():
-                                await self._handle_user(chat, client, user, user.participant)
+                                member = await self._handle_user(chat, client, user, user.participant)
+                                if member[1] is not None:
+                                    member[1]()
 
                     async def handle_new_message(event):
                         if not isinstance(event.message, telethon.types.Message):
@@ -974,7 +1013,15 @@ class MonitoringChatTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             return f"{ex}"
 
-        return asyncio.run(self._run(chat))
+        try:
+            chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
+
+            if not len(chat_phones):
+                return "Chat phones not found."
+        except exceptions.RequestException as ex:
+            return f"{ex}"
+
+        return asyncio.run(self._run(chat, chat_phones))
 
 
 app.register_task(MonitoringChatTask())
