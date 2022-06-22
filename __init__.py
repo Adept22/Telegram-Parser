@@ -1,14 +1,15 @@
-from datetime import datetime
-import string
 from abc import abstractmethod
+from datetime import datetime
+import os
+import string
 import re
 import asyncio
-from celery import Celery
-import telethon
 import random
 import names
+import telethon
 import telethon.sessions
 from telethon.tl.types import PhotoSize
+from celery import Celery
 from celery.utils.log import get_task_logger
 from celery.result import ResultBase
 from . import models
@@ -18,14 +19,9 @@ from . import exceptions
 
 app = Celery(
     'telegram-parser',
-    broker='redis://localhost:6379/1',
-    backend='redis://localhost:6379/1',
-    namespace='CELERY',
-    # database_table_names={
-    #     'task': 'django_celery_results_taskresult',
-    #     'group': 'django_celery_results_groupresult',
-    # },
-
+    broker=os.environ['CELERY_BROKER'],
+    backend=os.environ['CELERY_BROKER'],
+    namespace="CELERY"
 )
 
 
