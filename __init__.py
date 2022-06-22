@@ -3,15 +3,30 @@ import string
 from abc import abstractmethod
 import re
 import asyncio
+from celery import Celery
 import telethon
 import random
 import names
 import telethon.sessions
 from telethon.tl.types import PhotoSize
 from celery.utils.log import get_task_logger
-from main import app
 from celery.result import ResultBase
-from base import models, utils, exceptions
+from . import models
+from . import utils
+from . import exceptions
+
+
+app = Celery(
+    'telegram-parser',
+    broker='redis://localhost:6379/1',
+    backend='redis://localhost:6379/1',
+    namespace='CELERY',
+    # database_table_names={
+    #     'task': 'django_celery_results_taskresult',
+    #     'group': 'django_celery_results_groupresult',
+    # },
+
+)
 
 
 logger = get_task_logger(__name__)

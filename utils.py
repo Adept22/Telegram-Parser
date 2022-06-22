@@ -10,7 +10,8 @@ from opentele.api import API, APIData
 from telethon import types, functions, hints
 from telethon.client.chats import _ParticipantsIter, _MAX_PARTICIPANTS_CHUNK_SIZE
 from telethon.sessions import StringSession
-from base import models, exceptions
+from . import models
+from . import exceptions
 
 
 class Singleton(type):

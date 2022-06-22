@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
 import math
 from telethon.client import downloads
-from base.utils import ApiService
+from .utils import ApiService
 
 T = TypeVar('T', bound='Entity')
 
