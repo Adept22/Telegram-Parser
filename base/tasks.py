@@ -3,16 +3,14 @@ import string
 from abc import abstractmethod
 import re
 import asyncio
-
-import celery
 import telethon
 import random
 import names
 import telethon.sessions
-from celery.canvas import Signature
 from telethon.tl.types import PhotoSize
 from celery.utils.log import get_task_logger
 from base.celeryapp import app
+from celery.result import ResultBase
 from base import models, utils, exceptions
 
 
@@ -29,7 +27,7 @@ class Task(app.Task):
 
 class ParseBaseTask(Task):
     @staticmethod
-    async def _set_member(client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
+    async def __set_member(client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
         new_member = {
@@ -53,7 +51,15 @@ class ParseBaseTask(Task):
             new_member["phone"] = full_user.user.phone
             new_member["about"] = full_user.about
 
-        return models.Member(**new_member).save()
+        member = models.Member(**new_member).save()
+
+        mm_t = app.send_task(
+            "MemberMediaTask",
+            args=[client.phone.id, member.id, {"id": tg_user.id, "access_hash": tg_user.access_hash}],
+            queue='low_prio'
+        )
+
+        return member, mm_t
 
     @staticmethod
     def __set_chat_member(chat: 'models.TypeChat', member: 'models.TypeMember',
@@ -89,28 +95,24 @@ class ParseBaseTask(Task):
         return models.ChatMemberRole(**new_chat_member_role).save()
 
     @classmethod
-    async def _handle_user(cls, chat: 'models.TypeChat', client: 'utils.TypeTelegramClient',
+    async def _handle_user(cls, client: 'utils.TypeTelegramClient', chat: 'models.TypeChat',
                            tg_user: 'telethon.types.TypeUser', participant=None):
         """Handle telegram user"""
 
         if tg_user.is_self:
             return None, None, None, None
 
-        member = await cls._set_member(client, tg_user)
+        member, mm_t = await cls.__set_member(client, tg_user)
         chat_member = cls.__set_chat_member(chat, member, participant)
         chat_member_role = cls.__set_chat_member_role(chat_member, participant)
 
-        res = app.send_task(
-            "MemberMediaTask",
-            args=[chat.id, client.phone.id, member.id, {"id": tg_user.id, "access_hash": tg_user.access_hash}],
-            queue='low_prio'
-        )
-
-        return member, res, chat_member, chat_member_role
+        return member, mm_t, chat_member, chat_member_role
 
     @classmethod
     async def _handle_links(cls, client: 'utils.TelegramClient', text):
         """Handle links from message text"""
+
+        subs = []
 
         for link in re.finditer(utils.LINK_RE, text):
             username, is_join_chat = utils.parse_username(link.group())
@@ -123,10 +125,9 @@ class ParseBaseTask(Task):
                     tg_entity: 'telethon.types.TypeChat | telethon.types.User' = await client.get_entity(username)
 
                     if isinstance(tg_entity, telethon.types.User):
-                        member = await cls._set_member(client, tg_entity)
+                        member, mm_t = await cls.__set_member(client, tg_entity)
 
-                        # TODO: Как запускать?
-                        # processes.member_media_process(chat_phone, member, tg_entity)
+                        subs.append(mm_t)
 
                         continue
                 except (ValueError, telethon.errors.RPCError):
@@ -135,6 +136,8 @@ class ParseBaseTask(Task):
             models.Chat(link=link, internal_id=tg_entity.id, title=tg_entity.title, is_available=False).save()
 
             logger.info(f"New entity from link {link} created.")
+
+        return subs
 
     @staticmethod
     def _get_fwd(fwd_from):
@@ -157,6 +160,8 @@ class ParseBaseTask(Task):
     async def _handle_message(cls, chat: 'models.TypeChat', client, tg_message: 'telethon.types.TypeMessage'):
         """Handle telegram message"""
 
+        subs = []
+
         fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
 
         chat_member = None
@@ -165,10 +170,9 @@ class ParseBaseTask(Task):
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
-            member = await cls._handle_user(chat, client, user)
+            member, mm_t, chat_member, chat_member_role = await cls._handle_user(chat, client, user)
 
-            if member[1] is not None:
-                member[1]()
+            subs.append(mm_t)
 
         if tg_message.reply_to is not None:
             reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat)
@@ -185,7 +189,7 @@ class ParseBaseTask(Task):
                 for reply in replies.messages:
                     reply: 'telethon.types.TypeMessage'
 
-                    await cls._handle_message(chat, client, reply)
+                    subs += await cls._handle_message(chat, client, reply)
             except Exception as ex:
                 logger.exception(ex)
 
@@ -193,7 +197,7 @@ class ParseBaseTask(Task):
             internal_id=tg_message.id,
             text=tg_message.message,
             chat=chat,
-            member=member[2],
+            member=chat_member,
             reply_to=reply_to,
             is_pinned=tg_message.pinned,
             forwarded_from_id=fwd_from_id,
@@ -244,6 +248,8 @@ class ParseBaseTask(Task):
             media.save()
 
             await media.upload(client, entity, size, extension)
+
+        return subs
 
     @staticmethod
     def before_start(task_id, args, kwargs):
@@ -719,10 +725,9 @@ class MemberMediaTask(Task):
     name = "MemberMediaTask"
     queue = "low_prio"
 
-    async def _run(self, chat_phone: 'models.TypeChatPhone', member: 'models.TypeMember',
-                   tg_user: 'telethon.types.TypeUser'):
+    async def _run(self, phone: 'models.TypePhone', member: 'models.TypeMember', tg_user: 'telethon.types.TypeUser'):
         try:
-            async with utils.TelegramClient(chat_phone.phone) as client:
+            async with utils.TelegramClient(phone) as client:
                 while True:
                     try:
                         async for photo in client.iter_profile_photos(tg_user):
@@ -762,22 +767,15 @@ class MemberMediaTask(Task):
         except exceptions.UnauthorizedError as ex:
             logger.critical(f"{ex}")
 
-            chat_phone.is_using = False
-            chat_phone.save()
-
             return f"{ex}"
+
         return False
 
-    def run(self, chat_id, phone_id, member_id, tg_user):
+    def run(self, phone_id, member_id, tg_user):
         try:
-            chat_phones = models.ChatPhone.find(chat=chat_id, phone=phone_id, is_using=True)
-
-            if not len(chat_phones):
-                return "Chat phones not found."
+            phone = models.Phone(id=phone_id).reload()
         except exceptions.RequestException as ex:
             return f"{ex}"
-        else:
-            chat_phone = chat_phones[0]
 
         try:
             member = models.Member(id=member_id).reload()
@@ -786,7 +784,7 @@ class MemberMediaTask(Task):
 
         tg_user = telethon.types.User(**tg_user)
 
-        return asyncio.run(self._run(chat_phone, member, tg_user))
+        return asyncio.run(self._run(phone, member, tg_user))
 
 
 app.register_task(MemberMediaTask())
@@ -803,18 +801,17 @@ class ParseMembersTask(ParseBaseTask):
         # search = string.digits + string.ascii_lowercase + string.punctuation + ' ♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
         search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
 
-        ms = []
+        subs = []
 
         async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
-            member = await cls._handle_user(chat, client, user, user.participant)
+            member, mm_t, chat_member, chat_member_role = await cls._handle_user(chat, client, user, user.participant)
 
-            if member[1] is not None:
-                ms.append(member[1])
+            if mm_t is not None:
+                subs.append(mm_t)
         else:
             logger.info("Members data download success.")
 
-            res = celery.group(*ms)()
-            res.collect()
+        return subs
 
     async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
@@ -823,7 +820,7 @@ class ParseMembersTask(ParseBaseTask):
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        await self._get_members(client, chat)
+                        subs = await self._get_members(client, chat)
                     except telethon.errors.FloodWaitError as ex:
                         logger.warning(f"Messages request must wait {ex.seconds} seconds.")
 
@@ -843,6 +840,8 @@ class ParseMembersTask(ParseBaseTask):
 
                         return f"{ex}"
                     else:
+                        [sub.get() for sub in subs if isinstance(sub, ResultBase)]
+
                         return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
@@ -884,15 +883,19 @@ class ParseMessagesTask(ParseBaseTask):
         last_messages = models.Message.find(chat=chat.id, ordering="-internal_id", limit=1)
         max_id = last_messages[0].internal_id if last_messages else 0
 
+        subs = []
+
         async for tg_message in client.iter_messages(chat.internal_id, max_id=max_id):
             if not isinstance(tg_message, telethon.types.Message):
                 continue
 
-            await self._handle_links(client, tg_message.message)
+            subs += await self._handle_links(client, tg_message.message)
 
-            await self._handle_message(chat, client, tg_message)
+            subs += await self._handle_message(chat, client, tg_message)
         else:
             logger.info("Messages download success.")
+
+        return subs
 
     async def _run(self, chat: 'models.TypeChat', chat_phones: 'list[models.TypeChatPhone]'):
         for chat_phone in chat_phones:
@@ -901,7 +904,7 @@ class ParseMessagesTask(ParseBaseTask):
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        await self._get_messages(chat, client)
+                        subs = await self._get_messages(chat, client)
                     except telethon.errors.FloodWaitError as ex:
                         logger.warning(f"Messages request must wait {ex.seconds} seconds.")
 
@@ -921,6 +924,8 @@ class ParseMessagesTask(ParseBaseTask):
 
                         return f"{ex}"
                     else:
+                        [sub.get() for sub in subs if isinstance(sub, ResultBase)]
+
                         return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
@@ -965,9 +970,7 @@ class MonitoringChatTask(ParseBaseTask):
                     async def handle_chat_action(event):
                         if event.user_added or event.user_joined or event.user_left or event.user_kicked:
                             async for user in event.get_users():
-                                member = await self._handle_user(chat, client, user, user.participant)
-                                if member[1] is not None:
-                                    member[1]()
+                                await self._handle_user(chat, client, user, user.participant)
 
                     async def handle_new_message(event):
                         if not isinstance(event.message, telethon.types.Message):
