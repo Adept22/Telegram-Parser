@@ -2,7 +2,6 @@
 import os
 import random
 import re
-# import json
 import urllib.parse
 import requests
 import telethon
@@ -11,8 +10,7 @@ from opentele.api import API, APIData
 from telethon import types, functions, hints
 from telethon.client.chats import _ParticipantsIter, _MAX_PARTICIPANTS_CHUNK_SIZE
 from telethon.sessions import StringSession
-from base import models
-from base import exceptions
+from base import models, exceptions
 
 
 class Singleton(type):

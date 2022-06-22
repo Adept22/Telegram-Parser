@@ -1,0 +1,5 @@
+celery==5.2.6
+names==0.3.0
+opentele==1.15.1
+requests==2.22.0
+Telethon==1.24.0

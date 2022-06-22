@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 from celery import Celery
 
-
 app = Celery(
     'base',
     broker='redis://localhost:6379/1',
@@ -15,8 +14,5 @@ app = Celery(
 
 )
 
-
 if __name__ == '__main__':
     app.start()
-
-
