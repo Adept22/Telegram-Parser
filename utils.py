@@ -247,7 +247,7 @@ class ApiService(metaclass=Singleton):
         try:
             r = requests.request(
                 method,
-                os.environ['CELERY_API_URL'] + f"/telegram/{endpoint}/{path}",
+                os.environ['CELERY_API_URL'] + f"/{endpoint}/{path}",
                 headers={"Accept": "application/json"},
                 json=body,
                 params=params,

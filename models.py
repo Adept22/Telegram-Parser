@@ -375,6 +375,7 @@ class Phone(Entity['Phone']):
     status_text: 'str' = None
     internal_id: 'int' = None
     session: 'str' = None
+    username: 'str' = None
     first_name: 'str' = None
     last_name: 'str' = None
     code: 'str' = None
@@ -389,6 +390,7 @@ class Phone(Entity['Phone']):
             "status_text": self.status_text,
             "internal_id": self.internal_id,
             "session": self.session,
+            "username": self.username,
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
@@ -404,6 +406,7 @@ class Phone(Entity['Phone']):
         self.parser = kwargs.get('parser')
         self.internal_id = kwargs.get("internal_id")
         self.session = kwargs.get("session")
+        self.username = kwargs.get("username")
         self.first_name = kwargs.get("first_name")
         self.last_name = kwargs.get("last_name")
         self.code = kwargs.get("code")
