@@ -235,8 +235,7 @@ class Chat(Entity['Chat']):
 
     CREATED = 0
     AVAILABLE = 1
-    MONITORING = 2
-    FAILED = 3
+    FAILED = 2
 
     link: 'str' = None
     status: 'int' = CREATED

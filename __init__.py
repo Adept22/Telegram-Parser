@@ -1002,11 +1002,13 @@ class MonitoringChatTask(ParseBaseTask):
 
             try:
                 async with utils.TelegramClient(phone) as client:
+                    @client.on(telethon.events.chataction.ChatAction(chats=chat.internal_id))
                     async def handle_chat_action(event):
                         if event.user_added or event.user_joined or event.user_left or event.user_kicked:
                             async for user in event.get_users():
                                 await self._handle_user(client, chat, user, user.participant)
 
+                    @client.on(telethon.events.NewMessage(chats=chat.internal_id, incoming=True))
                     async def handle_new_message(event):
                         if not isinstance(event.message, telethon.types.Message):
                             return
@@ -1015,23 +1017,7 @@ class MonitoringChatTask(ParseBaseTask):
 
                         await self._handle_message(chat, client, event.message)
 
-                    client.add_event_handler(
-                        handle_chat_action,
-                        telethon.events.chataction.ChatAction(chats=chat.internal_id)
-                    )
-
-                    client.add_event_handler(
-                        handle_new_message,
-                        telethon.events.NewMessage(chats=chat.internal_id, incoming=True)
-                    )
-
-                    while True:
-                        await asyncio.sleep(10)
-
-                        chat.reload()
-
-                        if chat.status is not models.Chat.MONITORING:
-                            return True
+                    client.run_until_disconnected()
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
