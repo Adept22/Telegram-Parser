@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from datetime import datetime
 import os
 import string
 import re
@@ -281,7 +280,7 @@ class ParseBaseTask(Task):
 
         chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
         chat_task.status_text = None
-        chat_task.started_at = datetime.now().isoformat()
+        chat_task.started_at = app.now().isoformat()
         chat_task.save()
 
     @staticmethod
@@ -295,7 +294,7 @@ class ParseBaseTask(Task):
 
         chat_task.status = models.ChatTask.SUCCESED_STATUS
         chat_task.status_text = None
-        chat_task.ended_at = datetime.now().isoformat()
+        chat_task.ended_at = app.now().isoformat()
         chat_task.save()
 
     @staticmethod
@@ -309,7 +308,7 @@ class ParseBaseTask(Task):
 
         chat_task.status = models.ChatTask.FAILED_STATUS
         chat_task.status_text = str(exc)
-        chat_task.ended_at = datetime.now().isoformat()
+        chat_task.ended_at = app.now().isoformat()
         chat_task.save()
 
 

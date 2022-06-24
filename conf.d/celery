@@ -41,5 +41,7 @@ CELERYD_GROUP="celery"
 # and owned by the userid/group configured.
 CELERY_CREATE_DIRS=1
 
+CELERY_TIMEZONE="Europe/Moscow"
+
 CELERY_API_URL="http://10.8.1.2:8088/api/v1"
 CELERY_BROKER="redis://127.0.0.1:6379/0"
