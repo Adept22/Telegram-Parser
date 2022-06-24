@@ -442,6 +442,7 @@ class PhoneAuthorizationTask(Task):
             phone = models.Phone(id=phone_id).reload()
         except exceptions.RequestException as ex:
             return f"{ex}"
+
         return asyncio.run(self._run(phone))
 
 
@@ -854,30 +855,11 @@ class ParseMembersTask(ParseBaseTask):
 
             try:
                 async with utils.TelegramClient(phone) as client:
-                    try:
-                        subs = await self._get_members(client, chat)
-                    except telethon.errors.FloodWaitError as ex:
-                        logger.warning(f"Messages request must wait {ex.seconds} seconds.")
+                    subs = await self._get_members(client, chat)
 
-                        phone.status = models.Phone.FLOOD
-                        phone.status_text = str(ex)
-                        phone.save()
+                    [sub.get(disable_sync_subtasks=False) for sub in subs if isinstance(sub, ResultBase)]
 
-                        await asyncio.sleep(ex.seconds)
-
-                        continue
-                    except (ValueError, telethon.errors.RPCError) as ex:
-                        logger.error(f"Chat not available. Exception: {ex}")
-
-                        chat.status = models.Chat.FAILED
-                        chat.status_text = str(ex)
-                        chat.save()
-
-                        return f"{ex}"
-                    else:
-                        [sub.get(disable_sync_subtasks=False) for sub in subs if isinstance(sub, ResultBase)]
-
-                        return True
+                    return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
@@ -886,7 +868,7 @@ class ParseMembersTask(ParseBaseTask):
 
                 continue
 
-        return False
+        raise Exception("Chat doesn't have available phones.")
 
     def run(self, chat_id):
         try:
@@ -943,21 +925,9 @@ class ParseMessagesTask(ParseBaseTask):
                     except telethon.errors.FloodWaitError as ex:
                         logger.warning(f"Messages request must wait {ex.seconds} seconds.")
 
-                        phone.status = models.Phone.FLOOD
-                        phone.status_text = str(ex)
-                        phone.save()
-
                         await asyncio.sleep(ex.seconds)
 
                         continue
-                    except (ValueError, telethon.errors.RPCError) as ex:
-                        logger.error(f"Chat not available. Exception: {ex}")
-
-                        chat.status = models.Chat.FAILED
-                        chat.status_text = str(ex)
-                        chat.save()
-
-                        return f"{ex}"
                     else:
                         [sub.get(disable_sync_subtasks=False) for sub in subs if isinstance(sub, ResultBase)]
 
@@ -970,7 +940,7 @@ class ParseMessagesTask(ParseBaseTask):
 
                 continue
 
-        return False
+        raise Exception("Chat doesn't have available phones.")
 
     def run(self, chat_id):
         try:
