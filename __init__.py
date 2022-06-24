@@ -987,7 +987,9 @@ class MonitoringChatTask(ParseBaseTask):
 
                         await self._handle_message(chat, client, event.message)
 
-                    client.run_until_disconnected()
+                    await client.run_until_disconnected()
+
+                    return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
