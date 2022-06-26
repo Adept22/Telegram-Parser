@@ -52,7 +52,7 @@ class ParseBaseTask(Task):
             full_user: 'telethon.types.UserFull' = await client(
                 telethon.functions.users.GetFullUserRequest(tg_user.id)
             )
-        except:
+        except Exception:
             pass
         else:
             new_member["username"] = full_user.user.username
@@ -542,17 +542,17 @@ class ChatResolveTask(Task):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given chat.")
+            raise Exception("Can't get given chat.")
 
         try:
             phones = models.Phone.find(status=models.Phone.READY, parser=chat.parser.id)
 
             if not len(phones):
-                raise Exception(f"Phones not found.")
+                raise Exception("Phones not found.")
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get phones.")
+            raise Exception("Can't get phones.")
 
         return asyncio.run(self._run(chat, phones))
 
@@ -653,14 +653,14 @@ class JoinChatTask(Task):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given chat.")
+            raise Exception("Can't get given chat.")
 
         try:
             phone = models.Phone(id=phone_id).reload()
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given phone.")
+            raise Exception("Can't get given phone.")
 
         return asyncio.run(self._run(chat, phone))
 
@@ -726,17 +726,17 @@ class ChatMediaTask(Task):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given chat.")
+            raise Exception("Can't get given chat.")
 
         try:
             chat_phones = models.ChatPhone.find(chat=chat_id, is_using=True)
 
             if not len(chat_phones):
-                raise Exception(f"Chat phones not found.")
+                raise Exception("Chat phones not found.")
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get chat wired phones.")
+            raise Exception("Can't get chat wired phones.")
 
         return asyncio.run(self._run(chat, chat_phones))
 
@@ -789,14 +789,14 @@ class MemberMediaTask(Task):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given phone.")
+            raise Exception("Can't get given phone.")
 
         try:
             member = models.Member(id=member_id).reload()
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given member.")
+            raise Exception("Can't get given member.")
 
         tg_user = telethon.types.User(**tg_user)
 
@@ -856,17 +856,17 @@ class ParseMembersTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given chat.")
+            raise Exception("Can't get given chat.")
 
         try:
             chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
 
             if not len(chat_phones):
-                raise Exception(f"Chat phones not found.")
+                raise Exception("Chat phones not found.")
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get chat wired phones.")
+            raise Exception("Can't get chat wired phones.")
 
         return asyncio.run(self._run(chat, chat_phones))
 
@@ -932,17 +932,17 @@ class ParseMessagesTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't find given chat.")
+            raise Exception("Can't find given chat.")
 
         try:
             chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
 
             if not len(chat_phones):
-                raise Exception(f"Chat phones not found.")
+                raise Exception("Chat phones not found.")
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get chat wired phones.")
+            raise Exception("Can't get chat wired phones.")
 
         return asyncio.run(self._run(chat, chat_phones))
 
@@ -994,17 +994,17 @@ class MonitoringChatTask(ParseBaseTask):
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get given chat.")
+            raise Exception("Can't get given chat.")
 
         try:
             chat_phones = models.ChatPhone.find(chat=chat.id, is_using=True)
 
             if not len(chat_phones):
-                raise Exception(f"Chat phones not found.")
+                raise Exception("Chat phones not found.")
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception(f"Can't get chat wired phones.")
+            raise Exception("Can't get chat wired phones.")
 
         return asyncio.run(self._run(chat, chat_phones))
 

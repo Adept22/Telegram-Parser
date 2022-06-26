@@ -6,11 +6,60 @@ import math
 from telethon.client import downloads
 from .utils import ApiService
 
+
+class RelationProperty(property):
+    __prop = None
+    __value = None
+
+    def __init__(self, name, rel: 'TypeEntity | str', default=None):
+        self.__prop = name
+        self.___rel = rel
+        self.__value = default
+
+    @property
+    def __rel(self):
+        if isinstance(self.___rel, str):
+            return getattr(sys.modules[__name__], self.___rel)
+
+        return self.___rel
+
+    def __get__(self, instance, owner=None):
+        if self.__value is not None:
+            self.__value.reload()
+
+            return self.__value
+
+        return self.__rel()
+
+    def __set__(self, instance, value):
+        if isinstance(value, self.__rel):
+            self.__value = value
+        elif isinstance(value, str):
+            value = self.__rel(id=value)
+
+            if self.__value != value:
+                self.__value = value
+        elif isinstance(value, dict):
+            if isinstance(self.__value, self.__rel):
+                self.__value.deserialize(**value)
+            else:
+                self.__value = self.__rel(**value)
+        elif value is None:
+            self.__value = None
+        else:
+            raise TypeError(
+                f"Can't cast {type(value)} to '{self.__rel.__prop}'"
+                f" object in property {self.__prop} of {instance}."
+            )
+
+
 T = TypeVar('T', bound='Entity')
 
 
 class Entity(Generic[T], metaclass=ABCMeta):
     """Base class for entities"""
+
+    id = None
 
     def __init__(self, **kwargs):
         self.deserialize(**kwargs)
@@ -28,18 +77,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
             return self is other
 
         return my_id == other.id
-
-    @property
-    def id(self) -> 'str | None':
-        """Идентификатор сущности."""
-
-        return self._id
-
-    @id.setter
-    def id(self, new_value) -> 'None':
-        """Сеттер идентификатора сущности."""
-
-        self._id = new_value
 
     @property
     @abstractmethod
@@ -125,50 +162,6 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
             chunk_number += 1
 
 
-class RelationProperty(property):
-    __prop = None
-    __value = None
-
-    def __init__(self, name, rel: 'TypeEntity | str', default=None):
-        self.__prop = name
-        self.___rel = rel
-        self.__value = default
-
-    @property
-    def __rel(self):
-        if isinstance(self.___rel, str):
-            return getattr(sys.modules[__name__], self.___rel)
-
-        return self.___rel
-
-    def __get__(self, instance, owner=None):
-        if self.__value is not None:
-            self.__value.reload()
-
-        return self.__value
-
-    def __set__(self, instance, value):
-        if isinstance(value, self.__rel):
-            self.__value = value
-        elif isinstance(value, str):
-            value = self.__rel(id=value)
-
-            if self.__value != value:
-                self.__value = value
-        elif isinstance(value, dict):
-            if isinstance(self.__value, self.__rel):
-                self.__value.deserialize(**value)
-            else:
-                self.__value = self.__rel(**value)
-        elif value is None:
-            self.__value = None
-        else:
-            raise TypeError(
-                f"Can't cast {type(value)} to '{self.__rel.__prop}'"
-                f" object in property {self.__prop} of {instance}."
-            )
-
-
 class Host(Entity['Host']):
     """Host entity representation"""
 
@@ -246,10 +239,10 @@ class Chat(Entity['Chat']):
     date: 'str' = None
     total_members: 'int' = None
     total_messages: 'int' = None
-    parser: 'TypeHost' = RelationProperty("parser", Parser)
+    parser: 'TypeParser' = RelationProperty("parser", Parser)
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
             "link": self.link,
             "status": self.status,
@@ -260,10 +253,8 @@ class Chat(Entity['Chat']):
             "date": self.date,
             "total_members": self.total_members,
             "total_messages": self.total_messages,
-            "parser": self.parser.id if self.parser is not None else None
+            "parser": self.parser.id
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'Chat':
         self.id = kwargs.get('id')
@@ -303,17 +294,15 @@ class ChatTask(Entity['ChatTask']):
     ended_at: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "chat": self.chat.id if self.chat is not None else None,
+            "chat": self.chat.id,
             "type": self.type,
             "status": self.status,
             "status_text": self.status_text,
             "started_at": self.started_at,
             "ended_at": self.ended_at,
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeChatTask':
         self.id = kwargs.get("id")
@@ -338,15 +327,13 @@ class ChatMedia(Media['ChatMedia']):
     date: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "chat": self.chat.id if self.chat is not None else None,
+            "chat": self.chat.id,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeChatMedia':
         self.id = kwargs.get("id")
@@ -370,7 +357,7 @@ class Phone(Entity['Phone']):
     BAN = 4
 
     number: 'str' = None
-    status: 'bool' = None
+    status: 'int' = None
     status_text: 'str' = None
     internal_id: 'int' = None
     session: 'str' = None
@@ -424,14 +411,12 @@ class ChatPhone(Entity['ChatPhone']):
     is_using: 'bool' = False
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "chat": self.chat.id if self.chat is not None else None,
-            "phone": self.phone.id if self.phone is not None else None,
+            "chat": self.chat.id,
+            "phone": self.phone.id,
             "is_using": self.is_using
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'ChatPhone':
         self.id = kwargs.get("id")
@@ -455,7 +440,7 @@ class Member(Entity['Member']):
     about: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
             "internal_id": self.internal_id,
             "username": self.username,
@@ -464,8 +449,6 @@ class Member(Entity['Member']):
             "phone": self.phone,
             "about": self.about
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeMember':
         self.id = kwargs.get("id")
@@ -490,15 +473,13 @@ class MemberMedia(Media['MemberMedia']):
     date: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "member": self.member.id if self.member is not None else None,
+            "member": self.member.id,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeMemberMedia':
         self.id = kwargs.get("id")
@@ -548,23 +529,21 @@ class ChatMember(Entity['ChatMember']):
         self._roles = _roles
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "chat": self.chat.id if self.chat is not None else None,
-            "member": self.member.id if self.member is not None else None,
+            "chat": self.chat.id,
+            "member": self.member.id,
             "date": self.date,
             "is_left": self.is_left,
             "roles": [role.id for role in self.roles if isinstance(role, ChatMemberRole)],
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeChatMember':
         self.id = kwargs.get("id")
         self.chat = kwargs.get("chat")
         self.member = kwargs.get("member")
         self.date = kwargs.get("date")
-        self.is_left = kwargs.get("is_left")
+        self.is_left = kwargs.get("is_left", False)
         self.roles = kwargs.get("roles")
 
         return self
@@ -580,14 +559,12 @@ class ChatMemberRole(Entity['ChatMemberRole']):
     code: 'str' = "member"
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "member": self.member.id if self.member is not None else None,
+            "member": self.member.id,
             "title": self.title,
             "code": self.code
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeChatMemberRole':
         self.id = kwargs.get("id")
@@ -615,21 +592,19 @@ class Message(Entity['Message']):
     date: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
             "internal_id": self.internal_id,
             "text": self.text,
-            "chat": self.chat.id if self.chat is not None else None,
-            "member": self.member.id if self.member is not None else None,
-            "reply_to": self.reply_to.id if self.reply_to is not None else None,
+            "chat": self.chat.id,
+            "member": self.member.id,
+            "reply_to": self.reply_to.id,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
             "forwarded_from_endpoint": self.forwarded_from_endpoint,
             "grouped_id": self.grouped_id,
             "date": self.date
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeMessage':
         self.id = kwargs.get("id")
@@ -638,7 +613,7 @@ class Message(Entity['Message']):
         self.chat = kwargs.get("chat")
         self.member = kwargs.get("member")
         self.reply_to = kwargs.get("reply_to")
-        self.is_pinned = kwargs.get("is_pinned")
+        self.is_pinned = kwargs.get("is_pinned", False)
         self.forwarded_from_id = kwargs.get("forwarded_from_id")
         self.forwarded_from_endpoint = kwargs.get("forwarded_from_endpoint")
         self.grouped_id = kwargs.get("grouped_id")
@@ -658,15 +633,13 @@ class MessageMedia(Media['MessageMedia']):
     date: 'str' = None
 
     def serialize(self) -> 'dict':
-        _dict = {
+        return {
             "id": self.id,
-            "message": self.message.id if self.message is not None else None,
+            "message": self.message.id,
             "internal_id": self.internal_id,
             "path": self.path,
             "date": self.date,
         }
-
-        return dict((k, v) for k, v in _dict.items() if v is not None)
 
     def deserialize(self, **kwargs) -> 'TypeMessageMedia':
         self.id = kwargs.get("id")
