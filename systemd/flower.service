@@ -1,6 +1,6 @@
 [Unit]
 Description=Celery Flower Service
-Requires=redis.service
+After=celery.service
 
 [Service]
 Type=simple

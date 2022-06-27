@@ -19,7 +19,7 @@ from . import exceptions
 app = Celery(
     'telegram-parser',
     broker=os.environ['CELERY_BROKER'],
-    backend=os.environ['CELERY_BROKER'],
+    backend=os.environ['CELERY_RESULT_BACKEND'],
     namespace="CELERY"
 )
 
@@ -835,11 +835,13 @@ class ParseMembersTask(ParseBaseTask):
 
             try:
                 async with utils.TelegramClient(phone) as client:
-                    subs = await self._get_members(client, chat)
+                    client: 'utils.TelegramClient'
+                    with client.takeout() as takeout:
+                        subs = await self._get_members(takeout, chat)
 
-                    [sub.get(disable_sync_subtasks=False) for sub in subs if isinstance(sub, ResultBase)]
+                        [sub.get(disable_sync_subtasks=False) for sub in subs if isinstance(sub, ResultBase)]
 
-                    return True
+                        return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
