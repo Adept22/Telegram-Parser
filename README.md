@@ -7,10 +7,7 @@ sudo su
 apt install redis
 ```
 ```
-adduser --disabled-login --no-create-home celery
 mkdir -p /opt/celery && cd /opt/celery
-```
-```
 git clone git@gitlab.com:msr-system/telegram-parser.git && cd telegram-parser
 ```
 ```

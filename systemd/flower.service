@@ -4,8 +4,6 @@ After=celery.service
 
 [Service]
 Type=simple
-User=celery
-Group=celery
 EnvironmentFile=/etc/conf.d/celery
 WorkingDirectory=/opt/celery
 ExecStart=/bin/sh -c '${CELERY_BIN} -A $CELERY_APP --broker=${CELERY_BROKER} flower --port=${FLOWER_PORT}'
