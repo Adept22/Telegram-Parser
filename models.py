@@ -205,7 +205,7 @@ class Parser(Entity['Parser']):
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
-            "host": self.host.id if self.host is not None else None,
+            "host": self.host.id,
             "status": self.status,
             "api_id": self.api_id,
             "api_hash": self.api_hash
@@ -367,6 +367,7 @@ class Phone(Entity['Phone']):
     code: 'str' = None
     parser: 'TypeParser' = RelationProperty("parser", Parser)
     api: 'dict' = None
+    takeout: 'bool' = False
 
     def serialize(self) -> 'dict':
         return {
@@ -380,8 +381,9 @@ class Phone(Entity['Phone']):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "code": self.code,
-            "parser": self.parser.id if self.parser is not None else None,
-            "api": self.api
+            "parser": self.parser.id,
+            "api": self.api,
+            "takeout": self.takeout
         }
 
     def deserialize(self, **kwargs) -> 'TypePhone':
@@ -397,6 +399,7 @@ class Phone(Entity['Phone']):
         self.last_name = kwargs.get("last_name")
         self.code = kwargs.get("code")
         self.api = kwargs.get("api")
+        self.takeout = kwargs.get("takeout", False)
 
         return self
 
