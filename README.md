@@ -3,35 +3,50 @@
 ## Установка
 
 ```
-sudo api install redis
-sudo adduser --disabled-login --no-create-home celery
+sudo su
+apt install redis
+```
+```
 mkdir -p /opt/celery && cd /opt/celery
-```
-```
-git clone git@gitlab.com:msr-system/telegram-parser.git
+git clone git@gitlab.com:msr-system/telegram-parser.git && cd telegram-parser
 ```
 ```
 python3 -m venv /opt/celery/telegram-parser/venv
-source /opt/celery/telegram-parser/venv/bin/activate
+source ./venv/bin/activate
 ```
 ```
-cd telegram-parser
 pip install -r requirements.txt
 ```
-
+Копируем шаблон переменных окружения и редактируем по необходимости.
 ```
-sudo mkdir /etc/conf.d
-sudo cp conf.d/celery /etc/conf.d/
-sudo cp systemd/celery.service /etc/systemd/system/
+cp /opt/celery/telegram-parser/conf.d/celery /opt/celery/telegram-parser/conf.d/celery.local
+mkdir -p /etc/conf.d && ln -s /opt/celery/telegram-parser/conf.d/celery.local /etc/conf.d/celery
 ```
-
 ```
-sudo systemctl daemon-reload
-sudo systemctl enable celery.service
+ln -s /opt/celery/telegram-parser/systemd/celery.service /etc/systemd/system/
+```
+```
+mkdir -p /var/log/celery/ && chown -R celery:celery /var/log/celery/
+mkdir -p /var/run/celery/ && chown -R celery:celery /var/run/celery/
+```
+```
+systemctl daemon-reload
+systemctl enable celery.service
+```
+Если нужна веб-морда для celery создаем ссылку на юнит
+```
+ln -s /opt/celery/telegram-parser/systemd/flower.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable flower.service
 ```
 
 ## Запуск
 
 ```
-sudo systemctl start celery.service
+systemctl start celery.service
+```
+
+Веб морда
+```
+systemctl start flower.service
 ```

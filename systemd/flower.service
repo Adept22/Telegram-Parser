@@ -1,0 +1,13 @@
+[Unit]
+Description=Celery Flower Service
+After=celery.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/conf.d/celery
+WorkingDirectory=/opt/celery
+ExecStart=/bin/sh -c '${CELERY_BIN} -A $CELERY_APP --broker=${CELERY_BROKER} flower --port=${FLOWER_PORT}'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

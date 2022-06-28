@@ -9,9 +9,9 @@ from opentele.tl import TelegramClient as OpenteleClient
 from opentele.api import API, APIData
 from telethon import types, functions, hints
 from telethon.client.chats import _ParticipantsIter, _MAX_PARTICIPANTS_CHUNK_SIZE
+from telethon.client.account import _TakeoutClient as _TelethonTakeoutClient
 from telethon.sessions import StringSession
-from . import models
-from . import exceptions
+from . import models, exceptions, utils
 
 
 class Singleton(type):
@@ -26,23 +26,55 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-APIS = [
-    API.TelegramDesktop,
-    API.TelegramAndroid,
-    API.TelegramAndroidX,
-    API.TelegramIOS,
-    API.TelegramMacOS,
-]
+class _TakeoutClient(_TelethonTakeoutClient):
+    async def __aenter__(self):
+        client = self.__client
+
+        if client.session.takeout_id is None:
+            client.session.takeout_id = (await client(self.__request)).id
+        elif self.__request is not None:
+            raise ValueError("Can't send a takeout request while another "
+                             "takeout for the current session still not been finished yet.")
+
+        client.phone.takeout = True
+        client.phone.save()
+
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        client = self.__client
+
+        if self.__success is None and self.__finalize:
+            self.__success = exc_type is None
+
+        if self.__success is not None:
+            result = await self(functions.account.FinishTakeoutSessionRequest(self.__success))
+
+            if not result:
+                raise ValueError("Failed to finish the takeout.")
+
+            self.session.takeout_id = None
+
+        client.phone.takeout = False
+        client.phone.save()
 
 
 class TelegramClient(OpenteleClient):
     """Extended telegram client"""
 
+    APIS = [
+        API.TelegramDesktop,
+        API.TelegramAndroid,
+        API.TelegramAndroidX,
+        API.TelegramIOS,
+        API.TelegramMacOS,
+    ]
+
     def __init__(self, phone: 'models.TypePhone', *args, **kwargs):
         self.phone = phone
 
         if self.phone.api is None:
-            self.phone.api = APIS[random.randint(0, len(APIS) - 1)].Generate().__dict__
+            self.phone.api = self.APIS[random.randint(0, len(self.APIS) - 1)].Generate().__dict__
 
             del self.phone.api["pid"]
 
@@ -77,8 +109,8 @@ class TelegramClient(OpenteleClient):
             if self.total is None:
                 f = self.requests[0].filter
                 if len(self.requests) > 1 or (
-                        not isinstance(f, types.ChannelParticipantsRecent)
-                        and (not isinstance(f, types.ChannelParticipantsSearch) or f.q)
+                    not isinstance(f, types.ChannelParticipantsRecent)
+                    and (not isinstance(f, types.ChannelParticipantsSearch) or f.q)
                 ):
                     # Only do an additional getParticipants here to get the total
                     # if there's a filter which would reduce the real total number.
@@ -156,6 +188,102 @@ class TelegramClient(OpenteleClient):
         self.phone.save()
 
         raise exceptions.UnauthorizedError(self.phone.status_text)
+
+    def takeout(
+            self,
+            finalize: bool = True,
+            *,
+            contacts: bool = None,
+            users: bool = None,
+            chats: bool = None,
+            megagroups: bool = None,
+            channels: bool = None,
+            files: bool = None,
+            max_file_size: bool = None):
+        """Override"""
+        request_kwargs = dict(
+            contacts=contacts,
+            message_users=users,
+            message_chats=chats,
+            message_megagroups=megagroups,
+            message_channels=channels,
+            files=files,
+            file_max_size=max_file_size
+        )
+        arg_specified = (arg is not None for arg in request_kwargs.values())
+
+        if self.session.takeout_id is None or any(arg_specified):
+            request = functions.account.InitTakeoutSessionRequest(
+                **request_kwargs)
+        else:
+            request = None
+
+        return _TakeoutClient(finalize, self, request)
+
+    async def end_takeout(self, success: bool) -> bool:
+        try:
+            async with _TakeoutClient(True, self, None) as takeout:
+                takeout.success = success
+        except ValueError:
+            return False
+        return True
+
+    async def resolve(self, string: 'str'):
+        """Resolve entity from string"""
+
+        username, is_join_chat = utils.parse_username(string)
+
+        if is_join_chat:
+            invite = await self(telethon.functions.messages.CheckChatInviteRequest(username))
+
+            if isinstance(invite, telethon.types.ChatInvite):
+                return invite
+            elif isinstance(invite, telethon.types.ChatInviteAlready):
+                return invite.chat
+        elif username:
+            return await self.get_entity(username)
+
+        raise ValueError(f"Cannot find any entity corresponding to '{string}' in {self}.")
+
+    async def join(self, string: 'str'):
+        """Join to chat by phone"""
+
+        username, is_join_chat = utils.parse_username(string)
+
+        if is_join_chat:
+            invite = await self(telethon.functions.messages.CheckChatInviteRequest(username))
+
+            if isinstance(invite, telethon.types.ChatInviteAlready):
+                return invite.chat
+            else:
+                updates = await self(telethon.functions.messages.ImportChatInviteRequest(username))
+
+                return updates.chats[-1]
+        elif username:
+            updates = await self(telethon.functions.channels.JoinChannelRequest(username))
+
+            return updates.chats[-1]
+
+        raise ValueError(f"Cannot find any entity corresponding to '{string}' in {self}.")
+
+    async def get_messages_count(self, entity: 'hints.EntityLike'):
+        messages = await self.get_messages(entity, limit=0)
+
+        return messages.total
+
+    async def get_participants_count(self, entity: 'hints.EntityLike'):
+        if entity.participants_count is None:
+            try:
+                participants = await self.get_participants(entity, limit=0)
+
+                return participants.total
+            except (
+                telethon.errors.ChannelPrivateError,
+                telethon.errors.ChatAdminRequiredError
+            ):
+                pass
+
+        return entity.participants_count or 0
 
 
 TypeTelegramClient = TelegramClient
@@ -317,3 +445,31 @@ def parse_username(link: 'str') -> 'tuple[str | None, str | None]':
         return link.lower(), False
     else:
         return None, False
+
+
+def get_photo_location(photo):
+    # Include video sizes here (but they may be None so provide an empty list)
+    size = utils.TelegramClient._get_thumb(photo.sizes + (photo.video_sizes or []), -1)
+    if not size or isinstance(size, telethon.types.PhotoSizeEmpty):
+        return
+
+    extension = '.mp4' if isinstance(size, telethon.types.VideoSize) else '.jpg'
+
+    if isinstance(size, (telethon.types.PhotoCachedSize, telethon.types.PhotoStrippedSize)):
+        # TODO: Решить как качать кэшированные
+        # return telethon.utils._download_cached_photo_size(size, file)
+        return
+
+    if isinstance(size, telethon.types.PhotoSizeProgressive):
+        file_size = max(size.sizes)
+    else:
+        file_size = size.size
+
+    loc = telethon.types.InputPhotoFileLocation(
+        id=photo.id,
+        access_hash=photo.access_hash,
+        file_reference=photo.file_reference,
+        thumb_size=size.type
+    )
+
+    return loc, file_size, extension
