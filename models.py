@@ -8,48 +8,48 @@ from .utils import ApiService
 
 
 class RelationProperty(property):
-    __prop = None
-    __value = None
+    _prop = None
+    _value = None
 
     def __init__(self, name, rel: 'TypeEntity | str', default=None):
-        self.__prop = name
-        self.___rel = rel
-        self.__value = default
+        self._prop = name
+        self.__rel = rel
+        self._value = default
 
     @property
-    def __rel(self):
-        if isinstance(self.___rel, str):
-            return getattr(sys.modules[__name__], self.___rel)
+    def _rel(self):
+        if isinstance(self.__rel, str):
+            return getattr(sys.modules[__name__], self.__rel)
 
-        return self.___rel
+        return self.__rel
 
     def __get__(self, instance, owner=None):
-        if self.__value is not None:
-            self.__value.reload()
+        if self._value is not None:
+            self._value.reload()
 
-            return self.__value
+            return self._value
 
-        return self.__rel()
+        return self._rel()
 
     def __set__(self, instance, value):
-        if isinstance(value, self.__rel):
-            self.__value = value
+        if isinstance(value, self._rel):
+            self._value = value
         elif isinstance(value, str):
-            value = self.__rel(id=value)
+            value = self._rel(id=value)
 
-            if self.__value != value:
-                self.__value = value
+            if self._value != value:
+                self._value = value
         elif isinstance(value, dict):
-            if isinstance(self.__value, self.__rel):
-                self.__value.deserialize(**value)
+            if isinstance(self._value, self._rel):
+                self._value.deserialize(**value)
             else:
-                self.__value = self.__rel(**value)
+                self._value = self._rel(**value)
         elif value is None:
-            self.__value = None
+            self._value = None
         else:
             raise TypeError(
-                f"Can't cast {type(value)} to '{self.__rel.__prop}'"
-                f" object in property {self.__prop} of {instance}."
+                f"Can't cast {type(value)} to '{self._rel._prop}'"
+                f" object in property {self._prop} of {instance}."
             )
 
 
@@ -587,7 +587,7 @@ class Message(Entity['Message']):
     chat: 'TypeChat' = RelationProperty("chat", Chat)
     text: 'str' = None
     member: 'TypeMember' = RelationProperty("member", ChatMember)
-    reply_to: 'TypeMessage' = RelationProperty("reply_to", 'Message')
+    reply_to: 'str' = None
     is_pinned: 'bool' = False
     forwarded_from_id: 'int' = None
     forwarded_from_endpoint: 'str' = None
@@ -601,7 +601,7 @@ class Message(Entity['Message']):
             "text": self.text,
             "chat": self.chat.id,
             "member": self.member.id,
-            "reply_to": self.reply_to.id,
+            "reply_to": self.reply_to,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
             "forwarded_from_endpoint": self.forwarded_from_endpoint,

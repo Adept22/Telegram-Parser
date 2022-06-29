@@ -19,6 +19,8 @@ app = Celery(
     backend=os.environ['CELERY_RESULT_BACKEND'],
     namespace="CELERY"
 )
+app.conf.timezone = os.environ['CELERY_TIMEZONE']
+app.conf.enable_utc = os.environ['CELERY_ENABLE_UTC']
 
 
 logger = get_task_logger(__name__)
@@ -45,10 +47,10 @@ class ParseBaseTask(Task):
                         date=photo.date.isoformat()
                     ).save()
 
-                    tg_media, file_size, extension = utils.get_photo_location(photo)
+                    loc, file_size, extension = utils.get_photo_location(photo)
 
                     try:
-                        await media.upload(client, tg_media, file_size, extension)
+                        await media.upload(client, loc, file_size, extension)
                     except (ValueError, exceptions.RequestException) as ex:
                         logger.error(f"{ex}")
 
@@ -186,32 +188,19 @@ class ParseBaseTask(Task):
 
     @classmethod
     async def __set_message_media(cls, client, message, tg_message):
-        client.download_media
-
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
-            entity = tg_message.media.photo
-            _size = next(
-                ((size.type, size.size) for size in entity.sizes if isinstance(size, PhotoSize)),
-                ('', None)
-            )
-            size = _size[1]
-            extension = telethon.utils.get_extension(entity)
-            date = entity.date.isoformat()
-            entity = telethon.types.InputPhotoFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
-                thumb_size=_size[0]
-            )
+            photo = tg_message.media.photo
+
+            loc, file_size, extension = utils.get_photo_location(photo)
         elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
-            entity = tg_message.media.document
-            size = entity.size
-            extension = telethon.utils.get_extension(entity)
-            date = entity.date.isoformat()
-            entity = telethon.types.InputDocumentFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
+            document = tg_message.media.document
+            file_size = document.size
+            extension = telethon.utils.get_extension(document)
+            date = document.date.isoformat()
+            loc = telethon.types.InputDocumentFileLocation(
+                id=document.id,
+                access_hash=document.access_hash,
+                file_reference=document.file_reference,
                 thumb_size=''
             )
         # TODO:
@@ -224,28 +213,30 @@ class ParseBaseTask(Task):
         else:
             return
 
-        media = models.MessageMedia(internal_id=entity.id, message=message, date=date)
-        media.save()
+        media = models.MessageMedia(internal_id=loc.id, message=message, date=date).save()
 
-        await media.upload(client, entity, size, extension)
+        try:
+            await media.upload(client, loc, file_size, extension)
+        except (ValueError, exceptions.RequestException) as ex:
+            logger.error(f"{ex}")
+
+            return
 
     @classmethod
     async def _handle_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
         """Handle telegram message"""
 
-        fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
-
-        chat_member = None
-        reply_to = None
-
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
             member, chat_member, chat_member_role = await cls._handle_user(client, chat, user)
+        else:
+            chat_member = models.ChatMember()
 
         if tg_message.reply_to is not None:
-            reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat)
-            reply_to.save()
+            reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat).save()
+        else:
+            reply_to = models.Message()
 
         if tg_message.replies is not None:
             try:
@@ -262,12 +253,14 @@ class ParseBaseTask(Task):
             except Exception as ex:
                 logger.exception(ex)
 
+        fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
+
         message = models.Message(
             internal_id=tg_message.id,
             text=tg_message.message,
             chat=chat,
             member=chat_member,
-            reply_to=reply_to,
+            reply_to=reply_to.id,
             is_pinned=tg_message.pinned,
             forwarded_from_id=fwd_from_id,
             forwarded_from_name=fwd_from_name,

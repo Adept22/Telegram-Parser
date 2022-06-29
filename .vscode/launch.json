@@ -11,7 +11,7 @@
             "module": "celery",
             "justMyCode": true,
             "cwd": "/opt/celery", 
-            "envFile": "/etc/conf.d/celery",
+            "envFile": "${workspaceFolder}/conf.d/celery.dev.local",
             "args": ["-A", "telegram-parser", "worker", "-E", "-l", "debug", "-Q", "high_prio,low_prio"]
         }
     ]
