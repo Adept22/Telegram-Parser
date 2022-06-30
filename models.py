@@ -137,7 +137,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
     """Base class for media entities"""
 
-    async def upload(self, client, tg_media, size: 'int', extension: 'str') -> 'None':
+    async def upload(self, client, loc, size: 'int', extension: 'str') -> 'None':
         """Uploads media on server"""
 
         if self.id is None:
@@ -147,11 +147,11 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
         chunk_size = downloads.MAX_CHUNK_SIZE
         total_chunks = math.ceil(size / chunk_size)
 
-        async for chunk in client.iter_download(tg_media, chunk_size=chunk_size, file_size=size):
+        async for chunk in client.iter_download(loc, chunk_size=chunk_size, file_size=size):
             ApiService().chunk(
                 self.__class__._endpoint,
                 self.id,
-                str(tg_media.id) + extension,
+                str(loc.id) + extension,
                 chunk,
                 chunk_number,
                 chunk_size,

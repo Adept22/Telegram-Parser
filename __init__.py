@@ -7,7 +7,6 @@ import random
 import names
 import telethon
 import telethon.sessions
-from telethon.tl.types import PhotoSize
 from celery import Celery
 from celery.utils.log import get_task_logger
 from . import models, utils, exceptions
@@ -190,19 +189,12 @@ class ParseBaseTask(Task):
     async def __set_message_media(cls, client, message, tg_message):
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
             photo = tg_message.media.photo
-
+            date = photo.date.isoformat()
             loc, file_size, extension = utils.get_photo_location(photo)
         elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
             document = tg_message.media.document
-            file_size = document.size
-            extension = telethon.utils.get_extension(document)
             date = document.date.isoformat()
-            loc = telethon.types.InputDocumentFileLocation(
-                id=document.id,
-                access_hash=document.access_hash,
-                file_reference=document.file_reference,
-                thumb_size=''
-            )
+            loc, file_size, extension = utils.get_document_location(document)
         # TODO:
         # elif isinstance(tg_message.media, telethon.types.MessageMediaPoll):
         #     pass
