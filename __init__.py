@@ -723,7 +723,6 @@ class ParseMembersTask(ParseBaseTask):
                             break
                         else:
                             return True
-
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
@@ -779,18 +778,28 @@ class ParseMessagesTask(ParseBaseTask):
         for chat_phone in chat_phones:
             phone = chat_phone.phone
 
+            if phone.takeout:
+                continue
+
             try:
                 async with utils.TelegramClient(phone) as client:
-                    try:
-                        await self._get_messages(client, chat)
-                    except telethon.errors.FloodWaitError as ex:
-                        logger.warning(f"Messages request must wait {ex.seconds} seconds.")
+                    while True:
+                        try:
+                            async with client.takeout(users=True, chats=True, megagroups=True, channels=True,
+                                                      files=True, max_file_size=2147483647) as takeout:
+                                await self._get_messages(takeout, chat)
+                        except telethon.errors.TakeoutInitDelayError as ex:
+                            logger.warning('Must wait', ex.seconds, 'before takeout')
 
-                        await asyncio.sleep(ex.seconds)
+                            await asyncio.sleep(ex.seconds)
 
-                        continue
-                    else:
-                        return True
+                            continue
+                        except telethon.errors.TakeoutInvalidError as ex:
+                            logger.error(f"{ex}")
+
+                            break
+                        else:
+                            return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
