@@ -40,20 +40,21 @@ class ParseBaseTask(Task):
                 async for photo in client.iter_profile_photos(tg_user):
                     photo: 'telethon.types.TypePhoto'
 
+                    loc, file_size, extension = utils.get_photo_location(photo)
+
                     media = models.MemberMedia(
                         internal_id=photo.id,
                         member=member,
                         date=photo.date.isoformat()
                     ).save()
 
-                    loc, file_size, extension = utils.get_photo_location(photo)
+                    if media.path is None:
+                        try:
+                            await media.upload(client, loc, file_size, extension)
+                        except (ValueError, exceptions.RequestException) as ex:
+                            logger.error(f"{ex}")
 
-                    try:
-                        await media.upload(client, loc, file_size, extension)
-                    except (ValueError, exceptions.RequestException) as ex:
-                        logger.error(f"{ex}")
-
-                        continue
+                            continue
                 else:
                     return
             except telethon.errors.FloodWaitError as ex:
@@ -207,12 +208,13 @@ class ParseBaseTask(Task):
 
         media = models.MessageMedia(internal_id=loc.id, message=message, date=date).save()
 
-        try:
-            await media.upload(client, loc, file_size, extension)
-        except (ValueError, exceptions.RequestException) as ex:
-            logger.error(f"{ex}")
+        if media.path is None:
+            try:
+                await media.upload(client, loc, file_size, extension)
+            except (ValueError, exceptions.RequestException) as ex:
+                logger.error(f"{ex}")
 
-            return
+                return
 
     @classmethod
     async def _handle_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
@@ -464,10 +466,11 @@ class ChatResolveTask(Task):
 
         tg_media, file_size, extension = utils.get_photo_location(photo)
 
-        try:
-            await media.upload(client, tg_media, file_size, extension)
-        except (ValueError, exceptions.RequestException) as ex:
-            logger.error(f"{ex}")
+        if media.path is None:
+            try:
+                await media.upload(client, tg_media, file_size, extension)
+            except (ValueError, exceptions.RequestException) as ex:
+                logger.error(f"{ex}")
 
     async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
         for phone in phones:
@@ -636,12 +639,13 @@ class ChatMediaTask(Task):
 
                                 tg_media, file_size, extension = utils.get_photo_location(photo)
 
-                                try:
-                                    await media.upload(client, tg_media, file_size, extension)
-                                except (ValueError, exceptions.RequestException) as ex:
-                                    logger.error(f"{ex}")
+                                if media.path is None:
+                                    try:
+                                        await media.upload(client, tg_media, file_size, extension)
+                                    except (ValueError, exceptions.RequestException) as ex:
+                                        logger.error(f"{ex}")
 
-                                    continue
+                                        continue
                             else:
                                 return
                         except telethon.errors.FloodWaitError as ex:
