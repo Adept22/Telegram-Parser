@@ -1,56 +1,51 @@
 """Collection of entity representations"""
 import sys
 from abc import ABCMeta, abstractmethod
-from typing import Generic, TypeVar
 import math
+from typing import Generic, TypeVar
 from telethon.client import downloads
 from .utils import ApiService
 
 
-class RelationProperty(property):
-    _prop = None
-    _value = None
+class RelatedProperty(property):
+    name = None
 
-    def __init__(self, name, rel: 'TypeEntity | str', default=None):
-        self._prop = name
-        self.__rel = rel
-        self._value = default
+    def __init__(self, name, cls: 'TypeEntity | str'):
+        self.name = name
+        self._cls = cls
 
     @property
-    def _rel(self):
-        if isinstance(self.__rel, str):
-            return getattr(sys.modules[__name__], self.__rel)
+    def cls(self):
+        if isinstance(self._cls, str):
+            return getattr(sys.modules[__name__], self._cls)
 
-        return self.__rel
+        return self._cls
 
     def __get__(self, instance, owner=None):
-        if self._value is not None:
-            self._value.reload()
+        value = getattr(instance, f"{self.name}_id", None)
+        value = self.cls(id=value)
 
-            return self._value
+        try:
+            return value.reload()
+        except ValueError:
+            pass
 
-        return self._rel()
+        return value
 
     def __set__(self, instance, value):
-        if isinstance(value, self._rel):
-            self._value = value
-        elif isinstance(value, str):
-            value = self._rel(id=value)
-
-            if self._value != value:
-                self._value = value
+        if isinstance(value, self.cls):
+            value = value.id
+        elif isinstance(value, (str, type(None))):
+            value = value
         elif isinstance(value, dict):
-            if isinstance(self._value, self._rel):
-                self._value.deserialize(**value)
-            else:
-                self._value = self._rel(**value)
-        elif value is None:
-            self._value = None
+            value = value['id']
         else:
             raise TypeError(
-                f"Can't cast {type(value)} to '{self._rel._prop}'"
-                f" object in property {self._prop} of {instance}."
+                f"Can't cast {type(value)} to '{self.name}'"
+                f" object in property {self.name} of {self.cls}."
             )
+
+        setattr(instance, f"{self.name}_id", value)
 
 
 T = TypeVar('T', bound='Entity')
@@ -197,7 +192,7 @@ class Parser(Entity['Parser']):
     IN_PROGRESS = 1
     FAILED = 2
 
-    host: 'TypeHost' = RelationProperty("host", Host)
+    host: 'TypeHost' = RelatedProperty("host", Host)
     status: 'int' = NEW
     api_id: 'str' = None
     api_hash: 'str' = None
@@ -239,7 +234,7 @@ class Chat(Entity['Chat']):
     date: 'str' = None
     total_members: 'int' = None
     total_messages: 'int' = None
-    parser: 'TypeParser' = RelationProperty("parser", Parser)
+    parser: 'TypeParser' = RelatedProperty("parser", Parser)
 
     def serialize(self) -> 'dict':
         return {
@@ -286,7 +281,7 @@ class ChatTask(Entity['ChatTask']):
     SUCCESED_STATUS = 2
     FAILED_STATUS = 3
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     type: 'int' = None
     status: 'int' = CREATED_STATUS
     status_text: 'str' = None
@@ -321,7 +316,7 @@ class ChatMedia(Media['ChatMedia']):
 
     _endpoint = "chats-medias"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
@@ -365,7 +360,7 @@ class Phone(Entity['Phone']):
     first_name: 'str' = None
     last_name: 'str' = None
     code: 'str' = None
-    parser: 'TypeParser' = RelationProperty("parser", Parser)
+    parser: 'TypeParser' = RelatedProperty("parser", Parser)
     api: 'dict' = None
     takeout: 'bool' = False
 
@@ -409,8 +404,8 @@ class ChatPhone(Entity['ChatPhone']):
 
     _endpoint = "chats-phones"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
-    phone: 'TypePhone' = RelationProperty("phone", Phone)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
+    phone: 'TypePhone' = RelatedProperty("phone", Phone)
     is_using: 'bool' = False
 
     def serialize(self) -> 'dict':
@@ -470,7 +465,7 @@ class MemberMedia(Media['MemberMedia']):
 
     _endpoint = "members-medias"
 
-    member: 'TypeMember' = RelationProperty("member", Member)
+    member: 'TypeMember' = RelatedProperty("member", Member)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
@@ -499,8 +494,8 @@ class ChatMember(Entity['ChatMember']):
 
     _endpoint = "chats-members"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
-    member: 'TypeMember' = RelationProperty("member", Member)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
+    member: 'TypeMember' = RelatedProperty("member", Member)
     date: 'str' = None
     is_left: 'bool' = False
     _roles: 'list[TypeChatMemberRole]' = []
@@ -557,7 +552,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
     _endpoint = "chats-members-roles"
 
-    member: 'TypeMember' = RelationProperty("member", ChatMember)
+    member: 'TypeMember' = RelatedProperty("member", ChatMember)
     title: 'str' = "Участник"
     code: 'str' = "member"
 
@@ -584,9 +579,9 @@ class Message(Entity['Message']):
     _endpoint = "messages"
 
     internal_id: 'int' = None
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     text: 'str' = None
-    member: 'TypeMember' = RelationProperty("member", ChatMember)
+    member: 'TypeMember' = RelatedProperty("member", ChatMember)
     reply_to: 'str' = None
     is_pinned: 'bool' = False
     forwarded_from_id: 'int' = None
@@ -630,7 +625,7 @@ class MessageMedia(Media['MessageMedia']):
 
     _endpoint = "messages-medias"
 
-    message: 'TypeMessage' = RelationProperty("message", Message)
+    message: 'TypeMessage' = RelatedProperty("message", Message)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
