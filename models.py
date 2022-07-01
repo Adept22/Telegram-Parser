@@ -1,9 +1,7 @@
 """Collection of entity representations"""
 import sys
 from abc import ABCMeta, abstractmethod
-import math
 from typing import Generic, TypeVar
-from telethon.client import downloads
 from .utils import ApiService
 
 
@@ -127,34 +125,6 @@ class Entity(Generic[T], metaclass=ABCMeta):
         """
 
         ApiService().delete(self.__class__._endpoint, self.id)
-
-
-class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
-    """Base class for media entities"""
-
-    async def upload(self, client, loc, size: 'int', extension: 'str') -> 'None':
-        """Uploads media on server"""
-
-        if self.id is None:
-            raise ValueError("Entity hasn't id")
-
-        chunk_number = 0
-        chunk_size = downloads.MAX_CHUNK_SIZE
-        total_chunks = math.ceil(size / chunk_size)
-
-        async for chunk in client.iter_download(loc, chunk_size=chunk_size, file_size=size):
-            ApiService().chunk(
-                self.__class__._endpoint,
-                self.id,
-                str(loc.id) + extension,
-                chunk,
-                chunk_number,
-                chunk_size,
-                total_chunks,
-                size
-            )
-
-            chunk_number += 1
 
 
 class Host(Entity['Host']):
@@ -311,7 +281,7 @@ class ChatTask(Entity['ChatTask']):
         return self
 
 
-class ChatMedia(Media['ChatMedia']):
+class ChatMedia(Entity['ChatMedia']):
     """ChatMedia entity representation"""
 
     _endpoint = "chats-medias"
@@ -460,7 +430,7 @@ class Member(Entity['Member']):
         return self
 
 
-class MemberMedia(Media['MemberMedia']):
+class MemberMedia(Entity['MemberMedia']):
     """MemberMedia entity representation"""
 
     _endpoint = "members-medias"
@@ -620,7 +590,7 @@ class Message(Entity['Message']):
         return self
 
 
-class MessageMedia(Media['MessageMedia']):
+class MessageMedia(Entity['MessageMedia']):
     """MessageMedia entity representation"""
 
     _endpoint = "messages-medias"
@@ -650,7 +620,6 @@ class MessageMedia(Media['MessageMedia']):
 
 
 TypeEntity = Entity
-TypeMedia = Media
 TypeHost = Host
 TypeParser = Parser
 TypeChat = Chat
