@@ -4,7 +4,6 @@ import string
 import re
 import asyncio
 import random
-import names
 import telethon
 import telethon.sessions
 from celery import Celery
@@ -34,35 +33,30 @@ class Task(app.Task):
 
 
 class ParseBaseTask(Task):
-    async def __set_member_media(client, member: 'models.TypeMember', tg_user: 'telethon.types.User'):
-        while True:
-            try:
-                async for photo in client.iter_profile_photos(tg_user):
-                    photo: 'telethon.types.TypePhoto'
+    @classmethod
+    async def __set_member_media(cls, client, member: 'models.TypeMember', tg_user: 'telethon.types.User'):
+        try:
+            async for photo in client.iter_profile_photos(tg_user):
+                photo: 'telethon.types.TypePhoto'
 
+                media = models.MemberMedia(
+                    internal_id=photo.id,
+                    member=member,
+                    date=photo.date.isoformat()
+                ).save()
+
+                if media.path is None:
                     loc, file_size, extension = utils.get_photo_location(photo)
 
-                    media = models.MemberMedia(
-                        internal_id=photo.id,
-                        member=member,
-                        date=photo.date.isoformat()
-                    ).save()
+                    await client.download_media(media, loc, file_size, extension)
+            else:
+                return
+        except telethon.errors.FloodWaitError as ex:
+            logger.warning(f"Member media download must wait. Exception {ex}")
 
-                    if media.path is None:
-                        try:
-                            await media.upload(client, loc, file_size, extension)
-                        except (ValueError, exceptions.RequestException) as ex:
-                            logger.error(f"{ex}")
+            await asyncio.sleep(ex.seconds)
 
-                            continue
-                else:
-                    return
-            except telethon.errors.FloodWaitError as ex:
-                logger.warning(f"Member media download must wait. Exception {ex}")
-
-                await asyncio.sleep(ex.seconds)
-
-                continue
+            cls.__set_member_media(client, member, tg_user)
 
     @classmethod
     async def __set_member(cls, client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
@@ -209,12 +203,7 @@ class ParseBaseTask(Task):
         media = models.MessageMedia(internal_id=loc.id, message=message, date=date).save()
 
         if media.path is None:
-            try:
-                await media.upload(client, loc, file_size, extension)
-            except (ValueError, exceptions.RequestException) as ex:
-                logger.error(f"{ex}")
-
-                return
+            await client.download_media(media, loc, file_size, extension)
 
     @classmethod
     async def _handle_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
@@ -233,19 +222,13 @@ class ParseBaseTask(Task):
             reply_to = models.Message()
 
         if tg_message.replies is not None:
-            try:
-                replies = await client(
-                    telethon.tl.functions.messages.GetRepliesRequest(
-                        tg_message.peer_id, tg_message.id, 0, None, 0, 0, 0, 0, 0
-                    )
-                )
+            async for reply in client.iter_messages(tg_message.input_chat, reply_to=tg_message.id):
+                if not isinstance(reply, telethon.types.Message):
+                    continue
 
-                for reply in replies.messages:
-                    reply: 'telethon.types.TypeMessage'
+                await cls._handle_links(client, reply.message)
 
-                    await cls._handle_message(client, chat, reply)
-            except Exception as ex:
-                logger.exception(ex)
+                await cls._handle_message(client, chat, reply)
 
         fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
 
@@ -313,119 +296,34 @@ class PhoneAuthorizationTask(Task):
     name = "PhoneAuthorizationTask"
     queue = "high_prio"
 
-    async def _sync_dialogs(self, client, phone: 'models.TypePhone'):
-        dialogs = await client.get_dialogs(limit=0)
-
-        if dialogs.total >= 500:
-            phone.status = models.Phone.FULL
-            phone.save()
-
-        async for dialog in client.iter_dialogs():
-            if dialog.is_user:
-                continue
-
-            internal_id = telethon.utils.get_peer_id(dialog.dialog.peer)
-
-            for chat in models.Chat.find(internal_id=internal_id):
-                if not models.ChatPhone.find(chat=chat, phone=phone):
-                    models.ChatPhone(chat=chat, phone=phone, is_using=True).save()
-
     async def _run(self, phone: 'models.TypePhone'):
         client = utils.TelegramClient(phone)
 
-        if not client.is_connected():
-            try:
-                await client.connect()
-            except OSError as ex:
-                logger.critical(f"Unable to connect client. Exception: {ex}")
+        try:
+            await client._start()
+        except (
+            ValueError,
+            RuntimeError,
+            telethon.errors.RPCError
+        ) as ex:
+            phone.session = None
+            phone.status = models.Phone.BAN
+            phone.status_text = str(ex)
+            phone.code = None
+            phone.save()
 
-                raise ex
+            raise
 
-        code_hash = None
+        me = await client.get_me()
 
-        while True:
-            if not await client.is_user_authorized():
-                try:
-                    if phone.code is not None and code_hash is not None:
-                        try:
-                            await client.sign_in(phone.number, phone.code, phone_code_hash=code_hash)
-                        except telethon.errors.PhoneNumberUnoccupiedError:
-                            await asyncio.sleep(random.randint(2, 5))
+        signed, name = 'Signed in successfully as %s', telethon.utils.get_display_name(me)
 
-                            if phone.first_name is None or phone.first_name == '':
-                                phone.first_name = names.get_first_name()
-
-                            if phone.last_name is None or phone.last_name == '':
-                                phone.last_name = names.get_last_name()
-
-                            await client.sign_up(
-                                phone.code,
-                                phone.first_name,
-                                phone.last_name,
-                                phone_code_hash=code_hash
-                            )
-                        except (
-                            telethon.errors.PhoneCodeEmptyError,
-                            telethon.errors.PhoneCodeExpiredError,
-                            telethon.errors.PhoneCodeHashEmptyError,
-                            telethon.errors.PhoneCodeInvalidError
-                        ) as ex:
-                            logger.warning(f"Code invalid. Exception {ex}")
-
-                            phone.code = None
-                            phone.status_text = "Code invalid"
-                            phone.save()
-
-                            continue
-
-                        me = await client.get_me()
-
-                        phone.internal_id = me.id
-                        phone.first_name = me.first_name
-                        phone.last_name = me.last_name
-                        phone.username = me.username
-                        phone.session = client.session.save()
-                        phone.status = models.Phone.READY
-                        phone.status_text = None
-                        phone.code = None
-                        phone.save()
-
-                        await self._sync_dialogs(client, phone)
-
-                        break
-                    elif code_hash is None:
-                        try:
-                            sent = await client.send_code_request(phone=phone.number)
-
-                            code_hash = sent.phone_code_hash
-                        except telethon.errors.rpcerrorlist.FloodWaitError as ex:
-                            logger.warning(f"Flood exception. Sleep {ex.seconds}.")
-
-                            await asyncio.sleep(ex.seconds)
-
-                            continue
-                    else:
-                        await asyncio.sleep(10)
-
-                        phone.reload()
-                except telethon.errors.FloodWaitError as ex:
-                    logger.warning(f"Phone authorization must wait {ex.seconds}. Exception {ex}.")
-
-                    await asyncio.sleep(ex.seconds)
-
-                    continue
-                except telethon.errors.RPCError as ex:
-                    logger.exception(ex)
-
-                    phone.session = None
-                    phone.status = models.Phone.BAN
-                    phone.status_text = str(ex)
-                    phone.code = None
-                    phone.save()
-
-                    raise ex
-            else:
-                break
+        try:
+            logger.info(signed, name)
+        except UnicodeEncodeError:
+            # Some terminals don't support certain characters
+            logger.info(signed, name.encode('utf-8', errors='ignore')
+                                    .decode('ascii', errors='ignore'))
 
         return True
 
@@ -464,13 +362,10 @@ class ChatResolveTask(Task):
 
         media = models.ChatMedia(internal_id=photo.id, chat=chat, date=photo.date.isoformat()).save()
 
-        tg_media, file_size, extension = utils.get_photo_location(photo)
-
         if media.path is None:
-            try:
-                await media.upload(client, tg_media, file_size, extension)
-            except (ValueError, exceptions.RequestException) as ex:
-                logger.error(f"{ex}")
+            loc, file_size, extension = utils.get_photo_location(photo)
+
+            await client.download_media(media, loc, file_size, extension)
 
     async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
         for phone in phones:
@@ -637,15 +532,10 @@ class ChatMediaTask(Task):
                                     date=photo.date.isoformat()
                                 ).save()
 
-                                tg_media, file_size, extension = utils.get_photo_location(photo)
-
                                 if media.path is None:
-                                    try:
-                                        await media.upload(client, tg_media, file_size, extension)
-                                    except (ValueError, exceptions.RequestException) as ex:
-                                        logger.error(f"{ex}")
+                                    loc, file_size, extension = utils.get_photo_location(photo)
 
-                                        continue
+                                    await client.download_media(media, loc, file_size, extension)
                             else:
                                 return
                         except telethon.errors.FloodWaitError as ex:

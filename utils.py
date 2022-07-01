@@ -1,16 +1,20 @@
 """Utilities for tasks"""
+import asyncio
 import os
 import random
 import re
+import math
+import names
 import urllib.parse
 import requests
 import telethon
 from opentele.tl import TelegramClient as OpenteleClient
 from opentele.api import API, APIData
 from telethon import types, functions, hints
+from telethon.sessions import StringSession
+from telethon.client import downloads
 from telethon.client.chats import _ParticipantsIter, _MAX_PARTICIPANTS_CHUNK_SIZE
 from telethon.client.account import _TakeoutClient as _TelethonTakeoutClient
-from telethon.sessions import StringSession
 from . import models, exceptions, utils
 
 
@@ -171,6 +175,23 @@ class TelegramClient(OpenteleClient):
             aggressive=aggressive
         )
 
+    async def _sync_dialogs(self):
+        dialogs = await self.get_dialogs(limit=0)
+
+        if dialogs.total >= 500:
+            self.phone.status = models.Phone.FULL
+            self.phone.save()
+
+        async for dialog in self.iter_dialogs():
+            if dialog.is_user:
+                continue
+
+            internal_id = telethon.utils.get_peer_id(dialog.dialog.peer)
+
+            for chat in models.Chat.find(internal_id=internal_id):
+                if not models.ChatPhone.find(chat=chat, phone=self.phone):
+                    models.ChatPhone(chat=chat, phone=self.phone, is_using=True).save()
+
     async def start(self):
         try:
             if not self.is_connected():
@@ -188,6 +209,77 @@ class TelegramClient(OpenteleClient):
         self.phone.save()
 
         raise exceptions.UnauthorizedError(self.phone.status_text)
+
+    async def wait_code(self):
+        wait = 0
+
+        while True:
+            await asyncio.sleep(10)
+
+            self.phone.reload()
+
+            if self.phone.code is not None:
+                return self.phone.code
+
+            wait += 1
+
+            if wait >= 10:  # Wait code for 10 minutes
+                raise ValueError(
+                    "Wait code timeout."
+                )
+
+    async def _start(self, force_sms=False, max_attempts=3):
+        if not self.is_connected():
+            await self.connect()
+
+        me = await self.get_me()
+
+        if me is not None:
+            return self
+
+        self.phone.number = telethon.utils.parse_phone(self.phone.number) or self.phone.number
+
+        await self.send_code_request(self.phone.number, force_sms=force_sms)
+
+        me = None
+        attempts = 0
+
+        while attempts < max_attempts:
+            try:
+                code = await self.wait_code()
+
+                me = await self.sign_up(code, names.get_first_name(), names.get_last_name())
+
+                break
+            except telethon.errors.SessionPasswordNeededError:
+                raise ValueError("Two-step verification is enabled for this account.")
+            except (
+                telethon.errors.PhoneCodeEmptyError,
+                telethon.errors.PhoneCodeExpiredError,
+                telethon.errors.PhoneCodeHashEmptyError,
+                telethon.errors.PhoneCodeInvalidError
+            ):
+                self.phone.code = None
+                self.phone.status_text = "Invalid code. Please try again."
+                self.phone.save()
+
+            attempts += 1
+        else:
+            raise RuntimeError(f'{max_attempts} consecutive sign-in attempts failed. Aborting')
+
+        self.phone.internal_id = me.id
+        self.phone.first_name = me.first_name
+        self.phone.last_name = me.last_name
+        self.phone.username = me.username
+        self.phone.session = self.session.save()
+        self.phone.status = models.Phone.READY
+        self.phone.status_text = None
+        self.phone.code = None
+        self.phone.save()
+
+        await self._sync_dialogs()
+
+        return self
 
     def takeout(
             self,
@@ -284,6 +376,19 @@ class TelegramClient(OpenteleClient):
                 pass
 
         return entity.participants_count or 0
+
+    async def download_media(self, media, loc, file_size, extension):
+        chunk_number = 0
+        chunk_size = downloads.MAX_CHUNK_SIZE
+        total_chunks = math.ceil(file_size / chunk_size)
+
+        async for chunk in self.iter_download(loc, chunk_size=chunk_size, file_size=file_size):
+            ApiService().chunk(
+                media._endpoint, media.id, str(loc.id) + extension, chunk,
+                chunk_number, chunk_size, total_chunks, file_size
+            )
+
+            chunk_number += 1
 
 
 TypeTelegramClient = TelegramClient

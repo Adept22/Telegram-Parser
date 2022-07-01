@@ -51,3 +51,4 @@ CELERY_BROKER="redis://localhost:6379/0"
 CELERY_RESULT_BACKEND="redis://localhost:6379/0"
 
 FLOWER_PORT=5055
+FLOWER_BASIC_AUTH=admin:g4fUHf
