@@ -236,7 +236,7 @@ class ParseBaseTask(Task):
             try:
                 replies = await client(
                     telethon.tl.functions.messages.GetRepliesRequest(
-                        tg_message.peer_id, tg_message.id, 0, None, 0, 0, 0, 0, 0
+                        tg_message.input_chat, tg_message.id, 0, None, 0, 0, 0, 0, 0
                     )
                 )
 
