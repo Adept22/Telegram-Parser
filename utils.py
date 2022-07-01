@@ -473,3 +473,18 @@ def get_photo_location(photo):
     )
 
     return loc, file_size, extension
+
+
+def get_document_location(document):
+    file_size = document.size
+
+    extension = telethon.utils.get_extension(document)
+
+    loc = telethon.types.InputDocumentFileLocation(
+        id=document.id,
+        access_hash=document.access_hash,
+        file_reference=document.file_reference,
+        thumb_size=''
+    )
+
+    return loc, file_size, extension

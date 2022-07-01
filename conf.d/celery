@@ -44,6 +44,7 @@ CELERYD_GROUP="celery"
 CELERY_CREATE_DIRS=1
 
 CELERY_TIMEZONE="Europe/Moscow"
+CELERY_ENABLE_UTC=false
 
 CELERY_API_URL="http://localhost/api/v1"
 CELERY_BROKER="redis://localhost:6379/0"

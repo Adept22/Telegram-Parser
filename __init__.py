@@ -7,7 +7,6 @@ import random
 import names
 import telethon
 import telethon.sessions
-from telethon.tl.types import PhotoSize
 from celery import Celery
 from celery.utils.log import get_task_logger
 from . import models, utils, exceptions
@@ -19,6 +18,8 @@ app = Celery(
     backend=os.environ['CELERY_RESULT_BACKEND'],
     namespace="CELERY"
 )
+app.conf.timezone = os.environ['CELERY_TIMEZONE']
+app.conf.enable_utc = os.environ['CELERY_ENABLE_UTC']
 
 
 logger = get_task_logger(__name__)
@@ -39,20 +40,21 @@ class ParseBaseTask(Task):
                 async for photo in client.iter_profile_photos(tg_user):
                     photo: 'telethon.types.TypePhoto'
 
+                    loc, file_size, extension = utils.get_photo_location(photo)
+
                     media = models.MemberMedia(
                         internal_id=photo.id,
                         member=member,
                         date=photo.date.isoformat()
                     ).save()
 
-                    tg_media, file_size, extension = utils.get_photo_location(photo)
+                    if media.path is None:
+                        try:
+                            await media.upload(client, loc, file_size, extension)
+                        except (ValueError, exceptions.RequestException) as ex:
+                            logger.error(f"{ex}")
 
-                    try:
-                        await media.upload(client, tg_media, file_size, extension)
-                    except (ValueError, exceptions.RequestException) as ex:
-                        logger.error(f"{ex}")
-
-                        continue
+                            continue
                 else:
                     return
             except telethon.errors.FloodWaitError as ex:
@@ -186,34 +188,14 @@ class ParseBaseTask(Task):
 
     @classmethod
     async def __set_message_media(cls, client, message, tg_message):
-        client.download_media
-
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
-            entity = tg_message.media.photo
-            _size = next(
-                ((size.type, size.size) for size in entity.sizes if isinstance(size, PhotoSize)),
-                ('', None)
-            )
-            size = _size[1]
-            extension = telethon.utils.get_extension(entity)
-            date = entity.date.isoformat()
-            entity = telethon.types.InputPhotoFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
-                thumb_size=_size[0]
-            )
+            photo = tg_message.media.photo
+            date = photo.date.isoformat()
+            loc, file_size, extension = utils.get_photo_location(photo)
         elif isinstance(tg_message.media, telethon.types.MessageMediaDocument):
-            entity = tg_message.media.document
-            size = entity.size
-            extension = telethon.utils.get_extension(entity)
-            date = entity.date.isoformat()
-            entity = telethon.types.InputDocumentFileLocation(
-                id=entity.id,
-                access_hash=entity.access_hash,
-                file_reference=entity.file_reference,
-                thumb_size=''
-            )
+            document = tg_message.media.document
+            date = document.date.isoformat()
+            loc, file_size, extension = utils.get_document_location(document)
         # TODO:
         # elif isinstance(tg_message.media, telethon.types.MessageMediaPoll):
         #     pass
@@ -224,28 +206,31 @@ class ParseBaseTask(Task):
         else:
             return
 
-        media = models.MessageMedia(internal_id=entity.id, message=message, date=date)
-        media.save()
+        media = models.MessageMedia(internal_id=loc.id, message=message, date=date).save()
 
-        await media.upload(client, entity, size, extension)
+        if media.path is None:
+            try:
+                await media.upload(client, loc, file_size, extension)
+            except (ValueError, exceptions.RequestException) as ex:
+                logger.error(f"{ex}")
+
+                return
 
     @classmethod
     async def _handle_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
         """Handle telegram message"""
 
-        fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
-
-        chat_member = None
-        reply_to = None
-
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
             member, chat_member, chat_member_role = await cls._handle_user(client, chat, user)
+        else:
+            chat_member = models.ChatMember()
 
         if tg_message.reply_to is not None:
-            reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat)
-            reply_to.save()
+            reply_to = models.Message(internal_id=tg_message.reply_to.reply_to_msg_id, chat=chat).save()
+        else:
+            reply_to = models.Message()
 
         if tg_message.replies is not None:
             try:
@@ -262,12 +247,14 @@ class ParseBaseTask(Task):
             except Exception as ex:
                 logger.exception(ex)
 
+        fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
+
         message = models.Message(
             internal_id=tg_message.id,
             text=tg_message.message,
             chat=chat,
             member=chat_member,
-            reply_to=reply_to,
+            reply_to=reply_to.id,
             is_pinned=tg_message.pinned,
             forwarded_from_id=fwd_from_id,
             forwarded_from_name=fwd_from_name,
@@ -479,10 +466,11 @@ class ChatResolveTask(Task):
 
         tg_media, file_size, extension = utils.get_photo_location(photo)
 
-        try:
-            await media.upload(client, tg_media, file_size, extension)
-        except (ValueError, exceptions.RequestException) as ex:
-            logger.error(f"{ex}")
+        if media.path is None:
+            try:
+                await media.upload(client, tg_media, file_size, extension)
+            except (ValueError, exceptions.RequestException) as ex:
+                logger.error(f"{ex}")
 
     async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
         for phone in phones:
@@ -651,12 +639,13 @@ class ChatMediaTask(Task):
 
                                 tg_media, file_size, extension = utils.get_photo_location(photo)
 
-                                try:
-                                    await media.upload(client, tg_media, file_size, extension)
-                                except (ValueError, exceptions.RequestException) as ex:
-                                    logger.error(f"{ex}")
+                                if media.path is None:
+                                    try:
+                                        await media.upload(client, tg_media, file_size, extension)
+                                    except (ValueError, exceptions.RequestException) as ex:
+                                        logger.error(f"{ex}")
 
-                                    continue
+                                        continue
                             else:
                                 return
                         except telethon.errors.FloodWaitError as ex:
@@ -738,7 +727,6 @@ class ParseMembersTask(ParseBaseTask):
                             break
                         else:
                             return True
-
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 
@@ -794,18 +782,28 @@ class ParseMessagesTask(ParseBaseTask):
         for chat_phone in chat_phones:
             phone = chat_phone.phone
 
+            if phone.takeout:
+                continue
+
             try:
                 async with utils.TelegramClient(phone) as client:
-                    try:
-                        await self._get_messages(client, chat)
-                    except telethon.errors.FloodWaitError as ex:
-                        logger.warning(f"Messages request must wait {ex.seconds} seconds.")
+                    while True:
+                        try:
+                            async with client.takeout(users=True, chats=True, megagroups=True, channels=True,
+                                                      files=True, max_file_size=2147483647) as takeout:
+                                await self._get_messages(takeout, chat)
+                        except telethon.errors.TakeoutInitDelayError as ex:
+                            logger.warning('Must wait', ex.seconds, 'before takeout')
 
-                        await asyncio.sleep(ex.seconds)
+                            await asyncio.sleep(ex.seconds)
 
-                        continue
-                    else:
-                        return True
+                            continue
+                        except telethon.errors.TakeoutInvalidError as ex:
+                            logger.error(f"{ex}")
+
+                            break
+                        else:
+                            return True
             except exceptions.UnauthorizedError as ex:
                 logger.critical(f"{ex}")
 

@@ -1,56 +1,51 @@
 """Collection of entity representations"""
 import sys
 from abc import ABCMeta, abstractmethod
-from typing import Generic, TypeVar
 import math
+from typing import Generic, TypeVar
 from telethon.client import downloads
 from .utils import ApiService
 
 
-class RelationProperty(property):
-    __prop = None
-    __value = None
+class RelatedProperty(property):
+    name = None
 
-    def __init__(self, name, rel: 'TypeEntity | str', default=None):
-        self.__prop = name
-        self.___rel = rel
-        self.__value = default
+    def __init__(self, name, cls: 'TypeEntity | str'):
+        self.name = name
+        self._cls = cls
 
     @property
-    def __rel(self):
-        if isinstance(self.___rel, str):
-            return getattr(sys.modules[__name__], self.___rel)
+    def cls(self):
+        if isinstance(self._cls, str):
+            return getattr(sys.modules[__name__], self._cls)
 
-        return self.___rel
+        return self._cls
 
     def __get__(self, instance, owner=None):
-        if self.__value is not None:
-            self.__value.reload()
+        value = getattr(instance, f"{self.name}_id", None)
+        value = self.cls(id=value)
 
-            return self.__value
+        try:
+            return value.reload()
+        except ValueError:
+            pass
 
-        return self.__rel()
+        return value
 
     def __set__(self, instance, value):
-        if isinstance(value, self.__rel):
-            self.__value = value
-        elif isinstance(value, str):
-            value = self.__rel(id=value)
-
-            if self.__value != value:
-                self.__value = value
+        if isinstance(value, self.cls):
+            value = value.id
+        elif isinstance(value, (str, type(None))):
+            value = value
         elif isinstance(value, dict):
-            if isinstance(self.__value, self.__rel):
-                self.__value.deserialize(**value)
-            else:
-                self.__value = self.__rel(**value)
-        elif value is None:
-            self.__value = None
+            value = value['id']
         else:
             raise TypeError(
-                f"Can't cast {type(value)} to '{self.__rel.__prop}'"
-                f" object in property {self.__prop} of {instance}."
+                f"Can't cast {type(value)} to '{self.name}'"
+                f" object in property {self.name} of {self.cls}."
             )
+
+        setattr(instance, f"{self.name}_id", value)
 
 
 T = TypeVar('T', bound='Entity')
@@ -137,7 +132,7 @@ class Entity(Generic[T], metaclass=ABCMeta):
 class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
     """Base class for media entities"""
 
-    async def upload(self, client, tg_media, size: 'int', extension: 'str') -> 'None':
+    async def upload(self, client, loc, size: 'int', extension: 'str') -> 'None':
         """Uploads media on server"""
 
         if self.id is None:
@@ -147,11 +142,11 @@ class Media(Generic[T], Entity['Media'], metaclass=ABCMeta):
         chunk_size = downloads.MAX_CHUNK_SIZE
         total_chunks = math.ceil(size / chunk_size)
 
-        async for chunk in client.iter_download(tg_media, chunk_size=chunk_size, file_size=size):
+        async for chunk in client.iter_download(loc, chunk_size=chunk_size, file_size=size):
             ApiService().chunk(
                 self.__class__._endpoint,
                 self.id,
-                str(tg_media.id) + extension,
+                str(loc.id) + extension,
                 chunk,
                 chunk_number,
                 chunk_size,
@@ -197,7 +192,7 @@ class Parser(Entity['Parser']):
     IN_PROGRESS = 1
     FAILED = 2
 
-    host: 'TypeHost' = RelationProperty("host", Host)
+    host: 'TypeHost' = RelatedProperty("host", Host)
     status: 'int' = NEW
     api_id: 'str' = None
     api_hash: 'str' = None
@@ -239,7 +234,7 @@ class Chat(Entity['Chat']):
     date: 'str' = None
     total_members: 'int' = None
     total_messages: 'int' = None
-    parser: 'TypeParser' = RelationProperty("parser", Parser)
+    parser: 'TypeParser' = RelatedProperty("parser", Parser)
 
     def serialize(self) -> 'dict':
         return {
@@ -286,7 +281,7 @@ class ChatTask(Entity['ChatTask']):
     SUCCESED_STATUS = 2
     FAILED_STATUS = 3
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     type: 'int' = None
     status: 'int' = CREATED_STATUS
     status_text: 'str' = None
@@ -321,7 +316,7 @@ class ChatMedia(Media['ChatMedia']):
 
     _endpoint = "chats-medias"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
@@ -365,7 +360,7 @@ class Phone(Entity['Phone']):
     first_name: 'str' = None
     last_name: 'str' = None
     code: 'str' = None
-    parser: 'TypeParser' = RelationProperty("parser", Parser)
+    parser: 'TypeParser' = RelatedProperty("parser", Parser)
     api: 'dict' = None
     takeout: 'bool' = False
 
@@ -409,8 +404,8 @@ class ChatPhone(Entity['ChatPhone']):
 
     _endpoint = "chats-phones"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
-    phone: 'TypePhone' = RelationProperty("phone", Phone)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
+    phone: 'TypePhone' = RelatedProperty("phone", Phone)
     is_using: 'bool' = False
 
     def serialize(self) -> 'dict':
@@ -470,7 +465,7 @@ class MemberMedia(Media['MemberMedia']):
 
     _endpoint = "members-medias"
 
-    member: 'TypeMember' = RelationProperty("member", Member)
+    member: 'TypeMember' = RelatedProperty("member", Member)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
@@ -499,8 +494,8 @@ class ChatMember(Entity['ChatMember']):
 
     _endpoint = "chats-members"
 
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
-    member: 'TypeMember' = RelationProperty("member", Member)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
+    member: 'TypeMember' = RelatedProperty("member", Member)
     date: 'str' = None
     is_left: 'bool' = False
     _roles: 'list[TypeChatMemberRole]' = []
@@ -557,7 +552,7 @@ class ChatMemberRole(Entity['ChatMemberRole']):
 
     _endpoint = "chats-members-roles"
 
-    member: 'TypeMember' = RelationProperty("member", ChatMember)
+    member: 'TypeMember' = RelatedProperty("member", ChatMember)
     title: 'str' = "Участник"
     code: 'str' = "member"
 
@@ -584,10 +579,10 @@ class Message(Entity['Message']):
     _endpoint = "messages"
 
     internal_id: 'int' = None
-    chat: 'TypeChat' = RelationProperty("chat", Chat)
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
     text: 'str' = None
-    member: 'TypeMember' = RelationProperty("member", ChatMember)
-    reply_to: 'TypeMessage' = RelationProperty("reply_to", 'Message')
+    member: 'TypeMember' = RelatedProperty("member", ChatMember)
+    reply_to: 'str' = None
     is_pinned: 'bool' = False
     forwarded_from_id: 'int' = None
     forwarded_from_endpoint: 'str' = None
@@ -601,7 +596,7 @@ class Message(Entity['Message']):
             "text": self.text,
             "chat": self.chat.id,
             "member": self.member.id,
-            "reply_to": self.reply_to.id,
+            "reply_to": self.reply_to,
             "is_pinned": self.is_pinned,
             "forwarded_from_id": self.forwarded_from_id,
             "forwarded_from_endpoint": self.forwarded_from_endpoint,
@@ -630,7 +625,7 @@ class MessageMedia(Media['MessageMedia']):
 
     _endpoint = "messages-medias"
 
-    message: 'TypeMessage' = RelationProperty("message", Message)
+    message: 'TypeMessage' = RelatedProperty("message", Message)
     internal_id: 'int' = None
     path: 'str' = None
     date: 'str' = None
