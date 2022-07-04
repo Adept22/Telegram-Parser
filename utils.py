@@ -390,6 +390,29 @@ class TelegramClient(OpenteleClient):
 
             chunk_number += 1
 
+    async def download_chat_photo(self, chat, entity):
+        if isinstance(entity, telethon.types.Chat):
+            entity = await self(
+                telethon.functions.messages.GetFullChatRequest(
+                    chat_id=entity.id
+                )
+            )
+        elif isinstance(entity, telethon.types.Channel):
+            entity = await self(
+                telethon.functions.channels.GetFullChannelRequest(
+                    channel=entity
+                )
+            )
+
+        photo = entity.full_chat.chat_photo
+
+        media = models.ChatMedia(internal_id=photo.id, chat=chat, date=photo.date.isoformat()).save()
+
+        if media.path is None:
+            loc, file_size, extension = utils.get_photo_location(photo)
+
+            await self.download_media(media, loc, file_size, extension)
+
 
 TypeTelegramClient = TelegramClient
 

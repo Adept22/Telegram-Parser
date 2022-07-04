@@ -3,7 +3,6 @@ import os
 import string
 import re
 import asyncio
-import random
 import telethon
 import telethon.sessions
 from celery import Celery
@@ -32,7 +31,45 @@ class Task(app.Task):
         raise NotImplementedError
 
 
-class ParseBaseTask(Task):
+class BasePhoneTask(Task):
+    @staticmethod
+    def before_start(task_id, args, kwargs):
+        try:
+            phone_task = models.PhoneTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            return
+
+        phone_task.status = models.PhoneTask.STATUS_IN_PROGRESS
+        phone_task.status_text = None
+        phone_task.started_at = app.now().isoformat()
+        phone_task.save()
+
+    @staticmethod
+    def on_success(retval, task_id, args, kwargs):
+        try:
+            phone_task = models.PhoneTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            return
+
+        phone_task.status = models.PhoneTask.STATUS_SUCCESED
+        phone_task.status_text = None
+        phone_task.ended_at = app.now().isoformat()
+        phone_task.save()
+
+    @staticmethod
+    def on_failure(exc, task_id, args, kwargs, einfo):
+        try:
+            phone_task = models.PhoneTask(id=task_id).reload()
+        except exceptions.RequestException as ex:
+            return
+
+        phone_task.status = models.PhoneTask.STATUS_FAILED
+        phone_task.status_text = str(exc)
+        phone_task.ended_at = app.now().isoformat()
+        phone_task.save()
+
+
+class BaseChatTask(Task):
     @classmethod
     async def __set_member_media(cls, client, member: 'models.TypeMember', tg_user: 'telethon.types.User'):
         try:
@@ -254,11 +291,9 @@ class ParseBaseTask(Task):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.exception(ex)
-
             return
 
-        chat_task.status = models.ChatTask.IN_PROGRESS_STATUS
+        chat_task.status = models.ChatTask.STATUS_IN_PROGRESS
         chat_task.status_text = None
         chat_task.started_at = app.now().isoformat()
         chat_task.save()
@@ -268,11 +303,9 @@ class ParseBaseTask(Task):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.exception(ex)
-
             return
 
-        chat_task.status = models.ChatTask.SUCCESED_STATUS
+        chat_task.status = models.ChatTask.STATUS_SUCCESED
         chat_task.status_text = None
         chat_task.ended_at = app.now().isoformat()
         chat_task.save()
@@ -282,17 +315,15 @@ class ParseBaseTask(Task):
         try:
             chat_task = models.ChatTask(id=task_id).reload()
         except exceptions.RequestException as ex:
-            logger.exception(ex)
-
             return
 
-        chat_task.status = models.ChatTask.FAILED_STATUS
+        chat_task.status = models.ChatTask.STATUS_FAILED
         chat_task.status_text = str(exc)
         chat_task.ended_at = app.now().isoformat()
         chat_task.save()
 
 
-class PhoneAuthorizationTask(Task):
+class PhoneAuthorizationTask(BasePhoneTask):
     name = "PhoneAuthorizationTask"
     queue = "high_prio"
 
@@ -339,76 +370,53 @@ class PhoneAuthorizationTask(Task):
 app.register_task(PhoneAuthorizationTask())
 
 
-class ChatResolveTask(Task):
-    name = "ChatResolveTask"
+class LinkResolveTask(BaseChatTask):
+    name = "LinkResolveTask"
     queue = "high_prio"
 
-    @staticmethod
-    async def __get_chat_photo(client, chat, entity):
-        if isinstance(entity, telethon.types.Chat):
-            entity = await client(
-                telethon.functions.messages.GetFullChatRequest(
-                    chat_id=entity.id
-                )
-            )
-        elif isinstance(entity, telethon.types.Channel):
-            entity = await client(
-                telethon.functions.channels.GetFullChannelRequest(
-                    channel=entity
-                )
-            )
-
-        photo = entity.full_chat.chat_photo
-
-        media = models.ChatMedia(internal_id=photo.id, chat=chat, date=photo.date.isoformat()).save()
-
-        if media.path is None:
-            loc, file_size, extension = utils.get_photo_location(photo)
-
-            await client.download_media(media, loc, file_size, extension)
-
-    async def _run(self, chat: 'models.TypeChat', phones: 'list[models.TypePhone]'):
+    async def _run(self, link: 'models.TypeLink', phones: 'list[models.TypePhone]'):
         for phone in phones:
             try:
                 async with utils.TelegramClient(phone) as client:
                     try:
-                        tg_chat = await client.resolve(chat.link)
+                        tg_entity = await client.resolve(link.link)
                     except telethon.errors.FloodWaitError as ex:
-                        logger.warning(f"Chat resolve must wait {ex.seconds}. Exception {ex}.")
+                        logger.warning(f"Link resolve must wait {ex.seconds}. Exception {ex}.")
 
                         continue
                     except (ValueError, telethon.errors.RPCError) as ex:
-                        chat.status = models.Chat.FAILED
-                        chat.status_text = str(ex)
-                        chat.save()
+                        link.status = models.Link.STATUS_FAILED
+                        link.status_text = str(ex)
+                        link.save()
 
                         raise ex
                     else:
-                        if isinstance(tg_chat, telethon.types.User):
-                            logger.warning("User link.")
+                        if isinstance(tg_entity, telethon.types.User):
+                            member = await self.__set_member(client, tg_entity)
 
-                            chat.status = models.Chat.FAILED
-                            chat.status_text = "User link."
-                            chat.save()
+                            link = models.MemberLink(**link.serialize(), member=member)
+                            link.save()
 
-                            raise "User link."
+                            return True
 
-                        if isinstance(tg_chat, telethon.types.ChatInvite):
+                        chat = models.Chat(title=tg_entity.title, status=models.Chat.AVAILABLE)
+
+                        if isinstance(tg_entity, telethon.types.ChatInvite):
                             logger.warning("Chat is available, but need to join.")
 
-                            chat.status_text = "Chat is available, but need to join."
+                            creator_id, chat_id, rand_int = telethon.utils.resolve_invite_link(link.link)
+                            chat.internal_id = chat_id
 
-                            chat.total_members = tg_chat.participants_count or 0
+                            chat.status_text = "Chat is available, but need to join."
                         else:
-                            chat.internal_id = telethon.utils.get_peer_id(tg_chat)
+                            chat.internal_id = telethon.utils.get_peer_id(tg_entity)
                             chat.status_text = None
 
-                            chat.total_messages = await client.get_messages_count(tg_chat)
-                            chat.total_members = await client.get_participants_count(tg_chat)
-                            await self.__get_chat_photo(client, chat, tg_chat)
+                            chat.total_messages = await client.get_messages_count(tg_entity)
+                            chat.total_members = await client.get_participants_count(tg_entity)
 
-                        chat.title = tg_chat.title
-                        chat.status = models.Chat.AVAILABLE
+                            await client.download_chat_photo(chat, tg_entity)
+
                         chat.save()
 
                         return True
@@ -419,36 +427,36 @@ class ChatResolveTask(Task):
 
         raise Exception("Available phones doesn't exist.")
 
-    def run(self, chat_id):
+    def run(self, link_id: 'str'):
         try:
-            chat = models.Chat(id=chat_id).reload()
+            link = models.Link(id=link_id).reload()
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception("Can't get given chat.")
+            raise Exception("Can't get given link.")
 
         try:
-            phones = models.Phone.find(status=models.Phone.READY, parser=chat.parser.id)
+            phones = models.Phone.find(status=models.Phone.READY, takeout=False)
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
             raise Exception("Can't get phones.")
 
-        return asyncio.run(self._run(chat, phones))
+        return asyncio.run(self._run(link, phones))
 
 
-app.register_task(ChatResolveTask())
+app.register_task(LinkResolveTask())
 
 
-class JoinChatTask(Task):
+class JoinChatTask(BaseChatTask):
     name = "JoinChatTask"
     queue = "high_prio"
 
-    async def _run(self, chat: 'models.TypeChat', phone: 'models.TypePhone'):
+    async def _run(self, link: 'models.TypeChatLink', phone: 'models.TypePhone'):
         while True:
             async with utils.TelegramClient(phone) as client:
                 try:
-                    tg_chat = await client.join(chat.link)
+                    tg_entity = await client.join(link.link)
                 except telethon.errors.FloodWaitError as ex:
                     logger.warning(f"Chat wiring for phone {phone.id} must wait {ex.seconds}.")
 
@@ -462,41 +470,38 @@ class JoinChatTask(Task):
 
                     raise ex
                 except (ValueError, telethon.errors.RPCError) as ex:
-                    chat.status = models.Chat.FAILED
-                    chat.status_text = str(ex)
-                    chat.save()
+                    link.status = models.ChatLink.STATUS_FAILED
+                    link.status_text = str(ex)
+                    link.save()
 
                     raise ex
                 else:
+                    chat = link.chat
+
                     models.ChatPhone(chat=chat, phone=phone, is_using=True).save()
 
-                    chat.internal_id = telethon.utils.get_peer_id(tg_chat)
-                    chat.total_messages = await client.get_messages_count(tg_chat)
-                    chat.total_members = await client.get_participants_count(tg_chat)
-                    chat.title = tg_chat.title
+                    chat.internal_id = telethon.utils.get_peer_id(tg_entity)
+                    chat.total_messages = await client.get_messages_count(tg_entity)
+                    chat.total_members = await client.get_participants_count(tg_entity)
+                    chat.title = tg_entity.title
                     chat.save()
 
-                    await asyncio.sleep(random.randint(2, 5))
+                    await client.download_chat_photo(chat, tg_entity)
 
-                    messages = await client.get_messages(tg_chat, limit=3)
+                    messages = await client.get_messages(tg_entity, limit=1)
 
                     for tg_message in messages:
-                        models.Message(
-                            internal_id=tg_message.id,
-                            text=tg_message.message,
-                            chat=chat,
-                            date=tg_message.date.isoformat()
-                        ).save()
+                        await self._handle_message(client, chat, tg_message)
 
                     return True
 
-    def run(self, chat_id: 'str', phone_id: 'str'):
+    def run(self, link_id: 'str', phone_id: 'str'):
         try:
-            chat = models.Chat(id=chat_id).reload()
+            link = models.ChatLink(id=link_id).reload()
         except exceptions.RequestException as ex:
             logger.error(f"{ex}")
 
-            raise Exception("Can't get given chat.")
+            raise Exception("Can't get given link.")
 
         try:
             phone = models.Phone(id=phone_id).reload()
@@ -505,7 +510,7 @@ class JoinChatTask(Task):
 
             raise Exception("Can't get given phone.")
 
-        return asyncio.run(self._run(chat, phone))
+        return asyncio.run(self._run(link, phone))
 
 
 app.register_task(JoinChatTask())
@@ -575,7 +580,7 @@ class ChatMediaTask(Task):
 app.register_task(ChatMediaTask())
 
 
-class ParseMembersTask(ParseBaseTask):
+class ParseMembersTask(BaseChatTask):
     name = "ParseMembersTask"
     queue = "high_prio"
 
@@ -648,7 +653,7 @@ class ParseMembersTask(ParseBaseTask):
 app.register_task(ParseMembersTask())
 
 
-class ParseMessagesTask(ParseBaseTask):
+class ParseMessagesTask(BaseChatTask):
     name = "ParseMessagesTask"
     queue = "low_prio"
 
@@ -725,7 +730,7 @@ class ParseMessagesTask(ParseBaseTask):
 app.register_task(ParseMessagesTask())
 
 
-class MonitoringChatTask(ParseBaseTask):
+class MonitoringChatTask(BaseChatTask):
     name = "MonitoringChatTask"
     queue = "high_prio"
 

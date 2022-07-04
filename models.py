@@ -127,6 +127,83 @@ class Entity(Generic[T], metaclass=ABCMeta):
         ApiService().delete(self.__class__._endpoint, self.id)
 
 
+class Task(Entity['Task']):
+    """Task entity representation"""
+
+    STATUS_CREATED = 0
+    STATUS_IN_PROGRESS = 1
+    STATUS_SUCCESED = 2
+    STATUS_FAILED = 3
+
+    status: 'int' = STATUS_CREATED
+    status_text: 'str' = None
+    started_at: 'str' = None
+    ended_at: 'str' = None
+
+    @property
+    @abstractmethod
+    def _endpoint(self) -> str:
+        """Название сущности в пути API."""
+
+        raise NotImplementedError
+
+    def serialize(self) -> 'dict':
+        return {
+            "id": self.id,
+            "status": self.status,
+            "status_text": self.status_text,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
+
+    def deserialize(self, **kwargs) -> 'TypeTask':
+        self.id = kwargs.get("id")
+        self.status = kwargs.get("status")
+        self.status_text = kwargs.get("status_text")
+        self.started_at = kwargs.get("started_at")
+        self.ended_at = kwargs.get("ended_at")
+
+        return self
+
+
+class Link(Entity['Link']):
+    """Link entity representation"""
+
+    _endpoint = "links"
+
+    TYPE_LINK = 0
+    TYPE_CHAT_LINK = 1
+    TYPE_MEMBER_LINK = 2
+    TYPE_MESSAGE_LINK = 3
+
+    STATUS_CREATED = 0
+    STATUS_AVAILABLE = 1
+    STATUS_FAILED = 2
+
+    type: 'int' = TYPE_LINK
+    link: 'str' = None
+    status: 'int' = STATUS_CREATED
+    status_text: 'str' = None
+
+    def serialize(self) -> 'dict':
+        return {
+            "id": self.id,
+            "type": self.type,
+            "link": self.link,
+            "status": self.status,
+            "status_text": self.status_text
+        }
+
+    def deserialize(self, **kwargs) -> 'Link':
+        self.id = kwargs.get('id')
+        self.type = kwargs.get('type')
+        self.link = kwargs.get('link')
+        self.status = kwargs.get('status')
+        self.status_text = kwargs.get('status_text')
+
+        return self
+
+
 class Host(Entity['Host']):
     """Host entity representation"""
 
@@ -237,46 +314,52 @@ class Chat(Entity['Chat']):
         return self
 
 
-class ChatTask(Entity['ChatTask']):
+class ChatLink(Link['ChatLink']):
+    """ChatLink entity representation"""
+
+    type: 'int' = Link.TYPE_CHAT_LINK
+    chat: 'TypeChat' = RelatedProperty("chat", Chat)
+
+    def serialize(self) -> 'dict':
+        _dict = super().serialize()
+
+        return _dict.update(
+            {
+                "chat": self.chat.id
+            }
+        )
+
+    def deserialize(self, **kwargs) -> 'Link':
+        super().deserialize(**kwargs)
+
+        self.chat = kwargs.get('chat')
+
+        return self
+
+
+class ChatTask(Task['ChatTask']):
     """ChatTask entity representation"""
 
     _endpoint = "chats-tasks"
 
-    MEMBERS_TYPE = 0
-    MESSAGES_TYPE = 1
-    MONITORING_TYPE = 2
-
-    CREATED_STATUS = 0
-    IN_PROGRESS_STATUS = 1
-    SUCCESED_STATUS = 2
-    FAILED_STATUS = 3
-
     chat: 'TypeChat' = RelatedProperty("chat", Chat)
     type: 'int' = None
-    status: 'int' = CREATED_STATUS
-    status_text: 'str' = None
-    started_at: 'str' = None
-    ended_at: 'str' = None
 
     def serialize(self) -> 'dict':
-        return {
-            "id": self.id,
-            "chat": self.chat.id,
-            "type": self.type,
-            "status": self.status,
-            "status_text": self.status_text,
-            "started_at": self.started_at,
-            "ended_at": self.ended_at,
-        }
+        _dict = super().serialize()
+
+        return _dict.update(
+            {
+                "chat": self.chat.id,
+                "type": self.type,
+            }
+        )
 
     def deserialize(self, **kwargs) -> 'TypeChatTask':
-        self.id = kwargs.get("id")
+        super().deserialize(**kwargs)
+
         self.chat = kwargs.get("chat")
         self.type = kwargs.get("type")
-        self.status = kwargs.get("status")
-        self.status_text = kwargs.get("status_text")
-        self.started_at = kwargs.get("started_at")
-        self.ended_at = kwargs.get("ended_at")
 
         return self
 
@@ -369,6 +452,33 @@ class Phone(Entity['Phone']):
         return self
 
 
+class PhoneTask(Task['PhoneTask']):
+    """PhoneTask entity representation"""
+
+    _endpoint = "phones-tasks"
+
+    phone: 'TypePhone' = RelatedProperty("phone", Phone)
+    type: 'int' = None
+
+    def serialize(self) -> 'dict':
+        _dict = super().serialize()
+
+        return _dict.update(
+            {
+                "phone": self.phone.id,
+                "type": self.type,
+            }
+        )
+
+    def deserialize(self, **kwargs) -> 'TypePhoneTask':
+        super().deserialize(**kwargs)
+
+        self.phone = kwargs.get("phone")
+        self.type = kwargs.get("type")
+
+        return self
+
+
 class ChatPhone(Entity['ChatPhone']):
     """ChatPhone entity representation"""
 
@@ -426,6 +536,31 @@ class Member(Entity['Member']):
         self.last_name = kwargs.get("last_name")
         self.phone = kwargs.get("phone")
         self.about = kwargs.get("about")
+
+        return self
+
+
+class MemberLink(Link['MemberLink']):
+    """MemberLink entity representation"""
+
+    _endpoint = "links"
+
+    type: 'int' = Link.TYPE_MEMBER_LINK
+    member: 'TypeMember' = RelatedProperty("member", Member)
+
+    def serialize(self) -> 'dict':
+        _dict = super().serialize()
+
+        return _dict.update(
+            {
+                "member": self.member.id
+            }
+        )
+
+    def deserialize(self, **kwargs) -> 'Link':
+        super().deserialize(**kwargs)
+
+        self.member = kwargs.get('member')
 
         return self
 
@@ -620,14 +755,19 @@ class MessageMedia(Entity['MessageMedia']):
 
 
 TypeEntity = Entity
+TypeTask = Task
+TypeLink = Link
 TypeHost = Host
 TypeParser = Parser
 TypeChat = Chat
+TypeChatLink = ChatLink
 TypeChatTask = ChatTask
 TypeChatMedia = ChatMedia
 TypePhone = Phone
+TypePhoneTask = PhoneTask
 TypeChatPhone = ChatPhone
 TypeMember = Member
+TypeMemberLink = MemberLink
 TypeMemberMedia = MemberMedia
 TypeChatMember = ChatMember
 TypeChatMemberRole = ChatMemberRole
