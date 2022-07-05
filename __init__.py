@@ -71,7 +71,7 @@ class BasePhoneTask(Task):
 
 class BaseChatTask(Task):
     @classmethod
-    async def __set_member_media(cls, client, member: 'models.TypeMember', tg_user: 'telethon.types.User'):
+    async def _set_member_media(cls, client, member: 'models.TypeMember', tg_user: 'telethon.types.User'):
         try:
             async for photo in client.iter_profile_photos(tg_user):
                 photo: 'telethon.types.TypePhoto'
@@ -93,10 +93,10 @@ class BaseChatTask(Task):
 
             await asyncio.sleep(ex.seconds)
 
-            cls.__set_member_media(client, member, tg_user)
+            cls._set_member_media(client, member, tg_user)
 
     @classmethod
-    async def __set_member(cls, client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
+    async def _set_member(cls, client, tg_user: 'telethon.types.User') -> 'models.TypeMember':
         """Create 'Member' from telegram entity"""
 
         new_member = {
@@ -122,13 +122,13 @@ class BaseChatTask(Task):
 
         member = models.Member(**new_member).save()
 
-        await cls.__set_member_media(client, member, tg_user)
+        await cls._set_member_media(client, member, tg_user)
 
         return member
 
     @staticmethod
-    def __set_chat_member(chat: 'models.TypeChat', member: 'models.TypeMember',
-                          participant=None) -> 'models.TypeChatMember':
+    def _set_chat_member(chat: 'models.TypeChat', member: 'models.TypeMember',
+                         participant=None) -> 'models.TypeChatMember':
         """Create 'ChatMember' from telegram entity"""
 
         new_chat_member = {"chat": chat, "member": member}
@@ -141,8 +141,8 @@ class BaseChatTask(Task):
         return models.ChatMember(**new_chat_member).save()
 
     @staticmethod
-    def __set_chat_member_role(chat_member: 'models.TypeChatMember',
-                               participant=None) -> 'models.TypeChatMemberRole':
+    def _set_chat_member_role(chat_member: 'models.TypeChatMember',
+                              participant=None) -> 'models.TypeChatMemberRole':
         """Create 'ChatMemberRole' from telegram entity"""
 
         new_chat_member_role = {"member": chat_member}
@@ -158,47 +158,6 @@ class BaseChatTask(Task):
             new_chat_member_role["code"] = "member"
 
         return models.ChatMemberRole(**new_chat_member_role).save()
-
-    @classmethod
-    async def _handle_user(cls, client: 'utils.TypeTelegramClient', chat: 'models.TypeChat',
-                           tg_user: 'telethon.types.TypeUser', participant=None):
-        """Handle telegram user"""
-
-        if tg_user.is_self:
-            return None, None, None, None
-
-        member = await cls.__set_member(client, tg_user)
-        chat_member = cls.__set_chat_member(chat, member, participant)
-        chat_member_role = cls.__set_chat_member_role(chat_member, participant)
-
-        return member, chat_member, chat_member_role
-
-    @classmethod
-    async def _handle_links(cls, client: 'utils.TypeTelegramClient', text):
-        """Handle links from message text"""
-
-        for link in re.finditer(utils.LINK_RE, text):
-            _link = link.group()
-            username, is_join_chat = utils.parse_username(_link)
-
-            if not username:
-                continue
-
-            if not is_join_chat:
-                try:
-                    tg_entity: 'telethon.types.TypeChat | telethon.types.User' = await client.get_entity(username)
-
-                    if isinstance(tg_entity, telethon.types.User):
-                        await cls.__set_member(client, tg_entity)
-
-                        continue
-
-                    models.Chat(link=_link, internal_id=tg_entity.id, title=tg_entity.title, is_available=False).save()
-
-                    logger.info(f"New entity from link {_link} created.")
-
-                except (ValueError, exceptions.RequestException, telethon.errors.RPCError):
-                    continue
 
     @staticmethod
     def _get_fwd(fwd_from):
@@ -218,7 +177,7 @@ class BaseChatTask(Task):
         return None, None
 
     @classmethod
-    async def __set_message_media(cls, client, message, tg_message):
+    async def _set_message_media(cls, client, message, tg_message):
         if isinstance(tg_message.media, telethon.types.MessageMediaPhoto):
             photo = tg_message.media.photo
             date = photo.date.isoformat()
@@ -243,13 +202,39 @@ class BaseChatTask(Task):
             await client.download_media(media, loc, file_size, extension)
 
     @classmethod
-    async def _handle_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
+    async def set_chat_user(cls, client: 'utils.TypeTelegramClient', chat: 'models.TypeChat',
+                            tg_user: 'telethon.types.TypeUser', participant=None):
+        """Handle telegram user"""
+
+        if tg_user.is_self:
+            return None, None, None, None
+
+        member = await cls._set_member(client, tg_user)
+        chat_member = cls._set_chat_member(chat, member, participant)
+        chat_member_role = cls._set_chat_member_role(chat_member, participant)
+
+        return member, chat_member, chat_member_role
+
+    @classmethod
+    async def find_links(cls, text):
+        """Handle links from message text"""
+
+        for link in re.finditer(utils.LINK_RE, text):
+            username, is_join_chat = utils.parse_username(link.group())
+
+            if not username:
+                continue
+
+            models.Link(link=link.group()).save()
+
+    @classmethod
+    async def set_message(cls, client, chat: 'models.TypeChat', tg_message: 'telethon.types.TypeMessage'):
         """Handle telegram message"""
 
         if isinstance(tg_message.from_id, telethon.types.PeerUser):
             user: 'telethon.types.TypeUser' = await client.get_entity(tg_message.from_id)
 
-            member, chat_member, chat_member_role = await cls._handle_user(client, chat, user)
+            member, chat_member, chat_member_role = await cls.set_chat_user(client, chat, user)
         else:
             chat_member = models.ChatMember()
 
@@ -263,9 +248,9 @@ class BaseChatTask(Task):
                 if not isinstance(reply, telethon.types.Message):
                     continue
 
-                await cls._handle_links(client, reply.message)
+                await cls.find_links(reply.message)
 
-                await cls._handle_message(client, chat, reply)
+                await cls.set_message(client, chat, reply)
 
         fwd_from_id, fwd_from_name = cls._get_fwd(tg_message.fwd_from)
 
@@ -284,7 +269,7 @@ class BaseChatTask(Task):
         message.save()
 
         if tg_message.media is not None:
-            await cls.__set_message_media(client, message, tg_message)
+            await cls._set_message_media(client, message, tg_message)
 
     @staticmethod
     def before_start(task_id, args, kwargs):
@@ -392,14 +377,16 @@ class LinkResolveTask(BaseChatTask):
                         raise ex
                     else:
                         if isinstance(tg_entity, telethon.types.User):
-                            member = await self.__set_member(client, tg_entity)
+                            member = await super()._set_member(client, tg_entity)
 
-                            link = models.MemberLink(**link.serialize(), member=member)
+                            link.__class__ = models.MemberLink
+                            link.status = models.Link.STATUS_AVAILABLE
+                            link.member = member
                             link.save()
 
                             return True
 
-                        chat = models.Chat(title=tg_entity.title, status=models.Chat.AVAILABLE)
+                        chat = models.Chat(title=tg_entity.title, status=models.Chat.STATUS_AVAILABLE)
 
                         if isinstance(tg_entity, telethon.types.ChatInvite):
                             logger.warning("Chat is available, but need to join.")
@@ -415,9 +402,15 @@ class LinkResolveTask(BaseChatTask):
                             chat.total_messages = await client.get_messages_count(tg_entity)
                             chat.total_members = await client.get_participants_count(tg_entity)
 
-                            await client.download_chat_photo(chat, tg_entity)
-
                         chat.save()
+
+                        link.__class__ = models.ChatLink
+                        link.status = models.Link.STATUS_AVAILABLE
+                        link.chat = chat
+                        link.save()
+
+                        if not isinstance(tg_entity, telethon.types.ChatInvite):
+                            await client.download_chat_photo(chat, tg_entity)
 
                         return True
             except exceptions.UnauthorizedError as ex:
@@ -491,7 +484,7 @@ class JoinChatTask(BaseChatTask):
                     messages = await client.get_messages(tg_entity, limit=1)
 
                     for tg_message in messages:
-                        await self._handle_message(client, chat, tg_message)
+                        await self.set_message(client, chat, tg_message)
 
                     return True
 
@@ -592,7 +585,7 @@ class ParseMembersTask(BaseChatTask):
         search = string.ascii_lowercase + '♥абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
 
         async for user in client.iter_participants(entity=chat.internal_id, search=search, aggressive=True):
-            await cls._handle_user(client, chat, user, user.participant)
+            await cls.set_chat_user(client, chat, user, user.participant)
         else:
             logger.info("Members data download success.")
 
@@ -667,9 +660,9 @@ class ParseMessagesTask(BaseChatTask):
             if not isinstance(tg_message, telethon.types.Message):
                 continue
 
-            await self._handle_links(client, tg_message.message)
+            await self.find_links(tg_message.message)
 
-            await self._handle_message(client, chat, tg_message)
+            await self.set_message(client, chat, tg_message)
         else:
             logger.info("Messages download success.")
 
@@ -744,16 +737,16 @@ class MonitoringChatTask(BaseChatTask):
                     async def handle_chat_action(event):
                         if event.user_added or event.user_joined or event.user_left or event.user_kicked:
                             async for user in event.get_users():
-                                await self._handle_user(client, chat, user, user.participant)
+                                await self.set_chat_user(client, chat, user, user.participant)
 
                     @client.on(telethon.events.NewMessage(chats=chat.internal_id, incoming=True))
                     async def handle_new_message(event):
                         if not isinstance(event.message, telethon.types.Message):
                             return
 
-                        await self._handle_links(client, event.message.message)
+                        await self.find_links(event.message.message)
 
-                        await self._handle_message(client, chat, event.message)
+                        await self.set_message(client, chat, event.message)
 
                     await client.run_until_disconnected()
 

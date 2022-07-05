@@ -15,7 +15,7 @@ from telethon.sessions import StringSession
 from telethon.client import downloads
 from telethon.client.chats import _ParticipantsIter, _MAX_PARTICIPANTS_CHUNK_SIZE
 from telethon.client.account import _TakeoutClient as _TelethonTakeoutClient
-from . import models, exceptions, utils
+from . import models, exceptions
 
 
 class Singleton(type):
@@ -323,7 +323,7 @@ class TelegramClient(OpenteleClient):
     async def resolve(self, string: 'str'):
         """Resolve entity from string"""
 
-        username, is_join_chat = utils.parse_username(string)
+        username, is_join_chat = parse_username(string)
 
         if is_join_chat:
             invite = await self(telethon.functions.messages.CheckChatInviteRequest(username))
@@ -340,7 +340,7 @@ class TelegramClient(OpenteleClient):
     async def join(self, string: 'str'):
         """Join to chat by phone"""
 
-        username, is_join_chat = utils.parse_username(string)
+        username, is_join_chat = parse_username(string)
 
         if is_join_chat:
             invite = await self(telethon.functions.messages.CheckChatInviteRequest(username))
@@ -409,7 +409,7 @@ class TelegramClient(OpenteleClient):
         media = models.ChatMedia(internal_id=photo.id, chat=chat, date=photo.date.isoformat()).save()
 
         if media.path is None:
-            loc, file_size, extension = utils.get_photo_location(photo)
+            loc, file_size, extension = get_photo_location(photo)
 
             await self.download_media(media, loc, file_size, extension)
 
@@ -541,7 +541,7 @@ LINK_RE = re.compile(
     re.IGNORECASE
 )
 
-HTTP_RE = re.compile(r'^(?:@|(?:https?://)?(?:www\.)?(?:telegram\.(?:me|dog)|t\.me))/(\+|joinchat/)?')
+HTTP_RE = re.compile(r'^(?:@|(?:(?:https?://)?(?:www\.)?(?:telegram\.(?:me|dog)|t\.me))/(\+|joinchat/)?)')
 
 TG_RE = re.compile(r'^tg://(?:(join)|resolve)\?(?:invite|domain)=')
 
@@ -577,7 +577,7 @@ def parse_username(link: 'str') -> 'tuple[str | None, str | None]':
 
 def get_photo_location(photo):
     # Include video sizes here (but they may be None so provide an empty list)
-    size = utils.TelegramClient._get_thumb(photo.sizes + (photo.video_sizes or []), -1)
+    size = TelegramClient._get_thumb(photo.sizes + (photo.video_sizes or []), -1)
     if not size or isinstance(size, telethon.types.PhotoSizeEmpty):
         return
 

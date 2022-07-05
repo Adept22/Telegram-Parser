@@ -196,9 +196,9 @@ class Link(Entity['Link']):
 
     def deserialize(self, **kwargs) -> 'Link':
         self.id = kwargs.get('id')
-        self.type = kwargs.get('type')
+        self.type = kwargs.get('type', self.TYPE_LINK)
         self.link = kwargs.get('link')
-        self.status = kwargs.get('status')
+        self.status = kwargs.get('status', self.STATUS_CREATED)
         self.status_text = kwargs.get('status_text')
 
         return self
@@ -235,30 +235,24 @@ class Parser(Entity['Parser']):
 
     _endpoint = "parsers"
 
-    NEW = 0
-    IN_PROGRESS = 1
-    FAILED = 2
+    STATUS_NEW = 0
+    STATUS_IN_PROGRESS = 1
+    STATUS_FAILED = 2
 
     host: 'TypeHost' = RelatedProperty("host", Host)
-    status: 'int' = NEW
-    api_id: 'str' = None
-    api_hash: 'str' = None
+    status: 'int' = STATUS_NEW
 
     def serialize(self) -> 'dict':
         return {
             "id": self.id,
             "host": self.host.id,
             "status": self.status,
-            "api_id": self.api_id,
-            "api_hash": self.api_hash
         }
 
     def deserialize(self, **kwargs) -> 'TypeParser':
         self.id = kwargs.get('id')
         self.host = kwargs.get('host')
-        self.status = kwargs.get('status')
-        self.api_id = kwargs.get('api_id')
-        self.api_hash = kwargs.get('api_hash')
+        self.status = kwargs.get('status', self.STATUS_NEW)
 
         return self
 
@@ -268,12 +262,12 @@ class Chat(Entity['Chat']):
 
     _endpoint = "chats"
 
-    CREATED = 0
-    AVAILABLE = 1
-    FAILED = 2
+    STATUS_CREATED = 0
+    STATUS_AVAILABLE = 1
+    STATUS_FAILED = 2
 
     link: 'str' = None
-    status: 'int' = CREATED
+    status: 'int' = STATUS_CREATED
     status_text: 'str' = None
     internal_id: 'int' = None
     title: 'str' = None
@@ -301,7 +295,7 @@ class Chat(Entity['Chat']):
     def deserialize(self, **kwargs) -> 'Chat':
         self.id = kwargs.get('id')
         self.link = kwargs.get('link')
-        self.status = kwargs.get('status')
+        self.status = kwargs.get('status', self.STATUS_CREATED)
         self.status_text = kwargs.get('status_text')
         self.internal_id = kwargs.get('internal_id')
         self.title = kwargs.get('title')
@@ -314,30 +308,33 @@ class Chat(Entity['Chat']):
         return self
 
 
-class ChatLink(Link['ChatLink']):
+class ChatLink(Link):
     """ChatLink entity representation"""
+
+    _endpoint = "chats-links"
 
     type: 'int' = Link.TYPE_CHAT_LINK
     chat: 'TypeChat' = RelatedProperty("chat", Chat)
 
     def serialize(self) -> 'dict':
-        _dict = super().serialize()
-
-        return _dict.update(
-            {
+        return {
+            **super().serialize(),
+            **{
+                "type": Link.TYPE_CHAT_LINK,
                 "chat": self.chat.id
             }
-        )
+        }
 
     def deserialize(self, **kwargs) -> 'Link':
         super().deserialize(**kwargs)
 
+        self.type = kwargs.get('type', Link.TYPE_CHAT_LINK)
         self.chat = kwargs.get('chat')
 
         return self
 
 
-class ChatTask(Task['ChatTask']):
+class ChatTask(Task):
     """ChatTask entity representation"""
 
     _endpoint = "chats-tasks"
@@ -346,14 +343,13 @@ class ChatTask(Task['ChatTask']):
     type: 'int' = None
 
     def serialize(self) -> 'dict':
-        _dict = super().serialize()
-
-        return _dict.update(
-            {
+        return {
+            **super().serialize(),
+            **{
                 "chat": self.chat.id,
                 "type": self.type,
             }
-        )
+        }
 
     def deserialize(self, **kwargs) -> 'TypeChatTask':
         super().deserialize(**kwargs)
@@ -452,7 +448,7 @@ class Phone(Entity['Phone']):
         return self
 
 
-class PhoneTask(Task['PhoneTask']):
+class PhoneTask(Task):
     """PhoneTask entity representation"""
 
     _endpoint = "phones-tasks"
@@ -461,14 +457,13 @@ class PhoneTask(Task['PhoneTask']):
     type: 'int' = None
 
     def serialize(self) -> 'dict':
-        _dict = super().serialize()
-
-        return _dict.update(
-            {
+        return {
+            **super().serialize(),
+            **{
                 "phone": self.phone.id,
-                "type": self.type,
+                "type": self.type
             }
-        )
+        }
 
     def deserialize(self, **kwargs) -> 'TypePhoneTask':
         super().deserialize(**kwargs)
@@ -540,26 +535,27 @@ class Member(Entity['Member']):
         return self
 
 
-class MemberLink(Link['MemberLink']):
+class MemberLink(Link):
     """MemberLink entity representation"""
 
-    _endpoint = "links"
+    _endpoint = "members-links"
 
     type: 'int' = Link.TYPE_MEMBER_LINK
     member: 'TypeMember' = RelatedProperty("member", Member)
 
     def serialize(self) -> 'dict':
-        _dict = super().serialize()
-
-        return _dict.update(
-            {
+        return {
+            **super().serialize(),
+            **{
+                "type": Link.TYPE_MEMBER_LINK,
                 "member": self.member.id
             }
-        )
+        }
 
     def deserialize(self, **kwargs) -> 'Link':
         super().deserialize(**kwargs)
 
+        self.type = kwargs.get('type', Link.TYPE_MEMBER_LINK)
         self.member = kwargs.get('member')
 
         return self
@@ -721,6 +717,32 @@ class Message(Entity['Message']):
         self.forwarded_from_endpoint = kwargs.get("forwarded_from_endpoint")
         self.grouped_id = kwargs.get("grouped_id")
         self.date = kwargs.get("date")
+
+        return self
+
+
+class MessageLink(Link):
+    """MessageLink entity representation"""
+
+    _endpoint = "messages-links"
+
+    type: 'int' = Link.TYPE_MESSAGE_LINK
+    message: 'TypeMessage' = RelatedProperty("message", Message)
+
+    def serialize(self) -> 'dict':
+        return {
+            **super().serialize(),
+            **{
+                "type": Link.TYPE_MESSAGE_LINK,
+                "message": self.message.id
+            }
+        }
+
+    def deserialize(self, **kwargs) -> 'Link':
+        super().deserialize(**kwargs)
+
+        self.type = kwargs.get('type', Link.TYPE_MESSAGE_LINK)
+        self.message = kwargs.get('message')
 
         return self
 
