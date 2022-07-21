@@ -10,12 +10,9 @@ from celery.utils.log import get_task_logger
 from . import models, utils, exceptions
 
 
-app = Celery(
-    'telegram-parser',
-    broker=os.environ['CELERY_BROKER'],
-    backend=os.environ['CELERY_RESULT_BACKEND'],
-    namespace="CELERY"
-)
+app = celery.Celery('telegram-parser')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks()
 app.conf.timezone = os.environ['CELERY_TIMEZONE']
 app.conf.enable_utc = os.environ['CELERY_ENABLE_UTC']
 

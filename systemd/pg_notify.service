@@ -1,0 +1,18 @@
+[Unit]
+Description=Postgresql Notification Service
+Requires=uwsgi.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+StandardOutput=append:/var/log/pg_notify/pg_notify.log
+StandardError=append:/var/log/pg_notify/pg_notify.error.log
+EnvironmentFile=/etc/conf.d/telegram-parser-api
+WorkingDirectory=/var/www/telegram-parser-api
+ExecStart=/bin/sh -c '${PYTHON_BIN} -m pg_notify'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

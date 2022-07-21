@@ -1,0 +1,89 @@
+version: "3.8"
+
+services:
+  broker:
+    image: redis:${REDIS_VERSION}-alpine
+    ports:
+      - "6379"
+    volumes:
+      - redis-data:/var/lib/redis/data:rw
+
+  database:
+    image: postgres:${POSTGRES_VERSION}-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telegram}
+      # You should definitely change the password in production
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bYE6if588^oW}
+      POSTGRES_USER: ${POSTGRES_USER:-parser}
+    ports:
+      - "5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data:rw
+      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
+      # - ./docker/db/data:/var/lib/postgresql/data:rw
+
+  django:
+    environment:
+      POSTGRES_HOST: database
+      CELERY_BROKER: redis://broker:6379/1
+      CELERY_RESULT_BACKEND: redis://broker:6379/1
+    build:
+      context: .
+      target: django_python
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    restart: unless-stopped
+    volumes:
+      - /media/parser/uploads:/srv/app/public/uploads:rw,cached
+    depends_on:
+      - broker
+    healthcheck:
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  celery:
+    build:
+      context: .
+      target: celery_python
+    restart: unless-stopped
+    depends_on:
+      - django
+    healthcheck:
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  flower:
+    build:
+      context: .
+      target: flower_python
+    restart: unless-stopped
+    depends_on:
+      - celery
+
+  nginx:
+    build:
+      context: .
+      target: django_nginx
+    depends_on:
+      - django
+    restart: unless-stopped
+    volumes:
+      - /media/parser/uploads:/srv/app/public/uploads:rw,cached
+    ports:
+      # HTTP
+      - target: 80
+        published: 8080
+        protocol: tcp
+      # HTTPS
+      - target: 443
+        published: 4433
+        protocol: tcp
+
+volumes:
+  db-data: null
+  redis-data: null
